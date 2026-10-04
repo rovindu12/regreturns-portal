@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 
@@ -84,7 +85,10 @@ public sealed class AuditEntry
     /// <summary>Gets the keyed hash of this entry's canonical form and <see cref="PreviousHash"/>.</summary>
     public string Hash { get; private set; }
 
-    /// <summary>Creates an unsealed entry; <see cref="Seal"/> must be called before it is stored.</summary>
+    /// <summary>
+    /// Creates an unsealed entry; <see cref="Seal"/> must be called before it is stored. Control characters in
+    /// text are replaced with spaces and optional text is truncated to its column length.
+    /// </summary>
     /// <param name="occurredAt">When the action happened.</param>
     /// <param name="action">What happened.</param>
     /// <param name="actorType">The kind of actor.</param>
@@ -113,7 +117,7 @@ public sealed class AuditEntry
             OccurredAt = occurredAt.ToUniversalTime(),
             Action = action,
             ActorType = actorType,
-            ActorSubjectId = Guard.NotBlank(actorSubjectId, SubjectMaxLength),
+            ActorSubjectId = Guard.NotBlank(WithoutControlCharacters(actorSubjectId), SubjectMaxLength),
             ActorDisplayName = Truncate(actorDisplayName, DisplayNameMaxLength),
             InstitutionCode = Truncate(institutionCode, 10),
             EntityType = Truncate(entityType, EntityMaxLength),
@@ -177,6 +181,15 @@ public sealed class AuditEntry
             return null;
         }
 
-        return value.Length <= maxLength ? value : value[..maxLength];
+        var clean = WithoutControlCharacters(value);
+        return clean.Length <= maxLength ? clean : clean[..maxLength];
     }
+
+    // The canonical form separates fields with a control character, so no field may contain one:
+    // otherwise text could be moved across a field boundary without changing the hash.
+    [return: NotNullIfNotNull(nameof(value))]
+    private static string? WithoutControlCharacters(string? value) =>
+        value is null || !value.Any(char.IsControl)
+            ? value
+            : string.Concat(value.Select(c => char.IsControl(c) ? ' ' : c));
 }
