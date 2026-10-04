@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Domain: entities, value objects and business rules. No package dependencies by design. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="RegReturns.UnitTests" />
+  </ItemGroup>
+</Project>

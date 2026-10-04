@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] &ndash; RegReturns</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/RegReturns.Web.styles.css" asp-append-version="true" />
+</head>
+<body class="d-flex flex-column min-vh-100">
+    <partial name="_DemoBanner" />
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-dark bg-primary-subtle border-bottom mb-4" aria-label="Main navigation">
+            <div class="container">
+                <a class="navbar-brand fw-semibold text-dark" asp-controller="Home" asp-action="Index">RegReturns</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"
+                        aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="mainNav">
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-controller="Home" asp-action="Index">Home</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <main role="main" class="container flex-grow-1 pb-4">
+        @RenderBody()
+    </main>
+    <footer class="border-top py-3 text-muted small">
+        <div class="container d-flex justify-content-between flex-wrap gap-2">
+            <span>Bank of Valoria (fictional regulator) &middot; Regulatory Returns Portal</span>
+            <span>Version @RegReturns.ServiceDefaults.BuildInfo.Version</span>
+        </div>
+    </footer>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

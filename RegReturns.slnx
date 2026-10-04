@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RegReturns.Api/RegReturns.Api.csproj" />
+    <Project Path="src/RegReturns.Application/RegReturns.Application.csproj" />
+    <Project Path="src/RegReturns.Domain/RegReturns.Domain.csproj" />
+    <Project Path="src/RegReturns.Infrastructure/RegReturns.Infrastructure.csproj" />
+    <Project Path="src/RegReturns.ServiceDefaults/RegReturns.ServiceDefaults.csproj" />
+    <Project Path="src/RegReturns.Web/RegReturns.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RegReturns.IntegrationTests/RegReturns.IntegrationTests.csproj" />
+    <Project Path="tests/RegReturns.UnitTests/RegReturns.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/RegReturns.Migrator/RegReturns.Migrator.csproj" />
+  </Folder>
+</Solution>

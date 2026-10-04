@@ -1,0 +1,43 @@
+@model RegReturns.Application.Portal.PortalSummary
+@{
+    ViewData["Title"] = "Home";
+}
+
+<section class="mb-5">
+    <h1 class="h2">Regulatory Returns Portal</h1>
+    <p class="lead mb-0">
+        Licensed banks submit periodic regulatory returns to the Bank of Valoria. Returns are validated,
+        reviewed through a maker-checker workflow and tracked on supervisory dashboards.
+    </p>
+</section>
+
+<section aria-labelledby="summary-heading">
+    <h2 id="summary-heading" class="h5 text-muted mb-3">At a glance</h2>
+    <div class="row g-3">
+        <div class="col-6 col-lg">
+            <div class="card h-100"><div class="card-body">
+                <div class="display-6">@Model.Institutions</div><div class="text-muted">Licensed banks</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-lg">
+            <div class="card h-100"><div class="card-body">
+                <div class="display-6">@Model.ReturnTypes</div><div class="text-muted">Return types</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-lg">
+            <div class="card h-100"><div class="card-body">
+                <div class="display-6">@Model.AwaitingReview</div><div class="text-muted">Awaiting review</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-lg">
+            <div class="card h-100"><div class="card-body">
+                <div class="display-6">@Model.Overdue</div><div class="text-muted">Overdue returns</div>
+            </div></div>
+        </div>
+        <div class="col-12 col-lg">
+            <div class="card h-100"><div class="card-body">
+                <div class="display-6">@Model.ApprovedThisYear</div><div class="text-muted">Approved this year</div>
+            </div></div>
+        </div>
+    </div>
+</section>

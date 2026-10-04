@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <UserSecretsId>regreturns-api-9b7d4e2f</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RegReturns.Infrastructure\RegReturns.Infrastructure.csproj" />
+    <ProjectReference Include="..\RegReturns.ServiceDefaults\RegReturns.ServiceDefaults.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="RegReturns.IntegrationTests" />
+  </ItemGroup>
+</Project>
