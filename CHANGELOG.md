@@ -16,3 +16,7 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - Observability baseline: Serilog JSON logs, OpenTelemetry traces and metrics, Seq, W3C trace id on every response,
   sensitive-data redaction, `/health/live` and `/health/ready`.
 - Unit, architecture and Testcontainers integration tests; CI with format check, coverage gate and vulnerable-package check.
+
+### Changed
+
+- SQL Server 2025 replaces 2022 for local Docker Compose and the integration tests (ADR 0013).

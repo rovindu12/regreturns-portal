@@ -16,7 +16,7 @@ This plan covers the solution structure, data model, WSO2 Identity Server integr
 | Package management | Central Package Management (`Directory.Packages.props`), locked restore in CI | One place to audit versions; supports the vulnerable-package gate |
 | Web UI | ASP.NET Core MVC + Razor, Bootstrap 5.3, Chart.js 4, served via LibMan (no Node build) | Matches the brief; keeps the toolchain .NET-only |
 | API | ASP.NET Core controllers, `Asp.Versioning.Mvc` (URL segment `/v1`), Swashbuckle for Swagger UI with OAuth2 client-credentials flow **(ADR)** | Swashbuckle's UI has first-class OAuth config for reviewers |
-| Data | SQL Server 2022 + EF Core 10 code-first; Dapper for dashboard aggregates only **(ADR)** | EF for the write model; Dapper where a hand-tuned GROUP BY is clearer |
+| Data | SQL Server 2025 (ADR 0013) + EF Core 10 code-first; Dapper for dashboard aggregates only **(ADR)** | EF for the write model; Dapper where a hand-tuned GROUP BY is clearer |
 | Expressions | NCalc (MIT) for cross-field rules, sandboxed (no reflection / custom functions beyond a whitelist) **(ADR)** | Safe, declarative, storable in the DB |
 | Excel/PDF | ClosedXML (MIT) for import/export; QuestPDF Community licence for PDF **(ADR)** | Both free for this use; QuestPDF has a clean fluent API |
 | Scheduling | `BackgroundService` + Cronos (MIT) for nightly reset, obligation generation, SCIM outbox **(ADR)** | Avoids a Hangfire dependency for three small jobs |
@@ -356,7 +356,7 @@ Goal: when something goes wrong, anyone on support can go from a user's "error r
 | Container | Memory cap (8 GB VPS) |
 |---|---|
 | WSO2 IS (`-Xms512m -Xmx1536m`) | 2.5 GB |
-| SQL Server 2022 Express (`MSSQL_PID=Express`, `memory.memorylimitmb=2048`) | 2.5 GB |
+| SQL Server 2025 Express (`MSSQL_PID=Express`, `memory.memorylimitmb=2048`) | 2.5 GB |
 | Web, Api | 512 MB each |
 | Caddy | 128 MB |
 | Seq (logs + traces) | 512 MB |

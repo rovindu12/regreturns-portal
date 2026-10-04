@@ -109,5 +109,7 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 - EF Core cannot index complex-type columns; the unique obligation index is raw SQL in the `InitialCreate` migration.
 - The Api's `Program` is referenced from integration tests through the `ApiHost` extern alias (both hosts define `Program`).
 - Docker must be running for integration tests; in a fresh cloud container start it with `sudo dockerd &`.
+- The SQL Server image is pinned twice: the `sqlserver` service in `docker-compose.yml` and `SqlServerFixture.Image`.
+  Dependabot only bumps the compose file, so update the fixture in the same PR (ADR 0013).
 - Always pass an absolute `--results-directory` to `dotnet test`: the default location differs between SDK feature
   bands (under `bin/` on 10.0.1xx, the repo root on newer bands), which broke the CI coverage gate once.
