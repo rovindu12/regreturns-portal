@@ -30,14 +30,20 @@ public static class SignInFailureCodes
     /// <summary>The user cancelled or WSO2 refused the sign-in.</summary>
     public const string AccessDenied = "access_denied";
 
+    /// <summary>WSO2 reported an internal error (OAuth <c>server_error</c>).</summary>
+    public const string ServerError = "server_error";
+
+    /// <summary>WSO2 is overloaded or in maintenance (OAuth <c>temporarily_unavailable</c>).</summary>
+    public const string TemporarilyUnavailable = "temporarily_unavailable";
+
     /// <summary>The error message prefix of a failed discovery-document fetch in Microsoft.IdentityModel.</summary>
     private const string ConfigurationUnavailablePrefix = "IDX20803";
 
+    /// <summary>OAuth 2.0 and OIDC error codes passed through as they are (RFC 6749 §4.1.2.1, OIDC Core §3.1.2.6).</summary>
     private static readonly FrozenSet<string> KnownProtocolErrors = new[]
     {
-        AccessDenied, "login_required", "consent_required", "interaction_required", "invalid_request", "invalid_client",
-        "invalid_grant", "invalid_scope", "unauthorized_client", "unsupported_response_type", "server_error",
-        "temporarily_unavailable",
+        AccessDenied, ServerError, TemporarilyUnavailable, "login_required", "consent_required", "interaction_required",
+        "invalid_request", "invalid_client", "invalid_grant", "invalid_scope", "unauthorized_client", "unsupported_response_type",
     }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>Maps a remote authentication failure to a code.</summary>

@@ -1,0 +1,25 @@
+@{
+    var signedIn = User.Identity?.IsAuthenticated == true;
+    var here = Context.Request.Path.StartsWithSegments("/" + PortalPaths.AccountPrefix)
+        ? "/"
+        : Context.Request.Path + Context.Request.QueryString;
+}
+@if (signedIn)
+{
+    var user = SignedInUserViewModel.From(User);
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="navbar-text text-dark small">
+            Signed in as <strong>@user.Name</strong>@if (user.InstitutionCode is not null)
+            {
+                <span class="text-muted"> &middot; @user.InstitutionCode</span>
+            }
+        </span>
+        <form method="post" asp-controller="Account" asp-action="SignOut" class="d-inline">
+            <button type="submit" class="btn btn-outline-dark btn-sm">Sign out</button>
+        </form>
+    </div>
+}
+else
+{
+    <a class="btn btn-primary btn-sm" asp-controller="Account" asp-action="SignIn" asp-route-returnUrl="@here">Sign in</a>
+}

@@ -1,8 +1,12 @@
 using System.Globalization;
 
+using Microsoft.AspNetCore.Mvc;
+
 using RegReturns.Application;
 using RegReturns.Infrastructure;
+using RegReturns.Infrastructure.Identity.Authorization;
 using RegReturns.ServiceDefaults.Web;
+using RegReturns.Web.Identity;
 
 using Serilog;
 
@@ -17,7 +21,16 @@ try
 
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
-    builder.Services.AddControllersWithViews();
+    builder.Services.AddAuditTrail(builder.Configuration);
+    builder.Services.AddWso2Backchannel(builder.Configuration);
+    builder.Services.AddRegReturnsAuthorization(builder.Configuration);
+    builder.Services.AddPortalAuthentication(builder.Configuration);
+    builder.Services.AddAntiforgery(options =>
+    {
+        options.Cookie.Name = PortalSession.AntiforgeryCookieName;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    });
+    builder.Services.AddControllersWithViews(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
 
     var app = builder.Build();
 
@@ -30,10 +43,11 @@ try
 
     app.UseHttpsRedirection();
     app.UseRouting();
+    app.UseAuthentication();
     app.UseAuthorization();
 
     app.MapDefaultEndpoints();
-    app.MapStaticAssets();
+    app.MapStaticAssets().AllowAnonymous();
     app.MapControllerRoute(name: "default", pattern: "{controller=Home}/{action=Index}/{id?}")
         .WithStaticAssets();
 
