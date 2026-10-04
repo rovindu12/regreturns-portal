@@ -15,3 +15,7 @@
 | [0011](0011-testing-platform-and-coverage.md) | xUnit v3 on Microsoft Testing Platform with Microsoft code coverage |
 | [0012](0012-seed-data-through-the-domain.md) | Demo data is generated through the domain workflow |
 | [0013](0013-sql-server-2025.md) | SQL Server 2025 for development, tests and hosting |
+| [0014](0014-wso2-on-sql-server.md) | WSO2 Identity Server persists to the same SQL Server |
+| [0015](0015-explicit-trust-for-the-dev-ca.md) | Explicit trust for a private development CA, never disabled validation |
+| [0016](0016-hash-chained-audit-trail.md) | Tamper-evident audit trail as an HMAC hash chain |
+| [0017](0017-iam-bootstrap.md) | WSO2 configuration as code with an idempotent setup tool |

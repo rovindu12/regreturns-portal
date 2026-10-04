@@ -17,6 +17,18 @@ and the project uses [Semantic Versioning](https://semver.org/).
   sensitive-data redaction, `/health/live` and `/health/ready`.
 - Unit, architecture and Testcontainers integration tests; CI with format check, coverage gate and vulnerable-package check.
 
+- Phase 2: WSO2 Identity Server 7.3 in Docker Compose, persisted on the shared SQL Server (ADR 0014), with a local
+  development CA that the apps trust explicitly and WSO2's default keys and admin credentials replaced (ADR 0015).
+- IamBootstrap console (`apply`, `demo-users`): creates WSO2 claims, the RegReturns API resource and scopes, the portal
+  application with PKCE and an adaptive MFA script, application roles, one machine client per bank and the demo users.
+  Idempotent; generated client secrets go to a git-ignored `.env.generated` (ADR 0017).
+- Hash-chained, HMAC-signed audit trail with sign-in, sign-out and de-duplicated access-denied events (ADR 0016).
+- Authorization policies for every role, API scopes and institution membership; MFA requirement for approvals.
+- `scripts/init-env.sh` (random secrets), `scripts/dev-certs.sh` (dev CA and keystores), `scripts/dev-secrets.sh`
+  (copies local secrets into user-secrets).
+- Troubleshooting guide section for sign-in, tokens and WSO2.
+
 ### Changed
 
 - SQL Server 2025 replaces 2022 for local Docker Compose and the integration tests (ADR 0013).
+- The platform administrator role is `portal_admin`: WSO2 reserves the `system_` prefix.

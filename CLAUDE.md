@@ -17,26 +17,30 @@ The full plan is in [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md); 
 ## Build phases
 
 Work proceeds in 12 phases (plan §10). After each phase: zero-warning build, all tests green, a Conventional Commit
-pushed, a summary, then **stop for the owner's go-ahead** before the next phase.
+pushed, CI green and a short summary, then **continue straight into the next phase** (the owner asked for full
+automation on 2026-10-04). Stop only for decisions that are genuinely the owner's or inputs only they can give, such
+as the domain and server right before the phase 11 deploy.
 
 | Phase | Status |
 |---|---|
 | 1. Scaffold, domain, DB, seed (+ observability baseline) | done |
-| 2. WSO2 in Docker, IamBootstrap, OIDC login, role policies | next |
+| 2. WSO2 in Docker, IamBootstrap, OIDC login, role policies | in progress |
 | 3-12 | not started |
 
 ## Commands
 
 ```bash
-# Prerequisites: .NET 10 SDK, Docker.
-cp .env.example .env                       # then set MSSQL_SA_PASSWORD
-docker compose up -d                       # SQL Server + Seq (logs/traces UI on http://localhost:8081)
-
-# Connection string via user-secrets (never in appsettings):
-dotnet user-secrets --project src/RegReturns.Web set ConnectionStrings:RegReturns "Server=localhost,1433;Database=RegReturns;User Id=sa;Password=<pw>;TrustServerCertificate=True"
-# (repeat for src/RegReturns.Api and tools/RegReturns.Migrator, or export ConnectionStrings__RegReturns)
+# Prerequisites: .NET 10 SDK, Docker, openssl, jq. Run everything from the repository root.
+scripts/init-env.sh                        # .env with random secrets (git-ignored)
+scripts/dev-certs.sh                       # dev CA + WSO2 keystores in .certs/ (ADR 0015)
+docker compose up -d                       # SQL Server, WSO2 (https://localhost:9443/console), Seq (http://localhost:8081)
+scripts/dev-secrets.sh                     # copies .env (and .env.generated) into user-secrets for every project
 
 dotnet run --project tools/RegReturns.Migrator -- migrate-db --seed   # schema + demo data (idempotent)
+dotnet run --project tools/RegReturns.IamBootstrap -- apply           # WSO2 claims, API, apps, roles, bank clients,
+                                                                      # demo users; writes .env.generated (idempotent)
+scripts/dev-secrets.sh                                                # again, to pick up the portal client secret
+dotnet run --project tools/RegReturns.IamBootstrap -- demo-users      # reset demo users only (passwords, roles)
 dotnet run --project src/RegReturns.Web                               # https://localhost:7101
 dotnet run --project src/RegReturns.Api                               # https://localhost:7201
 
@@ -62,6 +66,7 @@ src/RegReturns.ServiceDefaults Serilog, OpenTelemetry, health endpoints, Problem
 src/RegReturns.Web             MVC portal (Razor + Bootstrap 5).
 src/RegReturns.Api             REST API (versioned from phase 5).
 tools/RegReturns.Migrator      `migrate-db [--seed]`, `seed`; legacy migration from phase 7.
+tools/RegReturns.IamBootstrap  `apply`, `demo-users`: idempotent WSO2 setup over its REST APIs (ADR 0017).
 tests/RegReturns.UnitTests     Domain, seeding, redaction and architecture tests.
 tests/RegReturns.IntegrationTests  Testcontainers SQL Server, WebApplicationFactory host tests.
 ```
@@ -92,6 +97,11 @@ Key domain rules (see `src/RegReturns.Domain/Submissions/Submission.cs`):
   9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
 - Time: inject `TimeProvider`; store UTC `DateTimeOffset`; dates as `DateOnly`; parse numbers with `CultureInfo.InvariantCulture`.
 - Config: options classes with `ValidateDataAnnotations().ValidateOnStart()`. Secrets only in user-secrets or environment variables.
+  Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web and Api share it), `Oidc:ClientSecret` (Web).
+  IamBootstrap reads `.env` itself and writes generated client secrets to `.env.generated` (mode 600, git-ignored).
+- Identity: WSO2 is the only identity store; `AppUser` rows link to WSO2 by subject id. Role, claim and scope names are
+  constants in `RoleNames`, `ClaimNames`, `ApiScopes` and `IamNames`. Change WSO2 only through IamBootstrap steps, never
+  by hand in the Console, so a fresh environment can be rebuilt.
 - Tests: `Method_or_behaviour_in_plain_words` names, Shouldly assertions, one behaviour per test. Host tests join the
   `HostedAppsDefinition` collection. Integration tests that write data use `SqlServerFixture.NewDatabaseConnectionString()`.
 - Commits: Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `build:`, `ci:`, `refactor:`). Record decisions as ADRs.
@@ -106,6 +116,13 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 ## Gotchas
 
 - `iam` is the identity schema name (`identity` is a T-SQL keyword).
+- WSO2 rejects role names starting with `system_`; the platform admin role is `portal_admin`.
+- WSO2 releases a claim only if its scope is requested and the claim is in the app's requested claims. `roles` is a
+  string for one role and an array for several. Only roles whose audience is the portal app reach its tokens.
+- WSO2 management API: `PUT` on an app's OIDC settings replaces everything (send `clientId` and `allowedOrigins`);
+  `PATCH` with `associatedRoles` deletes roles; API resource scopes can only be added. `Wso2Applications` handles this.
+- `Wso2:TrustedCaPath` is relative to the working directory. `dotnet run` starts Web SDK hosts in their project folder
+  (so `src/*` use `../../.certs/regreturns-dev-ca.crt`) but console tools in the shell's folder (the repository root).
 - EF Core cannot index complex-type columns; the unique obligation index is raw SQL in the `InitialCreate` migration.
 - The Api's `Program` is referenced from integration tests through the `ApiHost` extern alias (both hosts define `Program`).
 - Docker must be running for integration tests; in a fresh cloud container start it with `sudo dockerd &`.
