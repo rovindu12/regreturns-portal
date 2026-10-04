@@ -178,29 +178,42 @@ internal sealed class Wso2Applications(Wso2AdminClient wso2)
                 return actual is JsonObject actualObject &&
                     expectedObject.All(p => Contains(actualObject[p.Key], p.Value));
             case JsonArray expectedArray:
-                if (actual is not JsonArray actualArray || actualArray.Count != expectedArray.Count)
-                {
-                    return false;
-                }
-
                 // Arrays from WSO2 may come back in another order: compare as multisets.
-                var remaining = actualArray.ToList();
-                foreach (var item in expectedArray)
-                {
-                    var match = remaining.FindIndex(a => Contains(a, item));
-                    if (match < 0)
-                    {
-                        return false;
-                    }
-
-                    remaining.RemoveAt(match);
-                }
-
-                return true;
+                return actual is JsonArray actualArray &&
+                    actualArray.Count == expectedArray.Count &&
+                    MatchEach(expectedArray, 0, actualArray, []);
             case null:
                 return actual is null;
             default:
                 return JsonNode.DeepEquals(actual, expected);
         }
+    }
+
+    /// <summary>
+    /// Pairs every expected item from <paramref name="index"/> on with a distinct unused actual item. An item can fit
+    /// several candidates (subset match), so a greedy pick could fail where a full pairing exists: backtrack instead.
+    /// </summary>
+    private static bool MatchEach(JsonArray expected, int index, JsonArray actual, HashSet<int> used)
+    {
+        if (index == expected.Count)
+        {
+            return true;
+        }
+
+        for (var i = 0; i < actual.Count; i++)
+        {
+            if (!used.Contains(i) && Contains(actual[i], expected[index]))
+            {
+                used.Add(i);
+                if (MatchEach(expected, index + 1, actual, used))
+                {
+                    return true;
+                }
+
+                used.Remove(i);
+            }
+        }
+
+        return false;
     }
 }
