@@ -80,9 +80,10 @@ public static class DependencyInjection
     /// <returns>The same service collection.</returns>
     public static IServiceCollection AddWso2Backchannel(this IServiceCollection services, IConfiguration configuration)
     {
+        // No ValidateDataAnnotations: it reads every property, and the derived addresses throw while Authority is
+        // missing, which would hide the message below behind a TargetInvocationException.
         services.AddOptions<Wso2Options>()
             .Bind(configuration.GetSection(Wso2Options.SectionName))
-            .ValidateDataAnnotations()
             .Validate(
                 o => o.Authority is { IsAbsoluteUri: true, Scheme: "https" },
                 $"{Wso2Options.SectionName}:{nameof(Wso2Options.Authority)} must be an absolute https URL.")

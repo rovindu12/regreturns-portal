@@ -22,12 +22,17 @@ public sealed class GetApiClientInstitutionHandler(IAppDbContext db) : IQueryHan
     public async Task<ApiClientInstitution?> HandleAsync(GetApiClientInstitution query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
-        return await (
+        var match = await (
             from client in db.ApiClients
             join institution in db.Institutions on client.InstitutionId equals institution.Id
             where client.Wso2ClientId == query.ClientId && client.IsActive && institution.IsActive
-            select new ApiClientInstitution(institution.Id, institution.Code))
+            select new { client.Wso2ClientId, institution.Id, institution.Code })
             .AsNoTracking()
             .SingleOrDefaultAsync(cancellationToken);
+
+        // The column uses the database's case-insensitive collation; client ids are case-sensitive.
+        return match is not null && string.Equals(match.Wso2ClientId, query.ClientId, StringComparison.Ordinal)
+            ? new ApiClientInstitution(match.Id, match.Code)
+            : null;
     }
 }

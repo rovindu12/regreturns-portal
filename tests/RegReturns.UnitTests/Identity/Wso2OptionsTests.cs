@@ -82,14 +82,13 @@ public sealed class Wso2OptionsTests
             .Message.ShouldContain("absolute https URL");
     }
 
-    // Data-annotation validation reads the derived addresses, which throw before the friendlier checks run;
-    // the app still refuses to start, which is what matters here.
     [Fact]
     public void Backchannel_registration_refuses_a_relative_authority()
     {
         using var provider = BuildBackchannel(new() { ["Wso2:Authority"] = "iam.valoria.test/wso2" });
 
-        Should.Throw<Exception>(() => provider.GetRequiredService<IOptions<Wso2Options>>().Value);
+        Should.Throw<OptionsValidationException>(() => provider.GetRequiredService<IOptions<Wso2Options>>().Value)
+            .Message.ShouldContain("Wso2:Authority must be an absolute https URL");
     }
 
     [Fact]
@@ -97,9 +96,8 @@ public sealed class Wso2OptionsTests
     {
         using var provider = BuildBackchannel([]);
 
-        var failure = Should.Throw<Exception>(() => provider.GetRequiredService<IOptions<Wso2Options>>().Value);
-
-        failure.GetBaseException().Message.ShouldContain("Wso2:Authority");
+        Should.Throw<OptionsValidationException>(() => provider.GetRequiredService<IOptions<Wso2Options>>().Value)
+            .Message.ShouldContain("Wso2:Authority must be an absolute https URL");
     }
 
     [Fact]

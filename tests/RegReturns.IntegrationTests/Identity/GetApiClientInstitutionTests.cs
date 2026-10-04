@@ -33,6 +33,15 @@ public sealed class GetApiClientInstitutionTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task Client_id_in_a_different_case_returns_nothing()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (connection, _) = await CreateDatabaseAsync(ct);
+
+        (await QueryAsync(connection, ClientId.ToUpperInvariant(), ct)).ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Deactivated_client_returns_nothing()
     {
         var ct = TestContext.Current.CancellationToken;
