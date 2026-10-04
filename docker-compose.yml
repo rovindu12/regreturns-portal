@@ -1,5 +1,6 @@
 # Local development dependencies. Run the apps with `dotnet run` against these services.
-# Phase 2 adds WSO2 Identity Server; phase 11 adds the app containers and Caddy.
+# Before the first `docker compose up`: scripts/init-env.sh (secrets) and scripts/dev-certs.sh (WSO2 keystores).
+# Phase 11 adds the app containers and Caddy.
 name: regreturns
 
 services:
@@ -20,6 +21,46 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
+
+  wso2-db-init:
+    # One-off job: creates WSO2's databases and SQL login on the shared server, loads WSO2's schema once.
+    build: deploy/wso2/db-init
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env}
+      WSO2_DB_HOST: sqlserver
+      WSO2_DB_USERNAME: ${WSO2_DB_USERNAME:?Set WSO2_DB_USERNAME in .env}
+      WSO2_DB_PASSWORD: ${WSO2_DB_PASSWORD:?Set WSO2_DB_PASSWORD in .env}
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    restart: "no"
+
+  wso2:
+    # WSO2 Identity Server 7.3 persisted on SQL Server (ADR 0014). Console: https://localhost:9443/console
+    build: deploy/wso2
+    environment:
+      WSO2_HOSTNAME: ${WSO2_HOSTNAME:-localhost}
+      WSO2_ADMIN_USERNAME: ${WSO2_ADMIN_USERNAME:?Set WSO2_ADMIN_USERNAME in .env}
+      WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD:?Set WSO2_ADMIN_PASSWORD in .env}
+      WSO2_DB_HOST: sqlserver
+      WSO2_DB_USERNAME: ${WSO2_DB_USERNAME:?Set WSO2_DB_USERNAME in .env}
+      WSO2_DB_PASSWORD: ${WSO2_DB_PASSWORD:?Set WSO2_DB_PASSWORD in .env}
+      WSO2_KEYSTORE_PASSWORD: ${WSO2_KEYSTORE_PASSWORD:?Set WSO2_KEYSTORE_PASSWORD in .env}
+      WSO2_ENCRYPTION_KEY: ${WSO2_ENCRYPTION_KEY:?Set WSO2_ENCRYPTION_KEY in .env}
+      WSO2_AUTH_ENDPOINT_PASSWORD: ${WSO2_AUTH_ENDPOINT_PASSWORD:?Set WSO2_AUTH_ENDPOINT_PASSWORD in .env}
+      WSO2_AUTH_ENDPOINT_PASSWORD_SHA256: ${WSO2_AUTH_ENDPOINT_PASSWORD_SHA256:?Set WSO2_AUTH_ENDPOINT_PASSWORD_SHA256 in .env}
+      JAVA_OPTS: "-Xms512m -Xmx1536m"
+    ports:
+      - "127.0.0.1:9443:9443"
+    volumes:
+      # Keystores from scripts/dev-certs.sh; the WSO2 entrypoint copies this volume over its home at start.
+      - ./.certs/wso2:/home/wso2carbon/wso2-config-volume/repository/resources/security:ro
+    extra_hosts:
+      # Lets WSO2 reach the portal on the host for back-channel logout.
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      wso2-db-init:
+        condition: service_completed_successfully
 
   seq:
     # Log and trace viewer. Receives OTLP at http://localhost:5341/ingest/otlp; UI at http://localhost:8081.
