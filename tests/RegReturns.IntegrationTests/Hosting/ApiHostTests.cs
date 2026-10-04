@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 
+using RegReturns.Application.Identity;
 using RegReturns.IntegrationTests.Infrastructure;
 using RegReturns.ServiceDefaults.Web;
 
@@ -18,7 +19,8 @@ public sealed class ApiHostTests(SqlServerFixture sql) : IDisposable
         .WithWebHostBuilder(builder => builder
             .UseEnvironment("Testing")
             .UseSetting("Serilog:MinimumLevel:Default", "Warning")
-            .UseSetting("ConnectionStrings:RegReturns", sql.ConnectionString));
+            .UseSetting("ConnectionStrings:RegReturns", sql.ConnectionString)
+            .UseTestAuth());
 
     [Fact]
     public async Task Readiness_reports_healthy()
@@ -33,7 +35,8 @@ public sealed class ApiHostTests(SqlServerFixture sql) : IDisposable
     [Fact]
     public async Task Unknown_routes_return_problem_details_with_a_trace_id()
     {
-        using var client = _factory.CreateClient();
+        // Anonymous callers get 401 everywhere (authenticated fallback policy), so ask as a signed-in client.
+        using var client = _factory.CreateClientAs((ClaimNames.Subject, "any-client"));
 
         var response = await client.GetAsync("/v1/does-not-exist", TestContext.Current.CancellationToken);
 

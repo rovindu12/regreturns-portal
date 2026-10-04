@@ -1,5 +1,6 @@
 using System.Globalization;
 
+using RegReturns.Api.Authentication;
 using RegReturns.Application;
 using RegReturns.Infrastructure;
 using RegReturns.ServiceDefaults.Web;
@@ -17,6 +18,7 @@ try
 
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
+    builder.Services.AddApiAuthentication(builder.Configuration);
     builder.Services.AddControllers();
 
     var app = builder.Build();
@@ -30,6 +32,7 @@ try
     }
 
     app.UseHttpsRedirection();
+    app.UseAuthentication();
     app.UseAuthorization();
 
     app.MapDefaultEndpoints();
