@@ -10,8 +10,9 @@ using RegReturns.Domain.Auditing;
 namespace RegReturns.Infrastructure.Auditing;
 
 /// <summary>
-/// Records denied and failed access in the audit trail, at most once per actor, action and path per minute,
-/// so a client retrying in a loop cannot flood the chain (plan §4.6). Shared by the portal and the API.
+/// Records denied and failed access in the audit trail, at most once per actor, action and path per minute
+/// (once per IP address and action for anonymous callers), so a client retrying in a loop cannot flood the chain
+/// (plan §4.6). Shared by the portal and the API.
 /// </summary>
 /// <param name="auditTrail">The audit trail.</param>
 /// <param name="cache">Remembers what was recorded in the current minute.</param>
@@ -52,10 +53,13 @@ public sealed partial class AccessDeniedAuditor(
 
         var actor = AuditActor.FromPrincipal(principal);
 
-        // Anonymous callers are keyed by IP so one noisy client cannot hide others.
-        var who = actor.Type == ActorType.Anonymous ? $"ip:{ipAddress}" : actor.SubjectId;
+        // Anonymous callers are keyed by IP so one noisy client cannot hide others, and not by path, because an
+        // unauthenticated client can invent paths and would otherwise write one entry per request.
+        var anonymous = actor.Type == ActorType.Anonymous;
+        var who = anonymous ? $"ip:{ipAddress}" : actor.SubjectId;
+        var where = anonymous ? "*" : path;
         var minute = timeProvider.GetUtcNow().ToUnixTimeSeconds() / 60;
-        var key = string.Create(CultureInfo.InvariantCulture, $"audit-denied|{action}|{who}|{path}|{minute}");
+        var key = string.Create(CultureInfo.InvariantCulture, $"audit-denied|{action}|{who}|{where}|{minute}");
         if (cache.TryGetValue(key, out _))
         {
             return false;
