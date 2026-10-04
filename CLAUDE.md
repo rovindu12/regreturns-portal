@@ -43,6 +43,9 @@ dotnet run --project src/RegReturns.Api                               # https://
 dotnet build RegReturns.slnx                                   # warnings are errors
 dotnet test --project tests/RegReturns.UnitTests               # fast, no Docker
 dotnet test --project tests/RegReturns.IntegrationTests        # needs Docker (Testcontainers SQL Server)
+dotnet test --project tests/RegReturns.UnitTests --coverage --coverage-output-format cobertura \
+  --coverage-output unit.cobertura.xml --coverage-settings coverage.config --results-directory "$PWD/TestResults"
+python3 scripts/check-coverage.py TestResults/unit.cobertura.xml RegReturns.Domain=80   # CI coverage gate
 dotnet format RegReturns.slnx --verify-no-changes              # CI fails on formatting drift
 
 # New EF migration (Infrastructure is both project and startup; a design-time factory supplies the context):
@@ -106,3 +109,5 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 - EF Core cannot index complex-type columns; the unique obligation index is raw SQL in the `InitialCreate` migration.
 - The Api's `Program` is referenced from integration tests through the `ApiHost` extern alias (both hosts define `Program`).
 - Docker must be running for integration tests; in a fresh cloud container start it with `sudo dockerd &`.
+- Always pass an absolute `--results-directory` to `dotnet test`: the default location differs between SDK feature
+  bands (under `bin/` on 10.0.1xx, the repo root on newer bands), which broke the CI coverage gate once.
