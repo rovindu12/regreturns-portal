@@ -14,3 +14,4 @@
 | [0010](0010-observability-serilog-opentelemetry-seq.md) | Observability with Serilog, OpenTelemetry and Seq |
 | [0011](0011-testing-platform-and-coverage.md) | xUnit v3 on Microsoft Testing Platform with Microsoft code coverage |
 | [0012](0012-seed-data-through-the-domain.md) | Demo data is generated through the domain workflow |
+| [0013](0013-sql-server-2025.md) | SQL Server 2025 for development, tests and hosting |

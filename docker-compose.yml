@@ -4,7 +4,8 @@ name: regreturns
 
 services:
   sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    # Keep in step with SqlServerFixture.Image in the integration tests.
+    image: mcr.microsoft.com/mssql/server:2025-latest
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: Developer

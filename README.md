@@ -43,7 +43,7 @@ Open https://localhost:7101, and http://localhost:8081 for logs and traces.
 
 ## Tech stack
 
-.NET 10 · ASP.NET Core MVC and Web API · EF Core 10 · SQL Server 2022 · Serilog · OpenTelemetry · Seq ·
+.NET 10 · ASP.NET Core MVC and Web API · EF Core 10 · SQL Server 2025 · Serilog · OpenTelemetry · Seq ·
 xUnit v3 · Testcontainers · GitHub Actions. WSO2 Identity Server 7.3, Chart.js and Docker deployment come in later phases.
 
 ## Documentation

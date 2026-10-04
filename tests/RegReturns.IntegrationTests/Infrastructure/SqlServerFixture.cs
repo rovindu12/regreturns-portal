@@ -19,7 +19,13 @@ public sealed class SqlServerFixture : IAsyncLifetime
     /// <summary>The anchor date for demo data, so assertions are stable whatever day the tests run.</summary>
     public static readonly DateTimeOffset SeedDate = new(2026, 10, 4, 12, 0, 0, TimeSpan.Zero);
 
-    private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+    /// <summary>
+    /// The SQL Server image used by the tests. Keep it in step with the <c>sqlserver</c> service in
+    /// <c>docker-compose.yml</c>; Dependabot only bumps the compose file.
+    /// </summary>
+    public const string Image = "mcr.microsoft.com/mssql/server:2025-latest";
+
+    private readonly MsSqlContainer _container = new MsSqlBuilder(Image).Build();
 
     /// <summary>Gets the connection string of the seeded shared database.</summary>
     public string ConnectionString { get; private set; } = string.Empty;
