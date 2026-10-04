@@ -22,6 +22,7 @@ declare -A values=(
   [WSO2_ENCRYPTION_KEY]="$(openssl rand -hex 16)"
   [WSO2_AUTH_ENDPOINT_PASSWORD]="${endpoint_password}"
   [WSO2_AUTH_ENDPOINT_PASSWORD_SHA256]="$(printf '%s' "${endpoint_password}" | sha256sum | cut -d' ' -f1)"
+  [DEMO_USER_PASSWORD]="$(password)"
 )
 
 umask 077

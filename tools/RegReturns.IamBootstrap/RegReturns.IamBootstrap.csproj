@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>regreturns-iam-bootstrap</AssemblyName>
+    <UserSecretsId>regreturns-iam-bootstrap-5d2b8f40</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RegReturns.Infrastructure\RegReturns.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\RegReturns.ServiceDefaults\RegReturns.ServiceDefaults.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="appsettings*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="RegReturns.UnitTests" />
+    <InternalsVisibleTo Include="RegReturns.IntegrationTests" />
+  </ItemGroup>
+</Project>

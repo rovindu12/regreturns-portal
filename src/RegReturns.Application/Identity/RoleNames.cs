@@ -23,8 +23,8 @@ public static class RoleNames
     /// <summary>WSO2 role for <see cref="Role.SupervisorApprover"/>.</summary>
     public const string SupervisorApprover = "supervisor_approver";
 
-    /// <summary>WSO2 role for <see cref="Role.SystemAdmin"/>.</summary>
-    public const string SystemAdmin = "system_admin";
+    /// <summary>WSO2 role for <see cref="Role.SystemAdmin"/>. Not <c>system_admin</c>: WSO2 reserves the <c>system_</c> prefix.</summary>
+    public const string SystemAdmin = "portal_admin";
 
     /// <summary>WSO2 role for <see cref="Role.Auditor"/>.</summary>
     public const string Auditor = "auditor";
