@@ -1,0 +1,7 @@
+@model IReadOnlyList<PortalArea>
+@foreach (var area in Model)
+{
+    <li class="nav-item">
+        <a class="nav-link text-dark" href="@area.Path">@area.Title</a>
+    </li>
+}

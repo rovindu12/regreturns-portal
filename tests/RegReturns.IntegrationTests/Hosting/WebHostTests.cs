@@ -16,7 +16,8 @@ public sealed class WebHostTests(SqlServerFixture sql) : IDisposable
         .WithWebHostBuilder(builder => builder
             .UseEnvironment("Testing")
             .UseSetting("Serilog:MinimumLevel:Default", "Warning")
-            .UseSetting("ConnectionStrings:RegReturns", sql.ConnectionString));
+            .UseSetting("ConnectionStrings:RegReturns", sql.ConnectionString)
+            .UseTestAuth());
 
     [Fact]
     public async Task Readiness_reports_healthy_database_without_exception_details()
