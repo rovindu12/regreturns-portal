@@ -11,4 +11,7 @@ internal static class Schemas
 
     /// <summary>Obligations, submissions and their workflow.</summary>
     public const string Returns = "returns";
+
+    /// <summary>The tamper-evident audit chain.</summary>
+    public const string Audit = "audit";
 }

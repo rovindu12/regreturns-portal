@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 
 using RegReturns.Application.Abstractions;
+using RegReturns.Domain.Auditing;
 using RegReturns.Domain.Common;
 using RegReturns.Domain.Identity;
 using RegReturns.Domain.Institutions;
@@ -35,6 +36,12 @@ public sealed class RegReturnsDbContext(DbContextOptions<RegReturnsDbContext> op
 
     /// <inheritdoc />
     public DbSet<Submission> Submissions => Set<Submission>();
+
+    /// <inheritdoc />
+    public DbSet<ApiClient> ApiClients => Set<ApiClient>();
+
+    /// <summary>Gets the audit chain. Append only through <see cref="Auditing.AuditTrail"/>.</summary>
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -5,6 +5,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 using RegReturns.Application.Abstractions;
+using RegReturns.Application.Auditing;
+using RegReturns.Infrastructure.Auditing;
+using RegReturns.Infrastructure.Identity.Wso2;
 using RegReturns.Infrastructure.Persistence;
 
 namespace RegReturns.Infrastructure;
@@ -46,6 +49,56 @@ public static class DependencyInjection
         services.AddHealthChecks()
             .AddDbContextCheck<RegReturnsDbContext>("database", tags: [ReadyTag]);
 
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the tamper-evident audit trail. Requires <c>Audit:HmacKey</c>; the app refuses to start without it.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">Application configuration.</param>
+    /// <returns>The same service collection.</returns>
+    public static IServiceCollection AddAuditTrail(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<AuditOptions>()
+            .Bind(configuration.GetSection(AuditOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.TryAddSingleton<AuditHasher>();
+        services.TryAddScoped<IAuditTrail, AuditTrail>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the WSO2 back channel: options, the named <see cref="HttpClient"/> that trusts only the configured CA
+    /// and rewrites public WSO2 URLs to the internal address, and a readiness check on discovery and JWKS.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">Application configuration.</param>
+    /// <returns>The same service collection.</returns>
+    public static IServiceCollection AddWso2Backchannel(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<Wso2Options>()
+            .Bind(configuration.GetSection(Wso2Options.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(
+                o => o.Authority is { IsAbsoluteUri: true, Scheme: "https" },
+                $"{Wso2Options.SectionName}:{nameof(Wso2Options.Authority)} must be an absolute https URL.")
+            .Validate(
+                o => string.IsNullOrWhiteSpace(o.TrustedCaPath) || File.Exists(o.TrustedCaPath),
+                $"{Wso2Options.SectionName}:{nameof(Wso2Options.TrustedCaPath)} points to a file that does not exist.")
+            .ValidateOnStart();
+
+        services.AddHttpClient(Wso2Backchannel.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(sp =>
+                Wso2Backchannel.CreatePrimaryHandler(sp.GetRequiredService<IOptions<Wso2Options>>().Value))
+            .AddHttpMessageHandler(sp =>
+            {
+                var options = sp.GetRequiredService<IOptions<Wso2Options>>().Value;
+                return new Wso2BackchannelRewriteHandler(options.Authority!, options.EffectiveBackchannelAuthority);
+            });
+
+        services.AddHealthChecks().AddCheck<Wso2HealthCheck>("wso2", tags: [ReadyTag]);
         return services;
     }
 }
