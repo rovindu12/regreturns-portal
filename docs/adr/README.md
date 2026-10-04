@@ -19,3 +19,4 @@
 | [0015](0015-explicit-trust-for-the-dev-ca.md) | Explicit trust for a private development CA, never disabled validation |
 | [0016](0016-hash-chained-audit-trail.md) | Tamper-evident audit trail as an HMAC hash chain |
 | [0017](0017-iam-bootstrap.md) | WSO2 configuration as code with an idempotent setup tool |
+| [0018](0018-api-token-validation-and-institution-scoping.md) | API token validation and institution scoping |

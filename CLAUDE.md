@@ -94,10 +94,12 @@ Key domain rules (see `src/RegReturns.Domain/Submissions/Submission.cs`):
 - Entities: private setters, factory methods, `Guid.CreateVersion7()` ids assigned in `Entity`.
 - No magic strings: field codes, rule codes and schema names are constants (`MlrTemplate.TotalHqla`, `Schemas.Returns`).
 - Logging: `[LoggerMessage]` source-generated methods with event ids grouped per area (1xxx persistence, 2xxx migrator,
-  9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
+  30xx audit and identity, 31xx portal sign-in, 32xx API authentication, 4xxx IamBootstrap, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
 - Time: inject `TimeProvider`; store UTC `DateTimeOffset`; dates as `DateOnly`; parse numbers with `CultureInfo.InvariantCulture`.
 - Config: options classes with `ValidateDataAnnotations().ValidateOnStart()`. Secrets only in user-secrets or environment variables.
   Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web and Api share it), `Oidc:ClientSecret` (Web).
+  WSO2 settings: `Wso2:Authority` (public issuer base), `Wso2:TrustedCaPath`, optional `Wso2:BackchannelAuthority`
+  (e.g. `https://wso2:9443/` inside Docker), `Iam:EnforceMfa`.
   IamBootstrap reads `.env` itself and writes generated client secrets to `.env.generated` (mode 600, git-ignored).
 - Identity: WSO2 is the only identity store; `AppUser` rows link to WSO2 by subject id. Role, claim and scope names are
   constants in `RoleNames`, `ClaimNames`, `ApiScopes` and `IamNames`. Change WSO2 only through IamBootstrap steps, never
