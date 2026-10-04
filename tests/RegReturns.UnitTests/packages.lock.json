@@ -205,18 +205,6 @@
           "Microsoft.Extensions.Primitives": "10.0.12"
         }
       },
-      "Microsoft.Extensions.Caching.Memory": {
-        "type": "Transitive",
-        "resolved": "10.0.12",
-        "contentHash": "fhC3DHcBcFF4bXvHIxFtXJYNut7q7ZItqNFcgWfrIgmpVImlcEKNHhE7ztpNSPJYMHYYStS5QGND2I5mC26yeA==",
-        "dependencies": {
-          "Microsoft.Extensions.Caching.Abstractions": "10.0.12",
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12",
-          "Microsoft.Extensions.Logging.Abstractions": "10.0.12",
-          "Microsoft.Extensions.Options": "10.0.12",
-          "Microsoft.Extensions.Primitives": "10.0.12"
-        }
-      },
       "Microsoft.Extensions.Configuration": {
         "type": "Transitive",
         "resolved": "10.0.12",
@@ -691,6 +679,7 @@
         "dependencies": {
           "Microsoft.AspNetCore.Authorization": "[10.0.12, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.12, )",
+          "Microsoft.Extensions.Caching.Memory": "[10.0.12, )",
           "Microsoft.Extensions.Configuration.Binder": "[10.0.12, )",
           "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore": "[10.0.12, )",
           "Microsoft.Extensions.Http": "[10.0.12, )",
@@ -769,6 +758,19 @@
           "Microsoft.Extensions.Caching.Memory": "10.0.12",
           "Microsoft.Extensions.Configuration.Abstractions": "10.0.12",
           "Microsoft.Extensions.Logging": "10.0.12"
+        }
+      },
+      "Microsoft.Extensions.Caching.Memory": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.12, )",
+        "resolved": "10.0.12",
+        "contentHash": "fhC3DHcBcFF4bXvHIxFtXJYNut7q7ZItqNFcgWfrIgmpVImlcEKNHhE7ztpNSPJYMHYYStS5QGND2I5mC26yeA==",
+        "dependencies": {
+          "Microsoft.Extensions.Caching.Abstractions": "10.0.12",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.12",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.12",
+          "Microsoft.Extensions.Options": "10.0.12",
+          "Microsoft.Extensions.Primitives": "10.0.12"
         }
       },
       "Microsoft.Extensions.Configuration.Binder": {

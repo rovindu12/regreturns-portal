@@ -38,4 +38,13 @@ public static class ClaimNames
 
     /// <summary>Space-separated OAuth scopes granted to the token.</summary>
     public const string Scope = "scope";
+
+    /// <summary>
+    /// WSO2's token subject type: <see cref="ApplicationTokenType"/> for client-credentials tokens,
+    /// <c>APPLICATION_USER</c> for tokens issued to a signed-in user.
+    /// </summary>
+    public const string AuthorizedUserType = "aut";
+
+    /// <summary>The <see cref="AuthorizedUserType"/> value of a client-credentials (machine-to-machine) token.</summary>
+    public const string ApplicationTokenType = "APPLICATION";
 }

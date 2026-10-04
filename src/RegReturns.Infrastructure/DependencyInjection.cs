@@ -53,7 +53,7 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Adds the tamper-evident audit trail. Requires <c>Audit:HmacKey</c>; the app refuses to start without it.
+    /// Adds the tamper-evident audit trail and the de-duplicating <see cref="AccessDeniedAuditor"/>. Requires <c>Audit:HmacKey</c>; the app refuses to start without it.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configuration">Application configuration.</param>
@@ -66,6 +66,8 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.TryAddSingleton<AuditHasher>();
         services.TryAddScoped<IAuditTrail, AuditTrail>();
+        services.AddMemoryCache();
+        services.TryAddScoped<AccessDeniedAuditor>();
         return services;
     }
 
