@@ -27,7 +27,10 @@ public static class AuthorizationExtensions
         return services;
     }
 
-    /// <summary>Defines the policies; public so tests can evaluate them without a host.</summary>
+    /// <summary>
+    /// Defines the policies; public so tests can evaluate them without a host. API policies need a scope and an
+    /// institution: the API adds <c>institution_id</c> only for clients registered in <c>iam.ApiClients</c>.
+    /// </summary>
     /// <param name="options">The authorization options.</param>
     public static void Configure(AuthorizationOptions options)
     {
@@ -73,12 +76,12 @@ public static class AuthorizationExtensions
 
         options.AddPolicy(Policies.ApiReturnsRead, p => p
             .RequireAuthenticatedUser()
-            .AddRequirements(new ScopeRequirement(ApiScopes.ReturnsRead)));
+            .AddRequirements(new ScopeRequirement(ApiScopes.ReturnsRead), new InstitutionMemberRequirement()));
         options.AddPolicy(Policies.ApiReturnsSubmit, p => p
             .RequireAuthenticatedUser()
-            .AddRequirements(new ScopeRequirement(ApiScopes.ReturnsSubmit)));
+            .AddRequirements(new ScopeRequirement(ApiScopes.ReturnsSubmit), new InstitutionMemberRequirement()));
         options.AddPolicy(Policies.ApiReferenceRead, p => p
             .RequireAuthenticatedUser()
-            .AddRequirements(new ScopeRequirement(ApiScopes.ReferenceRead)));
+            .AddRequirements(new ScopeRequirement(ApiScopes.ReferenceRead), new InstitutionMemberRequirement()));
     }
 }
