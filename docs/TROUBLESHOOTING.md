@@ -188,3 +188,32 @@ Comments are never logged; they are in the return's history and the audit trail.
 | A supervisor gets 404 for a return the bank can see | The bank has not submitted it yet: drafts are visible only to their bank (ADR 0025) | Expected; it appears in the worklist once a checker submits it |
 | A return is missing from "Decided in the last 30 days" | Only decisions of the last 30 days are listed, newest 50 | Open it from the bank's history or filter the worklist by bank |
 
+
+## 8. Audit trail
+
+Every save in the portal and the API writes one audit entry per changed aggregate in the same transaction (ADR 0024),
+so a change that is in the database has its entry in the trail, and a failed or rolled-back save has none. Auditors and
+administrators open **Audit trail**: filter by action, entity type and id, or actor, and select an entity id to see
+that entity's whole history. Each data-change entry lists the values before and after; the trace id links it to the
+request's logs in Seq.
+
+**Verify chain** checks every entry up to the newest one and records the check as a `Chain verified` entry. It logs
+3003 when the chain is intact, with the newest entry's sequence and hash, and 3004 when it is broken. The
+`audit.verify-chain` span carries the entries checked and the kind of break; `audit.append-data-changes` times the
+audited part of each save.
+
+```
+EventId.Id in [3003, 3004]
+EventId.Id = 3004
+```
+
+| Result or symptom | What it means | What to do |
+|---|---|---|
+| "Entry N is missing: entry M follows entry N-1" | Entries were deleted from the database with the append-only trigger disabled | Treat it as a security incident: keep the database as it is, find who disabled `audit.TR_AuditEntries_AppendOnly` (SQL Server audit, DBA access records) and compare with a backup |
+| "Entry N does not carry the hash of entry N-1" | Entries were re-ordered, or one was replaced by an entry sealed for another position | As above |
+| "Entry N does not match its hash" | Entry N, or its change document, was edited after it was written | As above; the entry's values in a backup show what was changed |
+| "Entry 1 does not match its hash" (or the first entry one host wrote) straight after a deployment | `Audit:HmacKey` is not the key the entries were written with, or the Web and Api hosts have different keys | Restore the original key in both hosts; never rotate it while entries exist (ADR 0016) |
+| The chain is intact but its newest entry is older than a head logged earlier (3003) | Entries were deleted from the end of the chain, which leaves no gap to detect (ADR 0024) | Compare the heads recorded by earlier verifications; investigate as above |
+| Saves fail with SQL error 51000 "Could not lock the audit chain." | A transaction held the chain lock for more than 10 seconds, so the writer gave up | Look for a long-running transaction in the logs at that time (a slow request that saved, or a session left open in SQL Server) |
+| Error 51001 from SQL Server | Something tried to update or delete an audit entry | Expected: the trail is append-only |
+| A change is not in the trail | It was made outside EF Core (raw SQL, the migrator and seeding), or it only touched properties that are never recorded (`AppUser.Email`, `StoredFile.Content`) | Expected; seeding writes no entries. Data fixed by hand in SQL is not audited, so avoid it |

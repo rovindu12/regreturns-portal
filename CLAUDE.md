@@ -26,8 +26,9 @@ as the domain and server right before the phase 11 deploy.
 | 1. Scaffold, domain, DB, seed (+ observability baseline) | done |
 | 2. WSO2 in Docker, IamBootstrap, OIDC login, role policies | done |
 | 3. Templates, submission, validation engine | done |
-| 4. Workflow, queues, audit interceptor, auditor verify screen | next |
-| 5-12 | not started |
+| 4. Workflow, queues, audit interceptor, auditor verify screen | done |
+| 5. Web API: v1 endpoints, idempotency, paging, rate limits, Swagger | next |
+| 6-12 | not started |
 
 ## Commands
 
@@ -102,6 +103,16 @@ Templates and validation (see `src/RegReturns.Domain/Templates` and `Validation/
 - Comments are required on every step except "start review". Returning for correction bumps `Revision`.
 - `IsLate` is set on first submission if after the obligation's due date (UTC).
 
+Audit trail (see `src/RegReturns.Infrastructure/Auditing`, ADR 0016 and 0024):
+- Hash chain: gap-free `Sequence`, HMAC-SHA256 over `AuditEntry.ToCanonicalString()` plus the previous hash. Every
+  writer (`AuditTrail.RecordAsync` for events, audited saves for data changes) takes the `sp_getapplock` chain lock
+  (`AuditChain`) inside its transaction. An `INSTEAD OF UPDATE, DELETE` trigger makes the table append-only (51001).
+- In the hosts every `SaveChanges` audits itself: one entry per changed aggregate root, in the same transaction, with a
+  JSON change document (`AuditChanges`) and the actor from the host's `IAuditContext`. Contexts built without an
+  `IDataChangeAuditor` (migrator, seeding, design time, `SqlServerFixture.CreateContext`) write no entries.
+- Never add `AuditEntry` rows directly. Mark a property that must not be recorded `[NotAudited]` (with a unit test).
+  A new canonical field may only be appended, and only when not null, so old entries keep their hashes.
+
 ## Conventions
 
 - .NET 10, C# latest, nullable on, `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, SonarAnalyzer and
@@ -162,6 +173,11 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
   clock at 1 March 2027, so a January 2027 return is late).
 - A form with several steps posts to the endpoint of the button pressed: `<button asp-action="Approve">` renders a
   `formaction`. Each endpoint still carries its own policy (`PortalEndpointMetadataTests` checks the workflow ones).
+- Host saves are audited, so a host test that counts audit entries filters by action or actor; helper contexts
+  (`SqlServerFixture.CreateContext`) are not audited, so test setup leaves no entries. Tamper tests disable
+  `audit.TR_AuditEntries_AppendOnly`, change rows and re-enable it in a `finally`, on a database of their own.
+- A user transaction around an audited save must run inside `CreateExecutionStrategy().ExecuteAsync` when retries are
+  on (as in the hosts); the save joins it and holds the chain lock until it commits or rolls back.
 - WSO2 rejects role names starting with `system_`; the platform admin role is `portal_admin`.
 - WSO2 encrypts TOTP secrets with its own key: an administrator cannot set one. IamBootstrap enrols as the user
   (`DemoTotpStep`); never request `internal_login` from the portal, which would open WSO2's self-service APIs.
