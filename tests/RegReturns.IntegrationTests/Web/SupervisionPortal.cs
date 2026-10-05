@@ -10,8 +10,8 @@ using RegReturns.IntegrationTests.Infrastructure;
 namespace RegReturns.IntegrationTests.Web;
 
 /// <summary>
-/// Signs regulator staff in to the portal under test (linking the seeded demo users as first sign-in does), creates
-/// users holding two roles for segregation-of-duties tests, and posts the workflow forms.
+/// Signs regulator staff (supervisors and the auditor) in to the portal under test, linking the seeded demo users as
+/// first sign-in does, creates users holding two roles for segregation-of-duties tests, and posts the workflow forms.
 /// </summary>
 /// <param name="factory">The portal host.</param>
 /// <param name="connectionString">The test class's own database.</param>
@@ -27,6 +27,9 @@ internal sealed class SupervisionPortal(WebApplicationFactory<Program> factory, 
     /// <param name="withTotp">Whether the sign-in included the TOTP step.</param>
     public Task<HttpClient> ApproverAsync(bool withTotp = true) =>
         SignInAsync(DemoUsers.Approver, [Role.SupervisorApprover], bankCode: null, withTotp);
+
+    /// <summary>Gets a client signed in as the auditor.</summary>
+    public Task<HttpClient> AuditorAsync() => SignInAsync(DemoUsers.Auditor, [Role.Auditor], bankCode: null, withTotp: false);
 
     /// <summary>
     /// Gets a client signed in as a user holding several roles, created on first use: the way to test the
