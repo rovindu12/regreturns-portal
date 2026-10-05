@@ -122,16 +122,16 @@ internal sealed partial class BankPortal(WebApplicationFactory<Program> factory,
         var page = await client.GetStringAsync($"/bank/returns/{submissionId}", TestContext.Current.CancellationToken);
         var fields = values.Select(v => new KeyValuePair<string, string>($"Values[{v.Key}]", v.Value ?? string.Empty))
             .Append(new("EditVersion", editVersion?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? EditVersionIn(page)));
-        return await client.PostAsync($"/bank/returns/{submissionId}", Form(TokenIn(page), fields), TestContext.Current.CancellationToken);
+        return await client.PostAsync($"/bank/returns/{submissionId}", Form(PortalForms.TokenFrom(page), fields), TestContext.Current.CancellationToken);
     }
 
     /// <summary>Reads the antiforgery token of a page.</summary>
     public static async Task<string> TokenFromAsync(HttpClient client, string path) =>
-        TokenIn(await client.GetStringAsync(path, TestContext.Current.CancellationToken));
+        PortalForms.TokenFrom(await PortalForms.GetHtmlAsync(client, path));
 
     /// <summary>Builds a form post with the antiforgery token.</summary>
     public static FormUrlEncodedContent Form(string token, IEnumerable<KeyValuePair<string, string>>? fields = null) =>
-        new((fields ?? []).Append(new("__RequestVerificationToken", token)));
+        new((fields ?? []).Append(new(PortalForms.TokenField, token)));
 
     /// <summary>Reads the submission id from a redirect to a return page.</summary>
     public static Guid SubmissionIdFrom(HttpResponseMessage response)
@@ -140,13 +140,6 @@ internal sealed partial class BankPortal(WebApplicationFactory<Program> factory,
         var match = ReturnPath().Match(location);
         match.Success.ShouldBeTrue($"Expected a redirect to a return, got {location}.");
         return Guid.Parse(match.Groups[1].Value);
-    }
-
-    private static string TokenIn(string html)
-    {
-        var match = TokenInput().Match(html);
-        match.Success.ShouldBeTrue("The page has no antiforgery token.");
-        return match.Groups[1].Value;
     }
 
     private static string EditVersionIn(string html)
@@ -183,9 +176,6 @@ internal sealed partial class BankPortal(WebApplicationFactory<Program> factory,
         client.BaseAddress = PortalHost.BaseAddress;
         return client;
     }
-
-    [GeneratedRegex("<input[^>]*name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"")]
-    private static partial Regex TokenInput();
 
     [GeneratedRegex("<input[^>]*name=\"EditVersion\"[^>]*value=\"(-?[0-9]+)\"")]
     private static partial Regex EditVersionInput();
