@@ -25,8 +25,9 @@ as the domain and server right before the phase 11 deploy.
 |---|---|
 | 1. Scaffold, domain, DB, seed (+ observability baseline) | done |
 | 2. WSO2 in Docker, IamBootstrap, OIDC login, role policies | done |
-| 3. Templates, submission, validation engine | in progress |
-| 4-12 | not started |
+| 3. Templates, submission, validation engine | done |
+| 4. Workflow, queues, audit interceptor, auditor verify screen | next |
+| 5-12 | not started |
 
 ## Commands
 
@@ -83,6 +84,17 @@ Key domain rules (see `src/RegReturns.Domain/Submissions/Submission.cs`):
 - Maker creates and edits; checker submits and must not be the preparer or last editor; reviewer picks up;
   approver approves or rejects and must not be the reviewer. Supervisory steps require regulator staff (no institution).
 - Submit requires values, a validation run after the last edit, no errors and a justification (≥20 chars) per warning.
+- One live (not rejected) submission per obligation (`UX_Submissions_LiveObligation`). Saving unchanged values is not an
+  edit. Forms post the `EditVersion` they were rendered with; an older one is `Submission.EditConflict` (ADR 0023).
+
+Templates and validation (see `src/RegReturns.Domain/Templates` and `Validation/ValidationEngine.cs`):
+- A submission is captured with the published version whose `EffectiveFrom` (first period start) is the latest on or
+  before the period start; one draft version per return type; retire is explicit (ADR 0009).
+- `ValidationEngine` is pure: Required and DataType report blanks and bad values once; Range, CrossField and Variance
+  only judge parsed numbers; findings come in field order, then rule type, then code. Values are parsed only by
+  `FieldValueParser` (invariant culture, precision and column limits) in every channel.
+- Cross-field expressions use `RuleExpression` (ADR 0021): `[CODE]`, numbers, `+ - * /`, `Min`, `Max`, `Abs`.
+- Uploads (`.xlsx`, `.csv`) are checked by content, stored in `returns.StoredFiles` and never served (ADR 0022).
 - Comments are required on every step except "start review". Returning for correction bumps `Revision`.
 - `IsLate` is set on first submission if after the obligation's due date (UTC).
 
@@ -99,7 +111,8 @@ Key domain rules (see `src/RegReturns.Domain/Submissions/Submission.cs`):
 - Entities: private setters, factory methods, `Guid.CreateVersion7()` ids assigned in `Entity`.
 - No magic strings: field codes, rule codes and schema names are constants (`MlrTemplate.TotalHqla`, `Schemas.Returns`).
 - Logging: `[LoggerMessage]` source-generated methods with event ids grouped per area (1xxx persistence, 2xxx migrator,
-  30xx audit and identity, 31xx portal sign-in, 32xx API authentication, 4xxx IamBootstrap, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
+  30xx audit and identity, 31xx portal sign-in, 32xx API authentication, 4xxx IamBootstrap, 50xx templates, 51xx returns,
+  52xx uploads, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
 - Time: inject `TimeProvider`; store UTC `DateTimeOffset`; dates as `DateOnly`; parse numbers with `CultureInfo.InvariantCulture`.
 - Config: options classes with `ValidateDataAnnotations().ValidateOnStart()`. Secrets only in user-secrets or environment variables.
   Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web and Api share it), `Oidc:ClientSecret` (Web).
@@ -110,6 +123,11 @@ Key domain rules (see `src/RegReturns.Domain/Submissions/Submission.cs`):
   (mode 600, git-ignored).
 - Scripts never put a secret on a command line (other local users can read the process list): curl gets credentials
   through `-K <(...)` or `-H @<(...)`, jq through `$ENV`, keytool through `:env`, sqlcmd through `SQLCMDPASSWORD`.
+- Web: controllers take use-case handlers per action with `[FromServices]` and never touch `IAppDbContext`
+  (architecture test). Use cases resolve the caller with `ICurrentActor` (from the user record, never from claims)
+  and scope bank data to the caller's institution; another bank's ids answer 404. Post-redirect-get with
+  `TempData.Success/Error` (`_Flash` partial); re-render with the posted input when a save fails. No inline scripts
+  (page scripts in `wwwroot/js`, loaded in the `Scripts` section).
 - Identity: WSO2 is the only identity store; `AppUser` rows link to WSO2 by subject id. Role, claim and scope names are
   constants in `RoleNames`, `ClaimNames`, `ApiScopes` and `IamNames`. Change WSO2 only through IamBootstrap steps, never
   by hand in the Console, so a fresh environment can be rebuilt.
@@ -128,6 +146,12 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 ## Gotchas
 
 - `iam` is the identity schema name (`identity` is a T-SQL keyword).
+- Queries load collections with split queries (set globally in `AddInfrastructure`, because `AsSplitQuery` is
+  relational-only and Application references EF Core abstractions only). Rules have no stored order; sort them.
+- `@section` is a Razor keyword: do not name a loop variable `section` in a view. The HTML encoder escapes `+`, so
+  tests decode the page (`WebUtility.HtmlDecode`) before matching rule messages.
+- Host tests sign in as seeded demo users by linking `AppUser.Wso2UserId` to the test subject (`BankPortal`);
+  without that link, use cases answer `User.NotLinked`.
 - WSO2 rejects role names starting with `system_`; the platform admin role is `portal_admin`.
 - WSO2 encrypts TOTP secrets with its own key: an administrator cannot set one. IamBootstrap enrols as the user
   (`DemoTotpStep`); never request `internal_login` from the portal, which would open WSO2's self-service APIs.
