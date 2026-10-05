@@ -21,6 +21,9 @@ internal sealed class BootstrapState
     /// <summary>Gets the values written to the generated env file (secrets: never logged).</summary>
     public SortedDictionary<string, string> GeneratedSettings { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Gets the values already in the generated settings file when the run started (for secrets WSO2 cannot return).</summary>
+    public Dictionary<string, string> ExistingSettings { get; } = new(StringComparer.Ordinal);
+
     /// <summary>Gets the per-object outcomes, for the summary.</summary>
     public List<(string Kind, string Name, Outcome Outcome)> Changes { get; } = [];
 

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # End-to-end smoke test of the identity setup against a running WSO2, API and (optionally) portal.
 #
-#   scripts/smoke-wso2.sh              WSO2 discovery and JWKS, a bank's client-credentials token, the API's
-#                                      institution scoping and audience check, and a headless maker login + logout
-#   scripts/smoke-wso2.sh --browser    also signs in through the portal in headless Chromium (Playwright)
+#   scripts/smoke-wso2.sh              WSO2 discovery and JWKS; a bank's client-credentials token and the API's
+#                                      institution scoping and audience checks; headless logins as maker (password)
+#                                      and approver.mfa (password + TOTP) with claim checks and logout; the
+#                                      provisioner's SCIM scopes; and closed self-service (My Account, /scim2/Me)
+#   scripts/smoke-wso2.sh --browser    also signs in to the portal in headless Chromium (Playwright): bank workspace
+#                                      shown, supervision refused, sign-out
 #
 # Reads .env and .env.generated (IamBootstrap). Override with WSO2_BASE, API_BASE, PORTAL_BASE, WSO2_CA and APP_CA
 # (APP_CA=system uses the system trust store, for the hosted demo). Needs bash, curl, openssl, python3; --browser also
@@ -39,6 +42,9 @@ BANK_CLIENT_SECRET="$(setting "BANK_${OWN_BANK}_CLIENT_SECRET")"
 PORTAL_CLIENT_ID="$(setting Oidc__ClientId)"
 PORTAL_CLIENT_SECRET="$(setting Oidc__ClientSecret)"
 DEMO_PASSWORD="$(setting DEMO_USER_PASSWORD)"
+PROVISIONER_CLIENT_ID="$(setting PROVISIONER_CLIENT_ID)"
+PROVISIONER_CLIENT_SECRET="$(setting PROVISIONER_CLIENT_SECRET)"
+APPROVER_TOTP_SECRET="$(setting TOTP_SECRET_APPROVER_MFA)"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf -- "${WORK}"' EXIT
@@ -50,7 +56,8 @@ die() { echo "  FAIL  $*" >&2; echo "${passed} check(s) passed before the failur
 section() { echo; echo "$*"; }
 
 [ -f "${WSO2_CA}" ] || die "WSO2 CA not found at ${WSO2_CA} (run scripts/dev-certs.sh or set WSO2_CA)"
-for name in BANK_CLIENT_ID BANK_CLIENT_SECRET PORTAL_CLIENT_ID PORTAL_CLIENT_SECRET DEMO_PASSWORD; do
+for name in BANK_CLIENT_ID BANK_CLIENT_SECRET PORTAL_CLIENT_ID PORTAL_CLIENT_SECRET DEMO_PASSWORD PROVISIONER_CLIENT_ID \
+  PROVISIONER_CLIENT_SECRET APPROVER_TOTP_SECRET; do
   [ -n "${!name}" ] || die "${name} is not set: run IamBootstrap apply (it writes .env.generated)"
 done
 
@@ -156,60 +163,131 @@ code="$(status -H "Authorization: Bearer ${tampered}" "${API_BASE}/v1/me")"
 [ "${code}" = 401 ] || die "forged signature returned ${code}, expected 401"
 ok "forged signature: 401"
 
-section "Portal login as ${MAKER} (authorization code + PKCE, headless)"
+totp_code() {
+  python3 - "$1" <<'PY'
+import base64, hashlib, hmac, struct, sys, time
+secret = sys.argv[1].upper().replace(' ', '')
+key = base64.b32decode(secret + '=' * (-len(secret) % 8))
+digest = hmac.new(key, struct.pack('>Q', int(time.time()) // 30), hashlib.sha1).digest()
+offset = digest[-1] & 0x0F
+print(f"{(struct.unpack('>I', digest[offset:offset + 4])[0] & 0x7FFFFFFF) % 1000000:06d}")
+PY
+}
+
 redirect_uri="${PORTAL_BASE}/signin-oidc"
 post_logout_uri="${PORTAL_BASE}/signout-callback-oidc"
-verifier="$(openssl rand -hex 32)"
-challenge="$(printf %s "${verifier}" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
-state="$(openssl rand -hex 8)"; nonce="$(openssl rand -hex 8)"
-authorize="${WSO2_BASE}/oauth2/authorize?response_type=code&client_id=$(url_encode "${PORTAL_CLIENT_ID}")"
-authorize+="&redirect_uri=$(url_encode "${redirect_uri}")&scope=$(url_encode "openid profile email roles institution")"
-authorize+="&state=${state}&nonce=${nonce}&code_challenge=${challenge}&code_challenge_method=S256"
-location="$(redirect_of "${authorize}")"
-[[ "${location}" == *login.do* ]] || die "authorize did not show the login page: ${location%%\?*}"
-session_key="$(query_param "${location}" sessionDataKey)"
-location="$(redirect_of --data-urlencode "username=${MAKER}" --data-urlencode "password=${DEMO_PASSWORD}" \
-  --data-urlencode "sessionDataKey=${session_key}" "${WSO2_BASE}/commonauth")"
-[[ "${location}" != *authFailure=true* && "${location}" != *login.do* ]] || die "WSO2 rejected the demo password for ${MAKER}"
-location="$(redirect_of "${location}")"
-[[ "${location}" != *consent* ]] || die "WSO2 asked for consent; the portal app should skip it (re-run IamBootstrap apply)"
-[[ "${location}" == "${redirect_uri}"* ]] || die "login did not return to the portal callback: ${location%%\?*}"
-[ "$(query_param "${location}" state)" = "${state}" ] || die "state mismatch"
-auth_code="$(query_param "${location}" code)"
-[ -n "${auth_code}" ] || die "no authorization code: $(query_param "${location}" error)"
-ok "login form accepted and code returned to ${redirect_uri}"
-tokens="$(curl -sS --cacert "${WSO2_CA}" -u "${PORTAL_CLIENT_ID}:${PORTAL_CLIENT_SECRET}" \
-  --data-urlencode grant_type=authorization_code --data-urlencode "code=${auth_code}" \
-  --data-urlencode "redirect_uri=${redirect_uri}" --data-urlencode "code_verifier=${verifier}" "${WSO2_BASE}/oauth2/token")"
-id_token="$(json_get id_token <<< "${tokens}")"
-user_token="$(json_get access_token <<< "${tokens}")"
-[ -n "${id_token}" ] || die "token exchange failed: $(json_get error <<< "${tokens}")"
+
+# portal_login <user> [totp secret]: authorization code + PKCE through the login form (and the TOTP step when a
+# secret is given); leaves the tokens in id_token / user_token and the WSO2 session in the cookie jar.
+portal_login() {
+  local user="$1" totp_secret="${2:-}" verifier challenge location session_key auth_code tokens attempt
+  rm -f "${JAR}"
+  verifier="$(openssl rand -hex 32)"
+  challenge="$(printf %s "${verifier}" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+  state="$(openssl rand -hex 8)"; nonce="$(openssl rand -hex 8)"
+  authorize="${WSO2_BASE}/oauth2/authorize?response_type=code&client_id=$(url_encode "${PORTAL_CLIENT_ID}")"
+  authorize+="&redirect_uri=$(url_encode "${redirect_uri}")&scope=$(url_encode "openid profile email roles institution")"
+  authorize+="&state=${state}&nonce=${nonce}&code_challenge=${challenge}&code_challenge_method=S256"
+  location="$(redirect_of "${authorize}")"
+  [[ "${location}" == *login.do* ]] || die "authorize did not show the login page: ${location%%\?*}"
+  session_key="$(query_param "${location}" sessionDataKey)"
+  location="$(redirect_of --data-urlencode "username=${user}" --data-urlencode "password=${DEMO_PASSWORD}" \
+    --data-urlencode "sessionDataKey=${session_key}" "${WSO2_BASE}/commonauth")"
+  [[ "${location}" != *authFailure=true* && "${location}" != *login.do* ]] || die "WSO2 rejected the demo password for ${user}"
+  if [ -n "${totp_secret}" ]; then
+    [[ "${location}" == *totp.do* ]] || die "WSO2 did not ask ${user} for a TOTP code: ${location%%\?*}"
+    for attempt in 1 2; do
+      location="$(redirect_of --data-urlencode "token=$(totp_code "${totp_secret}")" \
+        --data-urlencode "sessionDataKey=${session_key}" "${WSO2_BASE}/commonauth")"
+      [[ "${location}" == *authFailure=true* ]] || break
+      # A code is accepted once per 30-second step; wait for the next one and retry.
+      [ "${attempt}" = 1 ] && sleep $((31 - $(date +%s) % 30))
+    done
+    [[ "${location}" != *authFailure=true* && "${location}" != *totp.do* ]] || die "WSO2 rejected the TOTP code for ${user}"
+  else
+    [[ "${location}" != *totp* ]] || die "WSO2 asked ${user} for a second factor it should not need"
+  fi
+  location="$(redirect_of "${location}")"
+  [[ "${location}" != *consent* ]] || die "WSO2 asked for consent; the portal app should skip it (re-run IamBootstrap apply)"
+  [[ "${location}" == "${redirect_uri}"* ]] || die "login did not return to the portal callback: ${location%%\?*}"
+  [ "$(query_param "${location}" state)" = "${state}" ] || die "state mismatch"
+  auth_code="$(query_param "${location}" code)"
+  [ -n "${auth_code}" ] || die "no authorization code: $(query_param "${location}" error)"
+  tokens="$(curl -sS --cacert "${WSO2_CA}" -u "${PORTAL_CLIENT_ID}:${PORTAL_CLIENT_SECRET}" \
+    --data-urlencode grant_type=authorization_code --data-urlencode "code=${auth_code}" \
+    --data-urlencode "redirect_uri=${redirect_uri}" --data-urlencode "code_verifier=${verifier}" "${WSO2_BASE}/oauth2/token")"
+  id_token="$(json_get id_token <<< "${tokens}")"
+  user_token="$(json_get access_token <<< "${tokens}")"
+  [ -n "${id_token}" ] || die "token exchange failed: $(json_get error <<< "${tokens}")"
+}
+
+# portal_logout: RP-initiated logout with the browser's WSO2 cookie, then proves the session is gone.
+portal_logout() {
+  local location
+  location="$(redirect_of -G "${WSO2_BASE}/oidc/logout" --data-urlencode "id_token_hint=${id_token}" \
+    --data-urlencode "post_logout_redirect_uri=${post_logout_uri}" --data-urlencode "state=${state}")"
+  [[ "${location}" == "${post_logout_uri}"* ]] || die "logout did not return to ${post_logout_uri}: ${location%%\?*}"
+  location="$(redirect_of "${authorize}&prompt=none")"
+  [ "$(query_param "${location}" error)" = login_required ] || die "the WSO2 session survived logout"
+}
+
+section "Portal login as ${MAKER} (authorization code + PKCE, headless)"
+portal_login "${MAKER}"
+ok "password login returns a code to ${redirect_uri}, no second factor asked"
 jwt_check "${id_token}" \
   "p.get('nonce') == '${nonce}'" \
   "has('aud', '${PORTAL_CLIENT_ID}')" \
   "has('roles', 'bank_maker')" \
   "p.get('institution_id') == '${OWN_BANK}'" \
   "p.get('username', '${MAKER}') == '${MAKER}'" \
-  "has('amr', 'BasicAuthenticator')" \
+  "p.get('amr') == ['BasicAuthenticator']" \
   "bool(p.get('sid'))" || die "ID token claims"
-ok "ID token: nonce, bank_maker role, institution_id ${OWN_BANK}, password authentication, session id"
+ok "ID token: nonce, bank_maker role, institution_id ${OWN_BANK}, password-only authentication, session id"
 code="$(status -H "Authorization: Bearer ${user_token}" "${API_BASE}/v1/me")"
 [ "${code}" = 401 ] || die "the portal's access token (wrong audience) returned ${code} from the API, expected 401"
 ok "API rejects the portal's access token (wrong audience): 401"
-location="$(redirect_of -G "${WSO2_BASE}/oidc/logout" --data-urlencode "id_token_hint=${id_token}" \
-  --data-urlencode "post_logout_redirect_uri=${post_logout_uri}" --data-urlencode "state=${state}")"
-[[ "${location}" == "${post_logout_uri}"* ]] || die "logout did not return to ${post_logout_uri}: ${location%%\?*}"
-location="$(redirect_of "${authorize}&prompt=none")"
-[ "$(query_param "${location}" error)" = login_required ] || die "the WSO2 session survived logout"
+code="$(wso2 -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${user_token}" "${WSO2_BASE}/scim2/Me")"
+[ "${code}" = 403 ] || die "a portal token reached WSO2's self-service API (/scim2/Me returned ${code}, expected 403)"
+ok "portal token cannot use WSO2's self-service API: /scim2/Me 403"
+portal_logout
 ok "logout returns to the portal and ends the WSO2 session"
+
+section "Portal login as approver.mfa (password + TOTP)"
+portal_login approver.mfa "${APPROVER_TOTP_SECRET}"
+jwt_check "${id_token}" \
+  "has('roles', 'supervisor_approver')" \
+  "'institution_id' not in p" \
+  "has('amr', 'BasicAuthenticator') and has('amr', 'totp')" || die "approver ID token claims"
+ok "TOTP step passed; ID token has supervisor_approver, no institution, amr password + totp"
+portal_logout
+ok "logout ends the approver's WSO2 session"
+
+section "Provisioner client (client credentials, SCIM 2 scopes)"
+provisioner_scopes="internal_user_mgt_create internal_user_mgt_update internal_user_mgt_list internal_user_mgt_view internal_user_mgt_delete internal_role_mgt_view internal_role_mgt_users_update"
+token_response="$(curl -sS --cacert "${WSO2_CA}" -u "${PROVISIONER_CLIENT_ID}:${PROVISIONER_CLIENT_SECRET}" \
+  --data-urlencode grant_type=client_credentials --data-urlencode "scope=${provisioner_scopes} internal_login" \
+  "${WSO2_BASE}/oauth2/token")"
+granted="$(json_get scope <<< "${token_response}")"
+for wanted in ${provisioner_scopes}; do
+  [[ " ${granted} " == *" ${wanted} "* ]] || die "provisioner token lacks ${wanted} (WSO2 drops scopes the app is not authorized for)"
+done
+[[ " ${granted} " != *" internal_login "* ]] || die "provisioner token was granted internal_login"
+ok "token carries the seven SCIM user and role scopes and nothing extra that was asked for"
+
+section "Self-service is closed"
+my_account_challenge="$(openssl rand -hex 32 | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+my_account="$(redirect_of "${WSO2_BASE}/oauth2/authorize?response_type=code&client_id=MY_ACCOUNT&scope=openid&redirect_uri=$(url_encode "${WSO2_BASE}/myaccount")&code_challenge=${my_account_challenge}&code_challenge_method=S256")"
+[[ "${my_account}" == *authentication.flow.app.disabled* ]] || die "My Account still accepts sign-ins: ${my_account%%\?*}"
+ok "My Account sign-in is refused (app disabled)"
 
 if [ "${BROWSER}" = true ]; then
   section "Portal at ${PORTAL_BASE} (headless Chromium)"
   command -v node > /dev/null || die "--browser needs Node and Playwright"
   NODE_PATH="${NODE_PATH:-$(npm root -g 2> /dev/null)}" PORTAL_BASE="${PORTAL_BASE}" WSO2_BASE="${WSO2_BASE}" \
     WSO2_CA="${WSO2_CA}" APP_CA="${APP_CA:-system}" LOGIN_USER="${MAKER}" LOGIN_PASSWORD="${DEMO_PASSWORD}" \
-    EXPECT_TEXT="${OWN_BANK}" node "${ROOT}/scripts/smoke/portal-login.cjs" || die "browser sign-in"
-  ok "browser sign-in as ${MAKER} lands on the bank dashboard, sign-out returns to the landing page"
+    EXPECT_PATH=/bank EXPECT_TEXT="${OWN_BANK}" DENIED_PATH=/supervision \
+    node "${ROOT}/scripts/smoke/portal-login.cjs" || die "browser sign-in"
+  ok "browser sign-in as ${MAKER} opens the bank workspace, is refused supervision, and signs out"
 fi
 
 echo

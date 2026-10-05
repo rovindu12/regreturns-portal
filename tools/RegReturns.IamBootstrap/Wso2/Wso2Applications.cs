@@ -1,3 +1,4 @@
+using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 
@@ -103,6 +104,27 @@ internal sealed class Wso2Applications(Wso2AdminClient wso2)
         return list["applications"]?.AsArray()
             .FirstOrDefault(a => string.Equals(a?["name"]?.GetValue<string>(), name, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>Finds an application by its OAuth client id and reads it in full.</summary>
+    /// <param name="clientId">The client id.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>The application, or <see langword="null"/>.</returns>
+    public async Task<JsonNode?> FindByClientIdAsync(string clientId, CancellationToken cancellationToken)
+    {
+        var list = await wso2.GetAsync($"{Applications}?filter=clientId+eq+{Wso2Ids.Filter(clientId)}", cancellationToken);
+        var id = list["applications"]?.AsArray().FirstOrDefault()?["id"]?.GetValue<string>();
+
+        // List items leave applicationEnabled empty; the full read has it.
+        return id is null ? null : await wso2.GetAsync($"{Applications}/{id}", cancellationToken);
+    }
+
+    /// <summary>Deletes an application. Only for the tool's own temporary apps: deleting an app also deletes its roles.</summary>
+    /// <param name="appId">The application id.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns>A task that completes when done.</returns>
+    public async Task DeleteAsync(string appId, CancellationToken cancellationToken) =>
+        (await wso2.SendAsync(HttpMethod.Delete, $"{Applications}/{appId}", null, Wso2AdminClient.Json, cancellationToken))
+            .EnsureSuccess(HttpStatusCode.NotFound);
 
     /// <summary>Authorizes an API resource's scopes for an application, adding and removing scopes to match.</summary>
     /// <param name="appId">The application id.</param>

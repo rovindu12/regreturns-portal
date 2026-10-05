@@ -38,7 +38,7 @@ internal static partial class BootstrapCommands
     {
         var envFile = EnvFileOption();
         var command = new Command("demo-users", "Reset the demo users' passwords, roles, institutions and TOTP secret.") { envFile };
-        command.SetAction((parse, ct) => RunAsync([DemoUsersStep.StepName], parse.GetValue(envFile), resetDemoUsers: true, ct));
+        command.SetAction((parse, ct) => RunAsync([DemoUsersStep.StepName, DemoTotpStep.StepName], parse.GetValue(envFile), resetDemoUsers: true, ct));
         return command;
     }
 
@@ -94,7 +94,10 @@ internal static partial class BootstrapCommands
         builder.Services.AddScoped<IBootstrapStep, PortalAppStep>();
         builder.Services.AddScoped<IBootstrapStep, RolesStep>();
         builder.Services.AddScoped<IBootstrapStep, ApiClientsStep>();
+        builder.Services.AddScoped<IBootstrapStep, ProvisionerStep>();
+        builder.Services.AddScoped<IBootstrapStep, SelfServiceStep>();
         builder.Services.AddScoped<IBootstrapStep, DemoUsersStep>();
+        builder.Services.AddScoped<IBootstrapStep, DemoTotpStep>();
 
         return builder.Build();
     }

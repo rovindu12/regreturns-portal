@@ -57,10 +57,20 @@ async function main() {
     await page.locator('button[type="submit"]').first().click();
 
     await page.waitForURL((url) => url.href.startsWith(portalBase) && !url.pathname.startsWith('/signin-oidc'));
-    const landing = page.url();
-    const body = await page.locator('body').innerText();
-    if (!body.includes(expectText)) throw new Error(`landing page ${landing} does not mention ${expectText}`);
-    console.log(`    signed in as ${user}, landed on ${new URL(landing).pathname}`);
+    console.log(`    signed in as ${user}, returned to ${new URL(page.url()).pathname}`);
+
+    const dashboard = await page.goto(`${portalBase}${env('EXPECT_PATH')}`);
+    const body = await page.locator('main').innerText();
+    if (dashboard.status() !== 200 || !body.includes(expectText)) {
+      throw new Error(`${env('EXPECT_PATH')} returned ${dashboard.status()} without ${expectText}`);
+    }
+    console.log(`    ${env('EXPECT_PATH')} shows the workspace for ${expectText}`);
+
+    await page.goto(`${portalBase}${env('DENIED_PATH')}`);
+    if (!new URL(page.url()).pathname.toLowerCase().includes('accessdenied')) {
+      throw new Error(`${env('DENIED_PATH')} did not send ${user} to the access-denied page`);
+    }
+    console.log(`    ${env('DENIED_PATH')} is refused`);
 
     await page.getByRole('button', { name: /sign out/i }).first().click();
     await page.waitForURL((url) => url.href.startsWith(portalBase) && !url.pathname.startsWith('/signout-callback-oidc'));

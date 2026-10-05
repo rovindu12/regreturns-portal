@@ -15,6 +15,9 @@ internal sealed class Wso2Scim(Wso2AdminClient wso2)
     /// <summary>WSO2's SCIM role schema.</summary>
     public const string RoleSchema = "urn:ietf:params:scim:schemas:extension:2.0:Role";
 
+    /// <summary>WSO2's own SCIM user extension (account flags such as <c>totpEnabled</c> and <c>accountLocked</c>).</summary>
+    public const string Wso2UserSchema = "urn:scim:wso2:schema";
+
     private const string Users = "scim2/Users";
     private const string Roles = "scim2/v2/Roles";
 
@@ -49,6 +52,16 @@ internal sealed class Wso2Scim(Wso2AdminClient wso2)
     public async Task PatchUserAsync(string userId, JsonArray operations, CancellationToken cancellationToken) =>
         (await wso2.SendAsync(HttpMethod.Patch, $"{Users}/{userId}", PatchOp(operations), Wso2AdminClient.ScimJson, cancellationToken))
             .EnsureSuccess();
+
+    /// <summary>Returns whether WSO2 marks TOTP as enabled for a user (its <c>totpEnabled</c> claim).</summary>
+    /// <param name="userId">The user id.</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns><see langword="true"/> when the claim is <c>true</c>.</returns>
+    public async Task<bool> IsTotpEnabledAsync(string userId, CancellationToken cancellationToken)
+    {
+        var user = await wso2.GetAsync($"{Users}/{userId}", cancellationToken);
+        return string.Equals(user[Wso2UserSchema]?["totpEnabled"]?.ToString(), "true", StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>Lists the roles whose audience is the given application.</summary>
     /// <param name="appId">The application id.</param>
