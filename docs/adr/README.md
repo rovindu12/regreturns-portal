@@ -20,3 +20,5 @@
 | [0016](0016-hash-chained-audit-trail.md) | Tamper-evident audit trail as an HMAC hash chain |
 | [0017](0017-iam-bootstrap.md) | WSO2 configuration as code with an idempotent setup tool |
 | [0018](0018-api-token-validation-and-institution-scoping.md) | API token validation and institution scoping |
+| [0019](0019-portal-sign-in-and-sessions.md) | Portal sign-in and session lifetime |
+| [0020](0020-demo-mfa-and-self-service-lockdown.md) | Demo TOTP enrolment and self-service lockdown |

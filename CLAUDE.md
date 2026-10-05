@@ -43,6 +43,8 @@ scripts/dev-secrets.sh                                                # again, t
 dotnet run --project tools/RegReturns.IamBootstrap -- demo-users      # reset demo users only (passwords, roles)
 dotnet run --project src/RegReturns.Web                               # https://localhost:7101
 dotnet run --project src/RegReturns.Api                               # https://localhost:7201
+scripts/smoke-wso2.sh --browser                                       # identity smoke test (needs Web + Api running;
+                                                                      # --browser needs Node with Playwright)
 
 dotnet build RegReturns.slnx                                   # warnings are errors
 dotnet test --project tests/RegReturns.UnitTests               # fast, no Docker
@@ -66,7 +68,8 @@ src/RegReturns.ServiceDefaults Serilog, OpenTelemetry, health endpoints, Problem
 src/RegReturns.Web             MVC portal (Razor + Bootstrap 5).
 src/RegReturns.Api             REST API (versioned from phase 5).
 tools/RegReturns.Migrator      `migrate-db [--seed]`, `seed`; legacy migration from phase 7.
-tools/RegReturns.IamBootstrap  `apply`, `demo-users`: idempotent WSO2 setup over its REST APIs (ADR 0017).
+tools/RegReturns.IamBootstrap  `apply`, `demo-users`: idempotent WSO2 setup over its REST APIs (ADR 0017, 0020).
+scripts/smoke-wso2.sh          End-to-end identity smoke test against a running WSO2 + API (`--browser`: + portal).
 tests/RegReturns.UnitTests     Domain, seeding, redaction and architecture tests.
 tests/RegReturns.IntegrationTests  Testcontainers SQL Server, WebApplicationFactory host tests.
 ```
@@ -100,12 +103,14 @@ Key domain rules (see `src/RegReturns.Domain/Submissions/Submission.cs`):
   Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web and Api share it), `Oidc:ClientSecret` (Web).
   WSO2 settings: `Wso2:Authority` (public issuer base), `Wso2:TrustedCaPath`, optional `Wso2:BackchannelAuthority`
   (e.g. `https://wso2:9443/` inside Docker), `Iam:EnforceMfa`.
-  IamBootstrap reads `.env` itself and writes generated client secrets to `.env.generated` (mode 600, git-ignored).
+  IamBootstrap reads `.env` itself and writes generated client secrets and the `approver.mfa` TOTP secret
+  (`TOTP_SECRET_APPROVER_MFA`) to `.env.generated` (mode 600, git-ignored).
 - Identity: WSO2 is the only identity store; `AppUser` rows link to WSO2 by subject id. Role, claim and scope names are
   constants in `RoleNames`, `ClaimNames`, `ApiScopes` and `IamNames`. Change WSO2 only through IamBootstrap steps, never
   by hand in the Console, so a fresh environment can be rebuilt.
 - Tests: `Method_or_behaviour_in_plain_words` names, Shouldly assertions, one behaviour per test. Host tests join the
-  `HostedAppsDefinition` collection. Integration tests that write data use `SqlServerFixture.NewDatabaseConnectionString()`.
+  `HostedAppsDefinition` collection, sign in with `UseTestAuth()` (`X-Test-Claims` header) and use an `https://localhost`
+  base address when they render signed-in pages (the session and antiforgery cookies are `Secure`). Integration tests that write data use `SqlServerFixture.NewDatabaseConnectionString()`.
 - Commits: Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `build:`, `ci:`, `refactor:`). Record decisions as ADRs.
 
 ## Observability
@@ -119,6 +124,10 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
 - `iam` is the identity schema name (`identity` is a T-SQL keyword).
 - WSO2 rejects role names starting with `system_`; the platform admin role is `portal_admin`.
+- WSO2 encrypts TOTP secrets with its own key: an administrator cannot set one. IamBootstrap enrols as the user
+  (`DemoTotpStep`); never request `internal_login` from the portal, which would open WSO2's self-service APIs.
+- Configuration binding appends to a list property's initial items, so option lists default to empty and the values
+  live in appsettings.json (`IamBootstrap:MfaAlwaysUsers`).
 - WSO2 releases a claim only if its scope is requested and the claim is in the app's requested claims. `roles` is a
   string for one role and an array for several. Only roles whose audience is the portal app reach its tokens.
 - WSO2 management API: `PUT` on an app's OIDC settings replaces everything (send `clientId` and `allowedOrigins`);
