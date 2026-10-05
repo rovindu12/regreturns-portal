@@ -4,6 +4,8 @@ using System.ComponentModel.DataAnnotations;
 
 using IamBootstrapTool::RegReturns.IamBootstrap;
 
+using Microsoft.Extensions.Configuration;
+
 namespace RegReturns.UnitTests.IamBootstrap;
 
 public sealed class BootstrapOptionsTests
@@ -92,6 +94,31 @@ public sealed class BootstrapOptionsTests
     public void Mfa_is_enforced_by_default()
     {
         new BootstrapOptions().EnforceMfa.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void No_user_always_gets_mfa_by_default()
+    {
+        new BootstrapOptions().MfaAlwaysUsers.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Mfa_always_users_bound_from_configuration_are_listed_once()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { [$"{BootstrapOptions.SectionName}:MfaAlwaysUsers:0"] = "approver.mfa" })
+            .Build();
+        var options = new BootstrapOptions();
+
+        configuration.GetSection(BootstrapOptions.SectionName).Bind(options);
+
+        options.MfaAlwaysUsers.ShouldBe(["approver.mfa"]);
+    }
+
+    [Fact]
+    public void Self_service_is_locked_down_by_default()
+    {
+        new BootstrapOptions().LockDownSelfService.ShouldBeTrue();
     }
 
     private static BootstrapOptions Options(string portal) => new() { PortalBaseUrl = new Uri(portal) };

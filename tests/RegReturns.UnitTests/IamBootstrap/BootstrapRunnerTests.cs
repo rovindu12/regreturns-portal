@@ -94,6 +94,47 @@ public sealed class BootstrapRunnerTests : IDisposable
         File.Exists(ConfiguredEnvFile).ShouldBeFalse();
     }
 
+    [Fact]
+    public async Task Existing_generated_settings_are_loaded_before_the_steps_run()
+    {
+        await File.WriteAllLinesAsync(ConfiguredEnvFile, ["TOTP_SECRET_APPROVER_MFA=KNOWN", "Oidc__ClientId=regreturns-portal"], TestContext.Current.CancellationToken);
+        Dictionary<string, string>? seen = null;
+
+        await RunAsync([Step("demo-totp", s => seen = new Dictionary<string, string>(s.ExistingSettings))], only: []);
+
+        seen.ShouldBe(new Dictionary<string, string> { ["TOTP_SECRET_APPROVER_MFA"] = "KNOWN", ["Oidc__ClientId"] = "regreturns-portal" });
+    }
+
+    [Fact]
+    public async Task Existing_settings_come_from_the_override_file_when_one_is_given()
+    {
+        var target = Path.Combine(_directory, "override.env");
+        await File.WriteAllLinesAsync(target, ["TOTP_SECRET_APPROVER_MFA=FROM_OVERRIDE"], TestContext.Current.CancellationToken);
+        await File.WriteAllLinesAsync(ConfiguredEnvFile, ["TOTP_SECRET_APPROVER_MFA=FROM_CONFIGURED"], TestContext.Current.CancellationToken);
+
+        var state = await RunAsync([Step("demo-totp")], only: [], envFile: target);
+
+        state.ExistingSettings["TOTP_SECRET_APPROVER_MFA"].ShouldBe("FROM_OVERRIDE");
+    }
+
+    [Fact]
+    public async Task Missing_generated_settings_file_means_no_existing_settings()
+    {
+        var state = await RunAsync([Step("demo-totp")], only: []);
+
+        state.ExistingSettings.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Reading_existing_settings_does_not_rewrite_the_file()
+    {
+        await File.WriteAllLinesAsync(ConfiguredEnvFile, ["# kept as written", "TOTP_SECRET_APPROVER_MFA=KNOWN"], TestContext.Current.CancellationToken);
+
+        await RunAsync([Step("demo-totp")], only: []);
+
+        (await File.ReadAllLinesAsync(ConfiguredEnvFile, TestContext.Current.CancellationToken)).ShouldBe(["# kept as written", "TOTP_SECRET_APPROVER_MFA=KNOWN"]);
+    }
+
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 
     private string ConfiguredEnvFile => Path.Combine(_directory, "configured.env");

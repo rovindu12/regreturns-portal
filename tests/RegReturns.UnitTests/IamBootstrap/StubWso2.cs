@@ -1,6 +1,7 @@
 extern alias IamBootstrapTool;
 
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -35,19 +36,26 @@ internal sealed class StubWso2 : HttpMessageHandler
     public Wso2AdminClient Client() =>
         new(new HttpClient(this, disposeHandler: false) { BaseAddress = Authority }, NullLogger<Wso2AdminClient>.Instance);
 
+    /// <summary>A factory whose clients all reach this stub (callers set their own base address).</summary>
+    public IHttpClientFactory Factory() => new StubFactory(this);
+
     public IEnumerable<RecordedRequest> Writes() => Requests.Where(r => r.Method != HttpMethod.Get);
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+        var mediaType = request.Content?.Headers.ContentType?.MediaType;
+        var isJson = mediaType?.EndsWith("json", StringComparison.OrdinalIgnoreCase) == true;
         var pathAndQuery = request.RequestUri!.PathAndQuery.TrimStart('/');
         var path = pathAndQuery.Split('?', 2)[0];
         Requests.Add(new RecordedRequest(
             request.Method,
             pathAndQuery,
-            body is null ? null : JsonNode.Parse(body),
-            request.Content?.Headers.ContentType?.MediaType,
-            string.Join(',', request.Headers.Accept.Select(a => a.MediaType))));
+            body is null || !isJson ? null : JsonNode.Parse(body),
+            mediaType,
+            string.Join(',', request.Headers.Accept.Select(a => a.MediaType)),
+            body,
+            request.Headers.Authorization));
 
         var route = _routes.FirstOrDefault(r => r.Method == request.Method && (r.Path.Contains('?', StringComparison.Ordinal) ? r.Path == pathAndQuery : r.Path == path))
             ?? throw new InvalidOperationException($"Unexpected WSO2 call: {request.Method} {pathAndQuery}");
@@ -71,7 +79,13 @@ internal sealed class StubWso2 : HttpMessageHandler
     }
 
     private sealed record Route(HttpMethod Method, string Path, HttpStatusCode Status, string? Json, string? Location, bool Once);
+
+    private sealed class StubFactory(StubWso2 stub) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(stub, disposeHandler: false);
+    }
 }
 
-/// <summary>A request the stub received.</summary>
-internal sealed record RecordedRequest(HttpMethod Method, string PathAndQuery, JsonNode? Body, string? ContentType, string Accept);
+/// <summary>A request the stub received; <see cref="Body"/> is set for JSON content only, <see cref="Text"/> always.</summary>
+internal sealed record RecordedRequest(
+    HttpMethod Method, string PathAndQuery, JsonNode? Body, string? ContentType, string Accept, string? Text, AuthenticationHeaderValue? Authorization);

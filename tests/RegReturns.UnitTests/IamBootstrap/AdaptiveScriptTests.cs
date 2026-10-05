@@ -50,6 +50,14 @@ public sealed class AdaptiveScriptTests
     }
 
     [Fact]
+    public void Always_mfa_users_are_listed_once_whatever_their_case()
+    {
+        var script = PortalAppStep.AdaptiveScript(enforceMfa: true, ["approver.mfa", "Approver.MFA", "admin.mfa", "approver.mfa"]);
+
+        script.ShouldContain("var alwaysUsers = [\"approver.mfa\",\"admin.mfa\"];");
+    }
+
+    [Fact]
     public void Always_mfa_users_get_totp_even_when_role_mfa_is_off()
     {
         var script = PortalAppStep.AdaptiveScript(enforceMfa: false, ["approver.mfa"]);
