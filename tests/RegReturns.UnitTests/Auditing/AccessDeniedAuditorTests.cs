@@ -139,6 +139,20 @@ public sealed class AccessDeniedAuditorTests : IDisposable
     }
 
     [Fact]
+    public async Task Anonymous_caller_probing_many_paths_from_one_address_is_recorded_once_a_minute()
+    {
+        await RecordAsync(null, "10.0.0.1");
+
+        var probe = await _auditor.RecordAsync(
+            null, AuditAction.AuthenticationFailed, "/v1/random-1", "invalid_token", "10.0.0.1", TraceId, TestContext.Current.CancellationToken);
+        var another = await _auditor.RecordAsync(
+            null, AuditAction.AuthenticationFailed, "/v1/random-2", "invalid_token", "10.0.0.1", TraceId, TestContext.Current.CancellationToken);
+
+        probe.ShouldBeTrue();
+        another.ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Audit_store_failure_is_logged_and_not_thrown()
     {
         _auditTrail.RecordAsync(Arg.Any<AuditRecord>(), Arg.Any<CancellationToken>())

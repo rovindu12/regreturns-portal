@@ -39,8 +39,18 @@ internal sealed class BootstrapOptions
     /// <summary>Gets or sets a value indicating whether approvers and administrators must pass TOTP at sign-in.</summary>
     public bool EnforceMfa { get; set; } = true;
 
-    /// <summary>Gets or sets the users who always get the TOTP step, whatever <see cref="EnforceMfa"/> says.</summary>
-    public IList<string> MfaAlwaysUsers { get; set; } = ["approver.mfa"];
+    /// <summary>
+    /// Gets or sets the users who always get the TOTP step, whatever <see cref="EnforceMfa"/> says; the tool pre-enrols
+    /// them. Empty by default because configuration binding appends to a list's initial items; appsettings.json lists
+    /// <c>approver.mfa</c>.
+    /// </summary>
+    public IList<string> MfaAlwaysUsers { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets a value indicating whether self-registration, account recovery and the My Account app are turned off,
+    /// so demo users cannot change their password or MFA. Turn off only for an installation with real users.
+    /// </summary>
+    public bool LockDownSelfService { get; set; } = true;
 
     /// <summary>Gets or sets the file the generated client secrets are written to (git-ignored).</summary>
     [Required]

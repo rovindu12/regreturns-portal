@@ -57,7 +57,7 @@ internal sealed class PortalAppStep(Wso2Applications applications, IOptions<Boot
     /// <returns>The script.</returns>
     internal static string AdaptiveScript(bool enforceMfa, IEnumerable<string> alwaysUsers)
     {
-        var users = JsonSerializer.Serialize(alwaysUsers.ToArray());
+        var users = JsonSerializer.Serialize(alwaysUsers.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
         var roles = JsonSerializer.Serialize(new[] { RoleNames.SupervisorApprover, RoleNames.SystemAdmin });
         var enforce = enforceMfa ? "true" : "false";
         return string.Create(CultureInfo.InvariantCulture, $$"""
