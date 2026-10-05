@@ -125,6 +125,19 @@ internal sealed partial class BankPortal(WebApplicationFactory<Program> factory,
         return await client.PostAsync($"/bank/returns/{submissionId}", Form(PortalForms.TokenFrom(page), fields), TestContext.Current.CancellationToken);
     }
 
+    /// <summary>Uploads a file through an obligation's upload page, as the browser does.</summary>
+    public static async Task<HttpResponseMessage> UploadAsync(HttpClient client, Guid obligationId, string fileName, byte[] content)
+    {
+        var path = $"/bank/obligations/{obligationId}/upload";
+        var token = await TokenFromAsync(client, path);
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent(token), PortalForms.TokenField },
+            { new ByteArrayContent(content), "file", fileName },
+        };
+        return await client.PostAsync(path, form, TestContext.Current.CancellationToken);
+    }
+
     /// <summary>Reads the antiforgery token of a page.</summary>
     public static async Task<string> TokenFromAsync(HttpClient client, string path) =>
         PortalForms.TokenFrom(await PortalForms.GetHtmlAsync(client, path));
