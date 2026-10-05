@@ -13,7 +13,10 @@ adding a dev certificate to the machine's trust store, either switch validation 
 
 - `scripts/dev-certs.sh` creates a private CA (`.certs/regreturns-dev-ca.crt`, git-ignored) and issues WSO2's TLS
   certificate (SANs `localhost`, `iam.localhost`, `wso2`, `127.0.0.1`, and `iam.$DOMAIN` when set), a separate token
-  signing key, and a truststore that WSO2 uses for outbound calls.
+  signing key, and a truststore that WSO2 uses for outbound calls. The truststore starts from WSO2's public roots but
+  drops WSO2's default `wso2carbon` certificate, whose private key ships with every WSO2 download. The keystores are
+  built in a staging folder and moved into place together, and keystore passwords reach `openssl` and `keytool`
+  through the environment, never the command line.
 - .NET code that calls WSO2 uses one named `HttpClient` (`Wso2Backchannel`). When `Wso2:TrustedCaPath` is set, its
   handler validates the server certificate with `X509ChainTrustMode.CustomRootTrust` against that CA only. The platform's
   host name check still applies, expiry and signatures are checked, and revocation is not checked because the private CA

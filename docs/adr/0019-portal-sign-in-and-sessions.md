@@ -21,13 +21,21 @@ signed in, out or was refused.
   name (`name`, falling back to given and family name, then user name). The WSO2 subject is linked just in time to the
   `AppUser` row (`LinkSignedInUser`); a token whose roles or institution make no sense for RegReturns is refused with a
   stable error code and an audit entry.
+- **RegReturns' record wins over the token for an existing user.** Sign-in is refused when the token names a different
+  institution than the `AppUser` row (`User.InstitutionChanged`), when the user or the institution is disabled
+  (`User.Disabled`, `User.InstitutionInactive`), or when the row is already linked to another WSO2 subject
+  (`User.IdentityConflict`; demo accounts are relinked, because demo resets re-create WSO2 users). Moving a user to
+  another bank is an administrator's action in RegReturns, never a side effect of an edited claim. The cookie carries
+  the institution code as RegReturns stores it. WSO2's `institution_id` claim is also read-only for users.
 - **Session lifetime:** a `__Host-` cookie with a 20-minute sliding expiry and an 8-hour absolute limit. The absolute
   expiry is stamped into the ticket at sign-in and checked on every request; a ticket without it counts as expired.
 - **Sign-out** clears the cookie and redirects to WSO2's end-session endpoint with `id_token_hint`, which ends the WSO2
-  session too. **Back-channel logout** (`/signout-backchannel`) validates the logout token (signature against WSO2's keys,
+  session too. Every cookie ticket gets a random id at sign-in, and sign-out puts that id on the deny list, so a copy of
+  the cookie taken before sign-out stops working at once rather than at its expiry. A ticket without an id is rejected. **Back-channel logout** (`/signout-backchannel`) validates the logout token (signature against WSO2's keys,
   issuer, audience, the back-channel event, a `sid`, no `nonce`, issued within 5 minutes) and puts the session id on a
   deny list in `IDistributedCache` (SHA-256 of the `sid`, kept for 8 hours 10 minutes). Cookies carrying a denied `sid`
-  are rejected.
+  are rejected. An ID token without a `sid` is refused at sign-in (`User.SessionMissing`), because such a session could
+  not be ended from WSO2.
 - **Failures** go to `/Account/SignInFailed` with a short allow-listed code and the trace id, never WSO2's raw message.
   SignIn, SignOut, AccessDenied and AuthenticationFailed are written to the audit trail (ADR 0016), de-duplicated per
   minute so refusals cannot flood it.

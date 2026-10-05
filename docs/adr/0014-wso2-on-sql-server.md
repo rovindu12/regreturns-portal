@@ -18,10 +18,14 @@ SQL Server 2017 and 2019 as tested, and we run 2025 (ADR 0013).
 - A thin image `FROM wso2/wso2is:7.3.0` adds the Microsoft JDBC driver (downloaded with a pinned SHA-256 checksum) and
   our `deployment.toml`. Every secret in that file is an `$env{...}` placeholder filled from `.env`.
 - A one-off `wso2-db-init` container (built from the SQL Server image, with WSO2's scripts copied in) creates the login,
-  the databases and the schema. It skips a database whose marker table already exists, so it is safe to re-run.
+  the databases and the schema. After all of a database's scripts succeed it writes a `REGRETURNS_WSO2_SCHEMA` marker
+  table; a database with the marker is skipped, so the job is safe to re-run, and a database with WSO2 tables but no
+  marker (an interrupted run) stops the job with instructions instead of being taken for a complete schema.
 - The user store is `database_unique_id` (user ids are UUIDs, which become the OIDC `sub`).
-- The JDBC URL uses `encrypt=true;trustServerCertificate=true` inside the Docker network for now; pinning SQL Server's
-  certificate is part of the security-hardening phase.
+- The JDBC URL uses `encrypt=true;trustServerCertificate=true` inside the Docker network for now, and the .NET
+  connection strings use `TrustServerCertificate=True`. SQL Server's port is published on 127.0.0.1 only. Giving SQL
+  Server a certificate from the development CA and validating it everywhere (JDBC, `sqlcmd`, SqlClient) is part of
+  the security-hardening phase (plan §10, phase 10).
 
 ## Consequences
 

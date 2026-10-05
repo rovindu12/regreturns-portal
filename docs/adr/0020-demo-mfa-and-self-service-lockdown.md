@@ -22,17 +22,26 @@ spike at the start of phase 2.
   active is kept on later runs and demo resets, so visitors do not have to re-scan the QR code after every reset.
   Phase 9 shows it on the demo page and stores it with Data Protection if it moves into the database.
 - **Who gets the second factor:** the portal app's adaptive script runs the TOTP step for users holding
-  `supervisor_approver` or `portal_admin` (when `EnforceMfa` is on) and always for `approver.mfa`. The portal checks
-  `amr` contains `totp` for approvals (`MfaRequirement`), so the rule holds even if the script is edited in WSO2.
-- **Self-service lockdown** (`self-service` step, on by default): self-registration, lite registration and password and
-  user-name recovery are pinned off, and WSO2's My Account app is disabled (only `applicationEnabled` is patched, so its
+  `supervisor_approver` or `portal_admin` (when `EnforceMfa` is on) and always for `approver.mfa` (matched in lower
+  case, because WSO2 accepts the user name in any case). The portal checks `amr` contains `totp` for approvals
+  (`MfaRequirement`), so the rule holds even if the script is edited in WSO2.
+- **Every demo user who reaches the TOTP step is pre-enrolled**, not only `approver.mfa`: with `EnforceMfa` on that is
+  also `approver` and `admin.demo`, each with its own `TOTP_SECRET_<USER>`. WSO2's enrolment during sign-in
+  (`TOTP.EnrolUserInAuthenticationFlow`) is turned off by the lockdown; otherwise the first visitor to sign in as a
+  shared demo approver could enrol their own phone and lock everyone else out.
+- **Self-service lockdown** (`self-service` step, on by default): self-registration, lite registration, password and
+  user-name recovery and TOTP enrolment during sign-in are pinned off, and WSO2's My Account app is disabled (only `applicationEnabled` is patched, so its
   roles survive). The portal never requests `internal_login`, so its tokens get 403 from `/scim2/Me` and
-  `/api/users/v1/me/*`. The smoke script checks both.
+  `/api/users/v1/me/*`; Basic authentication with a demo user's own password is refused there too. The smoke script
+  checks all three, and that every MFA user is asked for a code and never offered enrolment.
 
 ## Consequences
 
 - Each run that has to enrol creates and deletes a password-grant app for a few seconds. An interrupted run leaves it
-  behind; the next run reuses and deletes it.
+  behind; every later run looks for it and deletes it, even when it has nothing to enrol.
+- A user who must pass TOTP but has no active secret cannot finish signing in, because WSO2 no longer offers
+  enrolment. Demo users are re-enrolled by `IamBootstrap demo-users`; for real users, enrolment by an administrator
+  is part of the admin pages (phase 10).
 - Turning the lockdown off (`IamBootstrap:LockDownSelfService=false`) is for installations with real users who should
   manage their own accounts.
 - The TOTP code check depends on this machine's clock and WSO2's agreeing within 30 seconds.

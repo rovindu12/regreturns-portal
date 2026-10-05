@@ -24,14 +24,16 @@ as the domain and server right before the phase 11 deploy.
 | Phase | Status |
 |---|---|
 | 1. Scaffold, domain, DB, seed (+ observability baseline) | done |
-| 2. WSO2 in Docker, IamBootstrap, OIDC login, role policies | in progress |
-| 3-12 | not started |
+| 2. WSO2 in Docker, IamBootstrap, OIDC login, role policies | done |
+| 3. Templates, submission, validation engine | in progress |
+| 4-12 | not started |
 
 ## Commands
 
 ```bash
 # Prerequisites: .NET 10 SDK, Docker, openssl, jq. Run everything from the repository root.
-scripts/init-env.sh                        # .env with random secrets (git-ignored)
+scripts/init-env.sh                        # creates .env with random secrets (mode 600, git-ignored); on an existing
+                                           # .env only adds missing keys and fails on example values, never rotates
 scripts/dev-certs.sh                       # dev CA + WSO2 keystores in .certs/ (ADR 0015)
 docker compose up -d                       # SQL Server, WSO2 (https://localhost:9443/console), Seq (http://localhost:8081)
 scripts/dev-secrets.sh                     # copies .env (and .env.generated) into user-secrets for every project
@@ -40,7 +42,7 @@ dotnet run --project tools/RegReturns.Migrator -- migrate-db --seed   # schema +
 dotnet run --project tools/RegReturns.IamBootstrap -- apply           # WSO2 claims, API, apps, roles, bank clients,
                                                                       # demo users; writes .env.generated (idempotent)
 scripts/dev-secrets.sh                                                # again, to pick up the portal client secret
-dotnet run --project tools/RegReturns.IamBootstrap -- demo-users      # reset demo users only (passwords, roles)
+dotnet run --project tools/RegReturns.IamBootstrap -- demo-users      # reset demo users only (passwords, roles, TOTP)
 dotnet run --project src/RegReturns.Web                               # https://localhost:7101
 dotnet run --project src/RegReturns.Api                               # https://localhost:7201
 scripts/smoke-wso2.sh --browser                                       # identity smoke test (needs Web + Api running;
@@ -103,8 +105,11 @@ Key domain rules (see `src/RegReturns.Domain/Submissions/Submission.cs`):
   Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web and Api share it), `Oidc:ClientSecret` (Web).
   WSO2 settings: `Wso2:Authority` (public issuer base), `Wso2:TrustedCaPath`, optional `Wso2:BackchannelAuthority`
   (e.g. `https://wso2:9443/` inside Docker), `Iam:EnforceMfa`.
-  IamBootstrap reads `.env` itself and writes generated client secrets and the `approver.mfa` TOTP secret
-  (`TOTP_SECRET_APPROVER_MFA`) to `.env.generated` (mode 600, git-ignored).
+  IamBootstrap reads `.env` itself (between appsettings/user-secrets and real environment variables) and writes
+  generated client secrets and the TOTP secret of every MFA demo user (`TOTP_SECRET_<USER>`) to `.env.generated`
+  (mode 600, git-ignored).
+- Scripts never put a secret on a command line (other local users can read the process list): curl gets credentials
+  through `-K <(...)` or `-H @<(...)`, jq through `$ENV`, keytool through `:env`, sqlcmd through `SQLCMDPASSWORD`.
 - Identity: WSO2 is the only identity store; `AppUser` rows link to WSO2 by subject id. Role, claim and scope names are
   constants in `RoleNames`, `ClaimNames`, `ApiScopes` and `IamNames`. Change WSO2 only through IamBootstrap steps, never
   by hand in the Console, so a fresh environment can be rebuilt.
@@ -126,6 +131,7 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 - WSO2 rejects role names starting with `system_`; the platform admin role is `portal_admin`.
 - WSO2 encrypts TOTP secrets with its own key: an administrator cannot set one. IamBootstrap enrols as the user
   (`DemoTotpStep`); never request `internal_login` from the portal, which would open WSO2's self-service APIs.
+  Enrolment during sign-in is off (ADR 0020), so every user who reaches the TOTP step must be pre-enrolled.
 - Configuration binding appends to a list property's initial items, so option lists default to empty and the values
   live in appsettings.json (`IamBootstrap:MfaAlwaysUsers`).
 - WSO2 releases a claim only if its scope is requested and the claim is in the app's requested claims. `roles` is a
@@ -134,6 +140,8 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
   `PATCH` with `associatedRoles` deletes roles; API resource scopes can only be added. `Wso2Applications` handles this.
 - `Wso2:TrustedCaPath` is relative to the working directory. `dotnet run` starts Web SDK hosts in their project folder
   (so `src/*` use `../../.certs/regreturns-dev-ca.crt`) but console tools in the shell's folder (the repository root).
+- `wso2-db-init` marks each WSO2 database complete only after all its scripts ran (`REGRETURNS_WSO2_SCHEMA`); a
+  database with WSO2 tables but no marker stops the job (see the troubleshooting guide).
 - EF Core cannot index complex-type columns; the unique obligation index is raw SQL in the `InitialCreate` migration.
 - The Api's `Program` is referenced from integration tests through the `ApiHost` extern alias (both hosts define `Program`).
 - Docker must be running for integration tests; in a fresh cloud container start it with `sudo dockerd &`.

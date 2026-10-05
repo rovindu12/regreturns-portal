@@ -56,6 +56,24 @@ Return it to `Warning` afterwards: SQL command logs are verbose.
 | Migrator exits with code 1 | See the `Database command failed` log event (event id 2002) for the exception | Fix the cause and re-run; migrations are transactional |
 | Nothing appears in Seq | OTLP endpoint not set or Seq not running | `docker compose up -d seq`; check `Observability:OtlpEndpoint` |
 | Integration tests fail with `Docker is either not running` | Testcontainers needs a Docker daemon | Start Docker (`sudo dockerd &` in a fresh Linux container) |
+| `scripts/init-env.sh` (or `dev-secrets.sh`) stops: `still the published examples and must be rotated` | `.env` was copied from `.env.example`, or kept an example value | Rotate each named value as described in [Example secrets in .env](#example-secrets-in-env) |
+| `wso2-db-init` stops: `has some WSO2 tables but no completion marker` | An earlier run was interrupted while loading WSO2's schema; a half-made schema is never reused | Drop the named database (or, locally, `docker compose down -v` to start empty) and run `docker compose up -d` again |
+
+### Example secrets in .env
+
+`scripts/init-env.sh` creates `.env` with random values and never changes a value that is already set, because the
+SQL Server volume, the keystores and WSO2's database hold those secrets. To rotate one by hand:
+
+| Key | How to rotate |
+|---|---|
+| `MSSQL_SA_PASSWORD` | Run `ALTER LOGIN sa WITH PASSWORD = N'<new>'` with `sqlcmd` as `sa` (old password), put the new one in `.env`, then `docker compose up -d sqlserver` and `scripts/dev-secrets.sh` |
+| `WSO2_ADMIN_PASSWORD` | Change the password in the WSO2 Console first, then in `.env` |
+| `WSO2_DB_PASSWORD` | Change it in `.env`, run `docker compose run --rm wso2-db-init` (it resets the login's password), then `docker compose up -d wso2` |
+| `WSO2_KEYSTORE_PASSWORD` | Change it in `.env`, run `scripts/dev-certs.sh --force`, then `docker compose up -d wso2` |
+| `WSO2_AUTH_ENDPOINT_PASSWORD` | Change it and its `_SHA256` together (`printf %s '<new>' \| sha256sum`), then `docker compose up -d wso2` |
+| `WSO2_ENCRYPTION_KEY` | Data WSO2 already encrypted (client secrets, TOTP secrets) becomes unreadable: drop the three `WSO2_*` databases, change the key, `docker compose up -d`, then `IamBootstrap apply` |
+| `DEMO_USER_PASSWORD` | Change it in `.env`, then `IamBootstrap demo-users` |
+| `AUDIT_HMAC_KEY` | Only before audit entries exist: the existing chain no longer verifies under a new key (ADR 0016) |
 
 ## 5. Sign-in, tokens and WSO2
 
@@ -84,11 +102,16 @@ from `scripts/dev-certs.sh` (ADR 0015).
 | Portal shows "Sign-in failed" with `request_expired` | The sign-in took longer than the portal's correlation window, or the browser replayed an old callback (back button) | Start sign-in again from the portal |
 | Portal shows "Sign-in failed" with `idp_unreachable` | The portal could not fetch WSO2's discovery document or keys (WSO2 down or TLS trust) | Check `/health/ready` and the TLS rows above |
 | Portal shows "Sign-in failed" after a successful WSO2 login; audit reason `User.UnknownInstitution` or `User.RoleRequired` | The WSO2 user has an `institution_id` RegReturns does not know, or no RegReturns role | Fix the user's institution or roles in WSO2 (for demo users: `IamBootstrap demo-users`) |
-| `approver.mfa` sees WSO2's TOTP enrolment page instead of a code prompt | The user's secret was cleared or never activated | `IamBootstrap demo-users` re-enrols it and writes the new secret to `.env.generated` |
+| "Sign-in failed", audit reason `User.InstitutionInactive` | The user's institution is deactivated in RegReturns | Reactivate the institution, or move the user to an active one |
+| "Sign-in failed", audit reason `User.InstitutionChanged` | The token names a different institution than RegReturns has on record for this user. RegReturns never follows such a change on its own, so a user cannot switch banks by editing a claim | An administrator moves the user in RegReturns (phase 10) and in WSO2 together; for demo users run `IamBootstrap demo-users` |
+| "Sign-in failed", audit reason `User.Disabled` | The RegReturns user record is disabled | Re-enable the user in RegReturns |
+| "Sign-in failed", audit reason `User.IdentityConflict` | The RegReturns user is already linked to a different WSO2 user id (the WSO2 user was deleted and re-created) | Check it is the same person, then relink: clear the old `Wso2UserId` on the user record |
+| "Sign-in failed", audit reason `User.SessionMissing` | WSO2's ID token has no `sid` claim, so back-channel logout could not end this session | Check that the portal application in WSO2 still has back-channel logout configured; re-run `IamBootstrap apply` |
+| An approver or administrator cannot get past WSO2's TOTP step | The user has no active TOTP secret, and WSO2's enrolment during sign-in is off on purpose so nobody can enrol their own authenticator on a shared account (ADR 0020) | `IamBootstrap demo-users` re-enrols demo users and writes their secrets to `.env.generated` (`TOTP_SECRET_<USER>`); real users are enrolled by an administrator |
 | WSO2 rejects a correct-looking TOTP code | The clocks of the authenticator and WSO2 differ by more than 30 seconds, or the code was already used in this 30-second step | Sync the clock; wait for the next code |
 | My Account shows `authentication.flow.app.disabled` | Intended: IamBootstrap disables My Account so demo users cannot change their password or MFA (ADR 0020) | Set `IamBootstrap:LockDownSelfService=false` only for real users |
 | Demo user sees `Login failed` | The password was changed or the demo user was not provisioned | `IamBootstrap demo-users` resets every demo user to `DEMO_USER_PASSWORD` |
-| API returns `401` with `The signature key was not found` for a token that looks right | The API could not fetch WSO2's signing keys, usually TLS: the log has `HttpRequestException ... SSL connection could not be established` | Fix `Wso2:TrustedCaPath` (see the first rows) and restart the API |
-| API returns `401` with `invalid_token` and `The audience ... is invalid` in the log | The token was issued to a client without the RegReturns API audience, or an ID token was sent instead of an access token | Use a bank client created by IamBootstrap (`BANK_<CODE>_CLIENT_ID` in `.env.generated`) and send its access token |
+| API returns `401` for a token that looks right, and the API log has `The signature key was not found` | The API could not fetch WSO2's signing keys, usually TLS: the log has `HttpRequestException ... SSL connection could not be established` | Fix `Wso2:TrustedCaPath` (see the first rows) and restart the API |
+| API returns `401` and the API log has `The audience ... is invalid` (the response itself carries no details, by design) | The token was issued to a client without the RegReturns API audience, or an ID token was sent instead of an access token | Use a bank client created by IamBootstrap (`BANK_<CODE>_CLIENT_ID` in `.env.generated`) and send its access token |
 | API returns `403` | The token lacks the scope for the endpoint, or the client is not linked to an institution | Request the scope in the token call (`scope=returns:read`); re-run `IamBootstrap apply` to relink bank clients |
 | API returns `404` for another bank's data | By design: a bank cannot learn whether another bank's records exist | Use the client of the bank that owns the data |

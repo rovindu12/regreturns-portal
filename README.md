@@ -31,20 +31,27 @@ flowchart LR
 
 ## Quick start
 
+Needs the .NET 10 SDK, Docker, openssl and jq.
+
 ```bash
-cp .env.example .env            # set MSSQL_SA_PASSWORD
-docker compose up -d            # SQL Server + Seq
-export ConnectionStrings__RegReturns="Server=localhost,1433;Database=RegReturns;User Id=sa;Password=<pw>;TrustServerCertificate=True"
+scripts/init-env.sh             # .env with random secrets (never copy .env.example: its values are public)
+scripts/dev-certs.sh            # development CA and WSO2 keystores
+docker compose up -d            # SQL Server, WSO2 Identity Server, Seq
+scripts/dev-secrets.sh          # secrets into dotnet user-secrets
 dotnet run --project tools/RegReturns.Migrator -- migrate-db --seed
+dotnet run --project tools/RegReturns.IamBootstrap -- apply
+scripts/dev-secrets.sh          # again, for the portal's client secret
 dotnet run --project src/RegReturns.Web
 ```
 
-Open https://localhost:7101, and http://localhost:8081 for logs and traces.
+Open https://localhost:7101, and http://localhost:8081 for logs and traces. Demo users sign in with
+`DEMO_USER_PASSWORD` from `.env`; approvers and the administrator also need the TOTP code from their secret in
+`.env.generated`. More commands are in [CLAUDE.md](CLAUDE.md#commands).
 
 ## Tech stack
 
 .NET 10 · ASP.NET Core MVC and Web API · EF Core 10 · SQL Server 2025 · Serilog · OpenTelemetry · Seq ·
-xUnit v3 · Testcontainers · GitHub Actions. WSO2 Identity Server 7.3, Chart.js and Docker deployment come in later phases.
+xUnit v3 · Testcontainers · GitHub Actions · WSO2 Identity Server 7.3. Chart.js and Docker deployment come in later phases.
 
 ## Documentation
 

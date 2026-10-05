@@ -22,13 +22,17 @@ know which bank the caller is, and never let one bank read or learn about anothe
 - **Other banks look like nothing.** A request for another bank's resource returns the same `404` problem as an
   unknown one, so the API never reveals which banks or records exist.
 - **Every refusal is audited.** Failed authentication (with the exception type only) and forbidden requests (with the
-  endpoint's policy names) go to the audit trail through `AccessDeniedAuditor`, without the query string.
-  401 and 403 responses are RFC 9457 problem documents with the trace id.
+  endpoint's policy names) go to the audit trail through `AccessDeniedAuditor`, without the query string. A signed-in
+  caller is recorded once a minute per endpoint (by route pattern, so probing many ids writes one entry) and an
+  anonymous caller once a minute per IP address. The write has its own 15-second timeout instead of the request's
+  token, so a client cannot cancel its own entry by dropping the connection.
+  401 and 403 responses are RFC 9457 problem documents with the trace id. `WWW-Authenticate` carries no error
+  description (`IncludeErrorDetails=false`), so a caller cannot learn why a token failed; the log and the audit entry can.
 
 ## Consequences
 
 - A bank client works only after IamBootstrap has recorded it in `iam.ApiClients`; an unknown client gets 403.
-- When the API cannot reach or trust WSO2, callers see `The signature key was not found`; the TLS cause is only in the
-  logs (see the troubleshooting guide).
+- When the API cannot reach or trust WSO2, callers see a plain 401; the log says `The signature key was not found`
+  and the TLS cause (see the troubleshooting guide).
 - Forbidden-request auditing only runs under the real bearer scheme; tests that check it use real signed tokens against
   a static OpenID configuration rather than the header-driven test scheme.
