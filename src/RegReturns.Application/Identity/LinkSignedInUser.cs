@@ -62,6 +62,10 @@ public sealed class LinkSignedInUserHandler(IAppDbContext db) : ICommandHandler<
     public static readonly Error IdentityConflict = new(
         "User.IdentityConflict", "The user name is linked to a different WSO2 account.");
 
+    /// <summary>The user name belongs to the user an API client acts through, which no person may sign in as (ADR 0026).</summary>
+    public static readonly Error ApiClientUser = new(
+        "User.ApiClientUser", "The user name belongs to an API client, which cannot sign in to the portal.");
+
     /// <inheritdoc />
     public async Task<Result<SignedInUserLink>> HandleAsync(LinkSignedInUser command, CancellationToken cancellationToken)
     {
@@ -134,6 +138,11 @@ public sealed class LinkSignedInUserHandler(IAppDbContext db) : ICommandHandler<
 
     private static Error? CheckExisting(AppUser user, string subjectId, Guid? institutionId)
     {
+        if (user.IsApiClientUser)
+        {
+            return ApiClientUser;
+        }
+
         // Demo resets re-create WSO2 users with new ids, so demo accounts follow the user name. A real account that is
         // already linked keeps its WSO2 id: a re-used user name must not inherit someone else's history.
         if (user.Wso2UserId is not null && user.Wso2UserId != subjectId && !user.IsDemoAccount)

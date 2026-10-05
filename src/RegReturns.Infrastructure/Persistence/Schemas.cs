@@ -14,4 +14,7 @@ internal static class Schemas
 
     /// <summary>The tamper-evident audit chain.</summary>
     public const string Audit = "audit";
+
+    /// <summary>API plumbing: stored responses of idempotent requests.</summary>
+    public const string Api = "api";
 }

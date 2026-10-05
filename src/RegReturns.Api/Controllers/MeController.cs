@@ -1,5 +1,7 @@
 using System.Net.Mime;
 
+using Asp.Versioning;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,15 +16,17 @@ namespace RegReturns.Api.Controllers;
 /// <summary>Describes the calling client.</summary>
 /// <param name="institutions">Reads the caller's institution.</param>
 [ApiController]
-[Route("v1/me")]
+[ApiVersion(1)]
+[Route("v{version:apiVersion}/me")]
 [Authorize(Policy = Policies.ApiReferenceRead)]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status429TooManyRequests, MediaTypeNames.Application.ProblemJson)]
 public sealed class MeController(IQueryHandler<GetInstitution, InstitutionReference?> institutions) : ControllerBase
 {
     /// <summary>Returns the client id, its institution and the scopes granted to the token.</summary>
     /// <param name="cancellationToken">Cancels the request.</param>
     /// <returns>The caller.</returns>
     [HttpGet]
-    [ProducesResponseType<MeResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<MeResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)]
     public async Task<ActionResult<MeResponse>> GetAsync(CancellationToken cancellationToken)

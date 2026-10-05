@@ -28,5 +28,9 @@ internal sealed class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
         builder.HasIndex(u => u.UserName).IsUnique();
         builder.HasIndex(u => u.Wso2UserId).IsUnique().HasFilter("[Wso2UserId] IS NOT NULL");
         builder.HasOne<Institution>().WithMany().HasForeignKey(u => u.InstitutionId).OnDelete(DeleteBehavior.Restrict);
+
+        // A registered API client acts through exactly one client user (ADR 0026).
+        builder.HasIndex(u => u.ApiClientId).IsUnique().HasFilter("[ApiClientId] IS NOT NULL");
+        builder.HasOne<ApiClient>().WithMany().HasForeignKey(u => u.ApiClientId).OnDelete(DeleteBehavior.Restrict);
     }
 }

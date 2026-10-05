@@ -6,9 +6,11 @@ using Microsoft.Extensions.Options;
 
 using RegReturns.Application.Abstractions;
 using RegReturns.Application.Auditing;
+using RegReturns.Application.Idempotency;
 using RegReturns.Application.Returns;
 using RegReturns.Infrastructure.Auditing;
 using RegReturns.Infrastructure.Files;
+using RegReturns.Infrastructure.Idempotency;
 using RegReturns.Infrastructure.Identity.Wso2;
 using RegReturns.Infrastructure.Persistence;
 
@@ -83,6 +85,25 @@ public static class DependencyInjection
         services.TryAddScoped<IDataChangeAuditor, DataChangeAuditor>();
         services.AddMemoryCache();
         services.TryAddScoped<AccessDeniedAuditor>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the idempotency store for API requests with an <c>Idempotency-Key</c> and the background purge of expired
+    /// records (ADR 0027), configured by <c>Api:Idempotency</c>.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">Application configuration.</param>
+    /// <returns>The same service collection.</returns>
+    public static IServiceCollection AddIdempotency(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<IdempotencyOptions>()
+            .Bind(configuration.GetSection(IdempotencyOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddScoped<IIdempotencyStore, IdempotencyStore>();
+        services.AddHostedService<IdempotencyPurger>();
         return services;
     }
 

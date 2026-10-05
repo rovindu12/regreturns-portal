@@ -1,5 +1,7 @@
 using System.Net.Mime;
 
+using Asp.Versioning;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,8 +16,10 @@ namespace RegReturns.Api.Controllers;
 /// <summary>Institution reference data, scoped to the calling client's own institution.</summary>
 /// <param name="institutions">Reads institutions visible to the caller.</param>
 [ApiController]
-[Route("v1/institutions")]
+[ApiVersion(1)]
+[Route("v{version:apiVersion}/institutions")]
 [Authorize(Policy = Policies.ApiReferenceRead)]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status429TooManyRequests, MediaTypeNames.Application.ProblemJson)]
 public sealed class InstitutionsController(IQueryHandler<GetInstitution, InstitutionReference?> institutions) : ControllerBase
 {
     /// <summary>Title of the response for a code the caller cannot see.</summary>
@@ -32,7 +36,7 @@ public sealed class InstitutionsController(IQueryHandler<GetInstitution, Institu
     /// <param name="cancellationToken">Cancels the request.</param>
     /// <returns>The institution.</returns>
     [HttpGet("{code}")]
-    [ProducesResponseType<InstitutionResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<InstitutionResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)]

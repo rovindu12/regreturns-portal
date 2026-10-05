@@ -9,7 +9,7 @@ public static class ApiScopes
     /// <summary>Read the calling bank's submissions.</summary>
     public const string ReturnsRead = "returns:read";
 
-    /// <summary>Submit returns for the calling bank.</summary>
+    /// <summary>Deliver returns for the calling bank, as drafts a bank checker submits in the portal (ADR 0026).</summary>
     public const string ReturnsSubmit = "returns:submit";
 
     /// <summary>Read reference data (institutions, return types).</summary>

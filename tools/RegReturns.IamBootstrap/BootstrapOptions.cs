@@ -60,6 +60,15 @@ internal sealed class BootstrapOptions
     [Required]
     public string DemoApiInstitutionCode { get; set; } = "HLB";
 
+    /// <summary>
+    /// Gets or sets the public base URL of the API. Swagger UI asks WSO2 for tokens from the browser, so the demo
+    /// client allows this origin (ADR 0027). Without it, Swagger UI cannot sign in.
+    /// </summary>
+    public Uri? ApiBaseUrl { get; set; }
+
+    /// <summary>Gets the origin of <see cref="ApiBaseUrl"/> (scheme, host and port), or <see langword="null"/> if unset.</summary>
+    public string? ApiOrigin => ApiBaseUrl?.GetLeftPart(UriPartial.Authority);
+
     /// <summary>Gets the effective back-channel logout URL.</summary>
     public Uri EffectiveBackchannelLogoutUrl =>
         BackchannelLogoutUrl ?? new Uri(PortalBase(), "signout-backchannel");
