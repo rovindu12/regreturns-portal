@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using NetArchTest.Rules;
 
 using RegReturns.Api.Controllers;
+using RegReturns.Api.Idempotency;
 using RegReturns.Infrastructure.Identity.Authorization;
 
 namespace RegReturns.UnitTests.Api;
@@ -47,6 +48,19 @@ public sealed class ApiEndpointPolicyTests
             .ToList();
 
         unknown.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Every_post_action_needs_an_idempotency_key()
+    {
+        var offenders = Controllers
+            .SelectMany(controller => Actions(controller)
+                .Where(action => action.GetCustomAttribute<HttpPostAttribute>() is not null
+                    && action.GetCustomAttribute<IdempotentAttribute>() is null)
+                .Select(action => $"{controller.Name}.{action.Name}"))
+            .ToList();
+
+        offenders.ShouldBeEmpty();
     }
 
     [Fact]

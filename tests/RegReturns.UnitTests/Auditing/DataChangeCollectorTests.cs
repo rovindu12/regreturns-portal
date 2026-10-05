@@ -3,12 +3,14 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 using RegReturns.Application.Auditing;
+using RegReturns.Application.Idempotency;
 using RegReturns.Domain.Auditing;
 using RegReturns.Domain.Identity;
 using RegReturns.Domain.Institutions;
 using RegReturns.Domain.Submissions;
 using RegReturns.Domain.Templates;
 using RegReturns.Infrastructure.Auditing;
+using RegReturns.Infrastructure.Idempotency;
 using RegReturns.Infrastructure.Persistence;
 using RegReturns.UnitTests.TestSupport;
 
@@ -295,6 +297,15 @@ public sealed class DataChangeCollectorTests : IDisposable
     public void Audit_entries_are_never_audited()
     {
         _db.AuditEntries.Add(AuditEntry.Create(DomainFixture.Now, AuditAction.SignIn, ActorType.User, "user-1"));
+
+        Collect().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Entity_types_marked_not_audited_are_never_audited()
+    {
+        _db.Add(IdempotencyRecord.Claim(
+            new IdempotentRequest("client", "key", new string('a', 64)), DomainFixture.Now, TimeSpan.FromMinutes(1), TimeSpan.FromHours(1)));
 
         Collect().ShouldBeEmpty();
     }

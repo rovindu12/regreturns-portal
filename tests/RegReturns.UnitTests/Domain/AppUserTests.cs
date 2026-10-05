@@ -1,4 +1,5 @@
 using RegReturns.Domain.Identity;
+using RegReturns.Domain.Institutions;
 
 namespace RegReturns.UnitTests.Domain;
 
@@ -64,5 +65,24 @@ public sealed class AppUserTests
         actor.HasRole(Role.BankChecker).ShouldBeTrue();
         actor.BelongsTo(BankId).ShouldBeTrue();
         actor.IsRegulatorStaff.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void An_api_client_user_is_a_bank_maker_of_the_clients_bank_without_a_sign_in()
+    {
+        var bank = Institution.Create("HLB", "Harbourline Bank PLC", LicenceCategory.Commercial);
+        var client = ApiClient.Create(bank, "regreturns-bank-hlb", "Harbourline core banking");
+
+        var user = AppUser.ForApiClient(client);
+
+        user.UserName.ShouldBe($"{AppUser.ApiClientUserNamePrefix}{client.Id:N}");
+        user.DisplayName.ShouldBe("Harbourline core banking");
+        user.InstitutionId.ShouldBe(bank.Id);
+        user.Roles.ShouldBe([Role.BankMaker]);
+        user.Email.ShouldBeNull();
+        user.Wso2UserId.ShouldBeNull();
+        user.ApiClientId.ShouldBe(client.Id);
+        user.IsApiClientUser.ShouldBeTrue();
+        user.Status.ShouldBe(UserStatus.Active);
     }
 }

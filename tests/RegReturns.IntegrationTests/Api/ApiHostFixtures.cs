@@ -69,6 +69,33 @@ public sealed class BearerApiFixture(SqlServerFixture sql) : IAsyncLifetime
     public ValueTask DisposeAsync() => Factory.DisposeAsync();
 }
 
+/// <summary>
+/// The test-scheme API host with a rate limit of <see cref="PermitLimit"/> requests an hour per client, so tests reach
+/// it quickly and the window never resets under them.
+/// </summary>
+public sealed class RateLimitedApiFixture(SqlServerFixture sql) : IAsyncLifetime
+{
+    /// <summary>The requests a client may make in the window.</summary>
+    public const int PermitLimit = 2;
+
+    /// <summary>Gets the database.</summary>
+    public ApiDatabase Database { get; private set; } = null!;
+
+    /// <summary>Gets the host factory.</summary>
+    public WebApplicationFactory<ApiHost::Program> Factory { get; private set; } = null!;
+
+    public async ValueTask InitializeAsync()
+    {
+        Database = await ApiDatabase.CreateAsync(sql);
+        Factory = ApiHostFixtures.CreateFactory(Database, builder => builder
+            .UseTestAuth()
+            .UseSetting("Api:RateLimit:PermitLimit", PermitLimit.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .UseSetting("Api:RateLimit:WindowSeconds", "3600"));
+    }
+
+    public ValueTask DisposeAsync() => Factory.DisposeAsync();
+}
+
 internal static class ApiHostFixtures
 {
     public static WebApplicationFactory<ApiHost::Program> CreateFactory(ApiDatabase database, Action<IWebHostBuilder> configure) =>

@@ -142,6 +142,29 @@ public sealed class LinkSignedInUserTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task A_sign_in_with_the_user_name_of_an_api_client_user_is_refused()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (connection, _) = await CreateDatabaseAsync(ct);
+        string clientUserName;
+        await using (var db = SqlServerFixture.CreateContext(connection))
+        {
+            var alpha = await db.Institutions.SingleAsync(ct);
+            var client = ApiClient.Create(alpha, "alpha-core-banking", "Alpha core banking");
+            var clientUser = AppUser.ForApiClient(client);
+            clientUserName = clientUser.UserName;
+            await db.ApiClients.AddAsync(client, ct);
+            await db.Users.AddAsync(clientUser, ct);
+            await db.SaveChangesAsync(ct);
+        }
+
+        var result = await HandleAsync(connection, Maker(Sub, clientUserName, "Impostor"), ct);
+
+        result.Error.ShouldBe(LinkSignedInUserHandler.ApiClientUser);
+        (await SingleUserAsync(connection, ct)).Wso2UserId.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Inactive_institution_is_refused_and_nothing_is_stored()
     {
         var ct = TestContext.Current.CancellationToken;

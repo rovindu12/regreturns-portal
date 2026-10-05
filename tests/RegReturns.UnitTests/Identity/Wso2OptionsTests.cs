@@ -43,6 +43,7 @@ public sealed class Wso2OptionsTests
         options.Issuer.AbsoluteUri.ShouldBe("https://iam.valoria.test/wso2/oauth2/token");
         options.MetadataAddress.AbsoluteUri.ShouldBe("https://iam.valoria.test/wso2/oauth2/token/.well-known/openid-configuration");
         options.JwksAddress.AbsoluteUri.ShouldBe("https://iam.valoria.test/wso2/oauth2/jwks");
+        options.TokenEndpoint.AbsoluteUri.ShouldBe("https://iam.valoria.test/wso2/oauth2/token");
     }
 
     [Fact]
