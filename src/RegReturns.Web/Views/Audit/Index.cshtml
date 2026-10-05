@@ -1,0 +1,217 @@
+@model AuditTrailViewModel
+@{
+    ViewData["Title"] = "Audit trail";
+    var trail = Model.Trail;
+    var filter = Model.Filter;
+    var selectedAction = filter.ParsedAction;
+}
+
+<section class="mb-4">
+    <h1 class="h2">Audit trail</h1>
+    <p class="lead mb-0">
+        Sign-ins, refusals and every change to the data, newest first. Each entry carries the hash of the entry before
+        it, so editing, deleting or re-ordering entries breaks the chain.
+    </p>
+</section>
+
+<partial name="_Flash" />
+
+<section class="card mb-4" aria-labelledby="verify-heading">
+    <div class="card-body d-flex flex-wrap align-items-center gap-3">
+        <div class="flex-grow-1">
+            <h2 id="verify-heading" class="h5">Verify the chain</h2>
+            <p class="small mb-0">
+                Checks that no entry is missing, that each links to the one before it and that each matches its hash,
+                then records that you checked. Keep the newest entry and hash it reports: entries deleted from the end of
+                the chain leave no gap, so only a later check that finds an older head reveals them.
+            </p>
+        </div>
+        <form method="post" asp-action="Verify">
+            <button type="submit" class="btn btn-primary">Verify chain</button>
+        </form>
+    </div>
+</section>
+
+<form method="get" asp-action="Index" class="row g-2 align-items-end mb-3" aria-label="Filter the audit trail">
+    <div class="col-sm-6 col-lg-2">
+        <label for="filter-action" class="form-label">Action</label>
+        <select id="filter-action" name="auditAction" class="form-select">
+            <option value="">Any action</option>
+            @foreach (var action in AuditDisplay.Actions)
+            {
+                <option value="@action" selected="@(selectedAction == action)">@AuditDisplay.ActionLabel(action)</option>
+            }
+        </select>
+    </div>
+    <div class="col-sm-6 col-lg-2">
+        <label for="filter-entity-type" class="form-label">Entity type</label>
+        <input id="filter-entity-type" name="entityType" class="form-control" value="@filter.EntityType" placeholder="Submission" />
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <label for="filter-entity-id" class="form-label">Entity id</label>
+        <input id="filter-entity-id" name="entityId" class="form-control" value="@filter.EntityId" />
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <label for="filter-actor" class="form-label">Actor</label>
+        <input id="filter-actor" name="actor" class="form-control" value="@filter.Actor" aria-describedby="filter-actor-help" />
+        <div id="filter-actor-help" class="form-text">A subject id, or part of a name.</div>
+    </div>
+    <div class="col-lg-2 d-flex gap-2 pb-lg-4">
+        <button type="submit" class="btn btn-outline-primary">Filter</button>
+        @if (filter.IsFiltered)
+        {
+            <a class="btn btn-link" asp-action="Index">Clear</a>
+        }
+    </div>
+</form>
+
+@if (trail.Rows.Count == 0)
+{
+    <p>@(filter.IsFiltered ? "No entries match these filters." : "The audit trail is empty.")</p>
+    return;
+}
+
+<div class="table-responsive">
+    <table class="table table-sm align-top" aria-describedby="trail-caption">
+        <caption id="trail-caption" class="caption-top">
+            @trail.TotalCount @(trail.TotalCount == 1 ? "entry" : "entries")@(filter.IsFiltered ? " match the filters" : string.Empty).
+            Page @trail.Page of @trail.PageCount, newest first. Times are UTC.
+        </caption>
+        <thead class="table-light">
+            <tr>
+                <th scope="col" class="text-end">#</th>
+                <th scope="col">Time</th>
+                <th scope="col">Actor</th>
+                <th scope="col">Institution</th>
+                <th scope="col">Action</th>
+                <th scope="col">Entity</th>
+                <th scope="col">Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in trail.Rows)
+            {
+                <tr>
+                    <th scope="row" class="text-end fw-normal">@row.Sequence</th>
+                    <td class="text-nowrap">@AuditDisplay.Time(row.OccurredAt)</td>
+                    <td>
+                        @(row.ActorDisplayName ?? row.ActorSubjectId)
+                        <span class="d-block small text-body-secondary">
+                            @AuditDisplay.ActorTypeLabel(row.ActorType)@(row.ActorDisplayName is null ? string.Empty : $" · {row.ActorSubjectId}")
+                        </span>
+                    </td>
+                    <td>@AuditDisplay.Value(row.InstitutionCode)</td>
+                    <td><span class="badge @AuditDisplay.ActionBadge(row.Action)">@AuditDisplay.ActionLabel(row.Action)</span></td>
+                    <td>
+                        @if (row.EntityType is { } entityType && row.EntityId is { } entityId)
+                        {
+                            <span>@entityType</span>
+                            <a class="d-block small font-monospace text-break" asp-action="Index"
+                               asp-all-route-data="AuditTrailFilterInput.EntityHistory(entityType, entityId)"
+                               title="Show this entity's history">@entityId</a>
+                        }
+                        else
+                        {
+                            @AuditDisplay.Value(row.EntityType)
+                        }
+                    </td>
+                    <td>
+                        @if (row.Details is not null)
+                        {
+                            <span class="text-break">@row.Details</span>
+                        }
+                        <span class="d-block small text-body-secondary">
+                            @if (row.IpAddress is not null)
+                            {
+                                <span>IP @row.IpAddress</span>
+                            }
+                            @if (row.CorrelationId is not null)
+                            {
+                                <span class="font-monospace">trace @row.CorrelationId</span>
+                            }
+                        </span>
+                    </td>
+                </tr>
+                @if (row.ChangeItems is { Count: > 0 } items)
+                {
+                    <tr>
+                        <td></td>
+                        <td colspan="6">
+                            <details>
+                                <summary>Changes to entry @row.Sequence (@items.Count @(items.Count == 1 ? "item" : "items"))</summary>
+                                <table class="table table-sm table-bordered mt-2 mb-1">
+                                    <caption class="visually-hidden">Before and after values recorded by entry @row.Sequence</caption>
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Item</th>
+                                            <th scope="col">Field</th>
+                                            <th scope="col">Before</th>
+                                            <th scope="col">After</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in items)
+                                        {
+                                            var label = $"{item.Item} ({AuditDisplay.ChangeLabel(item.Change)})";
+                                            @if (item.Values.Count == 0)
+                                            {
+                                                <tr>
+                                                    <th scope="row" class="fw-normal">@label</th>
+                                                    <td colspan="3">@AuditDisplay.NoValue</td>
+                                                </tr>
+                                            }
+                                            @foreach (var value in item.Values)
+                                            {
+                                                <tr>
+                                                    <th scope="row" class="fw-normal">@label</th>
+                                                    <td>@value.Property</td>
+                                                    <td class="text-break">@AuditDisplay.Value(value.Before)</td>
+                                                    <td class="text-break">@AuditDisplay.Value(value.After)</td>
+                                                </tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                            </details>
+                        </td>
+                    </tr>
+                }
+                else if (row.Changes is not null)
+                {
+                    <tr>
+                        <td></td>
+                        <td colspan="6">
+                            <details>
+                                <summary>Changes to entry @row.Sequence (not in the expected format)</summary>
+                                <pre class="small text-break mb-1">@row.Changes</pre>
+                            </details>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (trail.PageCount > 1)
+{
+    <nav aria-label="Audit trail pages">
+        <ul class="pagination">
+            <li class="page-item @(trail.Page == 1 ? "disabled" : null)">
+                <a class="page-link" asp-action="Index" asp-all-route-data="filter.RouteValues(1)">Newest</a>
+            </li>
+            <li class="page-item @(trail.Page == 1 ? "disabled" : null)">
+                <a class="page-link" asp-action="Index" asp-all-route-data="filter.RouteValues(trail.Page - 1)">Newer</a>
+            </li>
+            <li class="page-item active" aria-current="page">
+                <span class="page-link">Page @trail.Page of @trail.PageCount</span>
+            </li>
+            <li class="page-item @(trail.Page == trail.PageCount ? "disabled" : null)">
+                <a class="page-link" asp-action="Index" asp-all-route-data="filter.RouteValues(trail.Page + 1)">Older</a>
+            </li>
+            <li class="page-item @(trail.Page == trail.PageCount ? "disabled" : null)">
+                <a class="page-link" asp-action="Index" asp-all-route-data="filter.RouteValues(trail.PageCount)">Oldest</a>
+            </li>
+        </ul>
+    </nav>
+}
