@@ -43,6 +43,11 @@
 
   <ItemGroup Label="Files">
     <PackageVersion Include="ClosedXML" Version="0.105.1" />
+    <PackageVersion Include="QuestPDF" Version="2026.9.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="Reporting">
+    <PackageVersion Include="Dapper" Version="2.1.89" />
   </ItemGroup>
 
   <ItemGroup Label="Identity">

@@ -25,7 +25,9 @@ public sealed record AuditOrigin(AuditActor Actor, string? IpAddress, string? Co
     /// <summary>Builds the record to append for an action from this origin.</summary>
     /// <param name="action">What happened.</param>
     /// <param name="details">Extra non-sensitive context.</param>
+    /// <param name="entityType">What the action was about, if anything.</param>
+    /// <param name="entityId">Which one.</param>
     /// <returns>The audit record.</returns>
-    public AuditRecord ToRecord(AuditAction action, string? details = null) =>
-        Actor.ToRecord(action, details, IpAddress, CorrelationId);
+    public AuditRecord ToRecord(AuditAction action, string? details = null, string? entityType = null, string? entityId = null) =>
+        Actor.ToRecord(action, details, IpAddress, CorrelationId, entityType, entityId);
 }

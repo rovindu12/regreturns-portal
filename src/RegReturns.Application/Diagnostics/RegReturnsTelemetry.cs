@@ -56,6 +56,10 @@ public static class RegReturnsTelemetry
     public static Counter<long> WorkflowTransitions { get; } = Meter.CreateCounter<long>(
         "regreturns.workflow.transitions", "{step}", "Workflow steps by action and outcome.");
 
+    /// <summary>Gets the count of report exports, tagged with <c>report</c> and <c>format</c>.</summary>
+    public static Counter<long> ReportExports { get; } = Meter.CreateCounter<long>(
+        "regreturns.reports.exports", "{file}", "Report exports by report and format.");
+
     /// <summary>Gets the count of returns first submitted after their due date.</summary>
     public static Counter<long> LateSubmissions { get; } = Meter.CreateCounter<long>(
         "regreturns.workflow.late_submissions", "{return}", "Returns first submitted after their due date.");

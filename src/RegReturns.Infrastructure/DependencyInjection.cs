@@ -7,12 +7,14 @@ using Microsoft.Extensions.Options;
 using RegReturns.Application.Abstractions;
 using RegReturns.Application.Auditing;
 using RegReturns.Application.Idempotency;
+using RegReturns.Application.Reporting;
 using RegReturns.Application.Returns;
 using RegReturns.Infrastructure.Auditing;
 using RegReturns.Infrastructure.Files;
 using RegReturns.Infrastructure.Idempotency;
 using RegReturns.Infrastructure.Identity.Wso2;
 using RegReturns.Infrastructure.Persistence;
+using RegReturns.Infrastructure.Reporting;
 
 namespace RegReturns.Infrastructure;
 
@@ -104,6 +106,27 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<IIdempotencyStore, IdempotencyStore>();
         services.AddHostedService<IdempotencyPurger>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the dashboards' read model over the <c>reporting</c> views and the report renderer (ADR 0028), configured
+    /// by <c>Reports</c>. Requires <see cref="AddInfrastructure"/> for the database settings.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">Application configuration.</param>
+    /// <returns>The same service collection.</returns>
+    public static IServiceCollection AddReporting(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<ReportingOptions>()
+            .Bind(configuration.GetSection(ReportingOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(
+                o => o.KeyRatios.All(k => !string.IsNullOrWhiteSpace(k.ReturnType) && !string.IsNullOrWhiteSpace(k.Field)),
+                $"Every {ReportingOptions.SectionName}:{nameof(ReportingOptions.KeyRatios)} entry needs a ReturnType and a Field.")
+            .ValidateOnStart();
+        services.TryAddSingleton<IReportingReadModel, ReportingReadModel>();
+        services.TryAddSingleton<IComplianceReportRenderer, ComplianceReportRenderer>();
         return services;
     }
 

@@ -17,4 +17,7 @@ internal static class Schemas
 
     /// <summary>API plumbing: stored responses of idempotent requests.</summary>
     public const string Api = "api";
+
+    /// <summary>Read-only views behind the dashboards and reports (ADR 0028).</summary>
+    public const string Reporting = "reporting";
 }
