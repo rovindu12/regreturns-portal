@@ -63,7 +63,13 @@ public sealed class ReturnObligation : Entity
     /// <summary>Returns whether a submission made at the given time would be late.</summary>
     /// <param name="at">The submission time.</param>
     /// <returns><see langword="true"/> if after the due date (UTC).</returns>
-    public bool WouldBeLate(DateTimeOffset at) => DateOnly.FromDateTime(at.UtcDateTime) > DueDate;
+    public bool WouldBeLate(DateTimeOffset at) => IsLateArrival(DueDate, at);
+
+    /// <summary>Returns whether a return due on <paramref name="dueDate"/> is late when it arrives at <paramref name="at"/> (UTC dates).</summary>
+    /// <param name="dueDate">The due date.</param>
+    /// <param name="at">When the return arrives.</param>
+    /// <returns><see langword="true"/> if it arrives after the due date.</returns>
+    public static bool IsLateArrival(DateOnly dueDate, DateTimeOffset at) => DateOnly.FromDateTime(at.UtcDateTime) > dueDate;
 
     /// <summary>Records that a submission reached the regulator.</summary>
     /// <param name="at">When it was submitted.</param>

@@ -315,11 +315,7 @@ public sealed class Submission : Entity
 
         var checks = Check(
             () => obligation.Id == ObligationId ? Result.Success() : SubmissionErrors.TemplateMismatch,
-            () => RequireTransition(WorkflowAction.Submit),
-            () => RequireBankRole(checker, Role.BankChecker, InstitutionId),
-            () => checker.UserId == PreparedByUserId || checker.UserId == LastEditedByUserId
-                ? SubmissionErrors.CheckerIsMaker
-                : Result.Success(),
+            () => Permits(WorkflowAction.Submit, checker),
             () => RequireComment(comment),
             () => EditVersion == 0 ? SubmissionErrors.NoValues : Result.Success(),
             () => ValidatedEditVersion != EditVersion ? SubmissionErrors.ValidationOutdated : Result.Success(),
@@ -350,9 +346,7 @@ public sealed class Submission : Entity
     public Result StartReview(Actor reviewer, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(reviewer);
-        var checks = Check(
-            () => RequireTransition(WorkflowAction.StartReview),
-            () => RequireRegulatorRole(reviewer, Role.SupervisorReviewer));
+        var checks = Permits(WorkflowAction.StartReview, reviewer);
         if (checks.IsFailure)
         {
             return checks;
@@ -371,10 +365,8 @@ public sealed class Submission : Entity
     public Result ReturnForCorrection(Actor supervisor, string comment, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(supervisor);
-        var role = supervisor.HasRole(Role.SupervisorApprover) ? Role.SupervisorApprover : Role.SupervisorReviewer;
         var checks = Check(
-            () => RequireTransition(WorkflowAction.ReturnForCorrection),
-            () => RequireRegulatorRole(supervisor, role),
+            () => Permits(WorkflowAction.ReturnForCorrection, supervisor),
             () => RequireComment(comment));
         if (checks.IsFailure)
         {
@@ -422,6 +414,49 @@ public sealed class Submission : Entity
         }
 
         return decided;
+    }
+
+    /// <summary>
+    /// Returns whether the actor may take a workflow action now: the state allows it, the actor holds the role at the
+    /// right organisation, and segregation of duties holds (a checker did not prepare or last edit the return; an
+    /// approver did not review it). The comment and the data rules for submitting are checked by the action itself.
+    /// </summary>
+    /// <param name="action">The workflow action.</param>
+    /// <param name="actor">The actor.</param>
+    /// <returns>Success, or the rule that stops the actor.</returns>
+    public Result Permits(WorkflowAction action, Actor actor)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        var transition = RequireTransition(action);
+        if (transition.IsFailure)
+        {
+            return transition;
+        }
+
+        return action switch
+        {
+            WorkflowAction.Submit => Check(
+                () => RequireBankRole(actor, Role.BankChecker, InstitutionId),
+                () => actor.UserId == PreparedByUserId || actor.UserId == LastEditedByUserId
+                    ? SubmissionErrors.CheckerIsMaker
+                    : Result.Success()),
+            WorkflowAction.StartReview => RequireRegulatorRole(actor, Role.SupervisorReviewer),
+            WorkflowAction.ReturnForCorrection => RequireRegulatorRole(
+                actor, actor.HasRole(Role.SupervisorApprover) ? Role.SupervisorApprover : Role.SupervisorReviewer),
+            WorkflowAction.Approve or WorkflowAction.Reject => Check(
+                () => RequireRegulatorRole(actor, Role.SupervisorApprover),
+                () => actor.UserId == ReviewedByUserId ? SubmissionErrors.ApproverIsReviewer : Result.Success()),
+            _ => SubmissionErrors.InvalidTransition,
+        };
+    }
+
+    /// <summary>Returns the workflow actions the actor may take now (see <see cref="Permits"/>).</summary>
+    /// <param name="actor">The actor.</param>
+    /// <returns>The actions, in workflow order.</returns>
+    public IReadOnlyList<WorkflowAction> ActionsFor(Actor actor)
+    {
+        ArgumentNullException.ThrowIfNull(actor);
+        return [.. SubmissionWorkflow.ActionsFrom(Status).Where(action => Permits(action, actor).IsSuccess)];
     }
 
     private static Result Check(params Func<Result>[] rules)
@@ -475,9 +510,7 @@ public sealed class Submission : Entity
     {
         ArgumentNullException.ThrowIfNull(approver);
         var checks = Check(
-            () => RequireTransition(action),
-            () => RequireRegulatorRole(approver, Role.SupervisorApprover),
-            () => approver.UserId == ReviewedByUserId ? SubmissionErrors.ApproverIsReviewer : Result.Success(),
+            () => Permits(action, approver),
             () => RequireComment(comment));
         if (checks.IsFailure)
         {
