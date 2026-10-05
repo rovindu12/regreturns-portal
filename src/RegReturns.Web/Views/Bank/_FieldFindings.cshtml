@@ -1,0 +1,17 @@
+@model ReturnFormField
+@if (Model.Findings.Count > 0)
+{
+    <ul id="field-@Model.Code-findings" class="list-unstyled small mb-0 mt-1">
+        @foreach (var finding in Model.Findings)
+        {
+            var isError = finding.Severity == Severity.Error;
+            <li class="@(isError ? "text-danger" : "text-warning-emphasis")">
+                <span class="fw-semibold">@(isError ? "Error:" : "Warning:")</span> @finding.Message
+                @if (!isError)
+                {
+                    <a href="#finding-@finding.Id">@(finding.Justification is null ? "Justify" : "Justified")</a>
+                }
+            </li>
+        }
+    </ul>
+}

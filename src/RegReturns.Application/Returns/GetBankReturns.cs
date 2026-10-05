@@ -1,3 +1,5 @@
+using System.Linq.Expressions;
+
 using Microsoft.EntityFrameworkCore;
 
 using RegReturns.Application.Abstractions;
@@ -78,8 +80,56 @@ public sealed class GetBankReturnsHandler(IAppDbContext db, ICurrentActor curren
 
         var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
         var from = today.AddMonths(-Math.Clamp(query.Months, 1, 60));
+        var rows = (await BankReturnRows.LoadAsync(db, institutionId, o => o.DueDate >= from, today, cancellationToken))
+            .OrderByDescending(r => r.IsToDo)
+            .ThenBy(r => r.IsToDo ? r.DueDate.DayNumber : -r.DueDate.DayNumber)
+            .ThenBy(r => r.ReturnTypeCode, StringComparer.Ordinal)
+            .ToList();
+        return new BankReturnsOverview(institution.Code, institution.Name, rows);
+    }
+}
+
+/// <summary>Asks for one filing obligation of the caller's bank and where its return stands.</summary>
+/// <param name="ObligationId">The obligation id.</param>
+public sealed record GetBankObligation(Guid ObligationId);
+
+/// <summary>Handles <see cref="GetBankObligation"/>.</summary>
+/// <param name="db">The unit of work.</param>
+/// <param name="currentActor">The caller.</param>
+/// <param name="timeProvider">The clock.</param>
+public sealed class GetBankObligationHandler(IAppDbContext db, ICurrentActor currentActor, TimeProvider timeProvider)
+    : IQueryHandler<GetBankObligation, Result<BankReturnRow>>
+{
+    /// <inheritdoc />
+    public async Task<Result<BankReturnRow>> HandleAsync(GetBankObligation query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        var actor = await BankReturnAccess.BankActorAsync(currentActor, cancellationToken);
+        if (actor.IsFailure)
+        {
+            return actor.Error!;
+        }
+
+        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var rows = await BankReturnRows.LoadAsync(
+            db, actor.Value.InstitutionId!.Value, o => o.Id == query.ObligationId, today, cancellationToken);
+        return rows.Count == 0 ? SubmissionErrors.NotFound : rows[0];
+    }
+}
+
+/// <summary>Builds <see cref="BankReturnRow"/>s for a bank's obligations.</summary>
+internal static class BankReturnRows
+{
+    public static async Task<List<BankReturnRow>> LoadAsync(
+        IAppDbContext db,
+        Guid institutionId,
+        Expression<Func<ReturnObligation, bool>> filter,
+        DateOnly today,
+        CancellationToken cancellationToken)
+    {
         var obligations = await db.Obligations.AsNoTracking()
-            .Where(o => o.InstitutionId == institutionId && o.DueDate >= from)
+            .Where(o => o.InstitutionId == institutionId)
+            .Where(filter)
             .Join(db.ReturnTypes, o => o.ReturnTypeId, r => r.Id, (o, r) => new { Obligation = o, r.Code, r.Name })
             .ToListAsync(cancellationToken);
         var ids = obligations.Select(o => o.Obligation.Id).ToList();
@@ -101,18 +151,12 @@ public sealed class GetBankReturnsHandler(IAppDbContext db, ICurrentActor curren
             .GroupBy(s => s.ObligationId)
             .ToDictionary(g => g.Key, g => g.MaxBy(s => s.CreatedAt)!);
 
-        var rows = obligations
-            .Select(o =>
-            {
-                var s = latest.GetValueOrDefault(o.Obligation.Id);
-                return new BankReturnRow(
-                    o.Obligation.Id, o.Code, o.Name, o.Obligation.Period.Label, o.Obligation.DueDate, o.Obligation.Status,
-                    o.Obligation.IsOverdue(today), s?.Id, s?.Status, s?.Revision, s?.Errors ?? 0, s?.Unjustified ?? 0, s?.IsLate ?? false);
-            })
-            .OrderByDescending(r => r.IsToDo)
-            .ThenBy(r => r.IsToDo ? r.DueDate.DayNumber : -r.DueDate.DayNumber)
-            .ThenBy(r => r.ReturnTypeCode, StringComparer.Ordinal)
-            .ToList();
-        return new BankReturnsOverview(institution.Code, institution.Name, rows);
+        return [.. obligations.Select(o =>
+        {
+            var s = latest.GetValueOrDefault(o.Obligation.Id);
+            return new BankReturnRow(
+                o.Obligation.Id, o.Code, o.Name, o.Obligation.Period.Label, o.Obligation.DueDate, o.Obligation.Status,
+                o.Obligation.IsOverdue(today), s?.Id, s?.Status, s?.Revision, s?.Errors ?? 0, s?.Unjustified ?? 0, s?.IsLate ?? false);
+        })];
     }
 }
