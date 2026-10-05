@@ -50,8 +50,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - Variance rules compare with the last approved return for the previous period or the same period last year.
 - Bank return pages: obligations overview, entry form by section with inline findings, draft save with optimistic
   concurrency and a clear conflict message, re-validation, warning justifications and upload history (ADR 0023).
-- Excel and CSV template download and upload with extension, signature, macro and size checks; accepted files are
-  kept as evidence in `returns.StoredFiles` and never served (ADR 0022).
+- Excel and CSV template download and upload with ClosedXML: extension, signature, macro, zip-bomb, row and cell
+  limits; percentage-formatted cells read as percentages; CSV formula-injection guard that round-trips; accepted
+  files are kept as evidence in `returns.StoredFiles` and never served (ADR 0022).
 - Template administration: draft versions copied from the published one, field and rule editing, publish, retire and
   delete draft (ADR 0009 amendment).
 - Log events 50xx (templates), 51xx (returns) and 52xx (uploads); validation and upload metrics and a

@@ -135,6 +135,7 @@ EventId.Id = 5202 and ErrorCode = 'Upload.MacrosNotAllowed'
 | 5105 | Edit refused: the page was older than the saved return |
 | 5201 | Upload accepted (format, size, fields loaded, stored file id) |
 | 5202 | Upload refused (error code and size) |
+| 5210 | A workbook could not be read (exception type only); refused as `Upload.Unreadable` |
 
 Logs never contain figures, file names or justification text. Metrics: `regreturns.validation.runs` (by outcome),
 `regreturns.validation.findings` (by rule code and severity) and `regreturns.uploads` (by outcome and reason); the
@@ -153,6 +154,7 @@ Logs never contain figures, file names or justification text. Metrics: `regretur
 | Upload refused: `Upload.NoHeader` or `Upload.NoValues` | The first sheet has no `FieldCode` and `Value` header row, or no field rows under it | Start from the downloaded template; keep its header row and the first sheet |
 | Upload refused: `Upload.UnknownFields` | The file names field codes the return's template version does not have (often a template from another return type or an older version) | Download the template for this obligation; the message lists up to ten unknown codes |
 | Upload refused: `Upload.DuplicateField` | A field code appears on two rows | Keep one row per field |
+| Upload refused: `Upload.Unreadable` | The file is damaged, is a zip bomb (over 200 entries, 50 MB expanded or a compression ratio over 100), has more than 2,000 rows, a cell over 4,000 characters, a CSV line over 200 columns or broken quoting; the message names the line where it can | Start from the downloaded template; event 5210 gives the exception type for workbooks |
 | Upload refused: `Upload.TooLarge`, or the browser shows a 413 / connection reset | The file is over 5 MB (the server cuts requests a little above that) | Remove other sheets and formatting; a return template is a few KB |
 | A value from a spreadsheet shows as invalid although Excel displays it correctly | Excel shows a formatted number, but the cell holds text such as `1.234,56`, or more decimals than the field allows | Enter plain numbers with a full stop for decimals; the hint under each field gives the allowed decimals |
 | A variance warning appears for the first return of a new bank, or never appears | Variance rules compare with the last **approved** return for the previous period or the same period last year; without one, or when it was zero, they are skipped | Expected; check the prior return's status in Supervision |
