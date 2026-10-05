@@ -2,7 +2,7 @@ using RegReturns.Application.Returns;
 
 namespace RegReturns.Web.Models.Bank;
 
-/// <summary>The return entry page: the saved return, plus what the user posted when a save or justification failed.</summary>
+/// <summary>The return entry page: the saved return, plus what the user posted when a save, justification or submission failed.</summary>
 public sealed class ReturnFormViewModel
 {
     /// <summary>Initializes a new instance of the <see cref="ReturnFormViewModel"/> class showing the saved return.</summary>
@@ -37,6 +37,12 @@ public sealed class ReturnFormViewModel
 
     /// <summary>Gets why the justification failed.</summary>
     public string? JustifyError { get; init; }
+
+    /// <summary>Gets the comment the checker posted when the submission was refused.</summary>
+    public string? SubmitComment { get; init; }
+
+    /// <summary>Gets why the submission was refused.</summary>
+    public string? SubmitError { get; init; }
 
     /// <summary>Gets the value to show in a field's input.</summary>
     /// <param name="field">The field.</param>

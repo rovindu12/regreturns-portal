@@ -1,0 +1,70 @@
+@model WorklistViewModel
+@{
+    ViewData["Title"] = "Supervision";
+    var worklist = Model.Worklist;
+}
+
+<section class="mb-4">
+    <h1 class="h2">Supervision</h1>
+    <p class="lead mb-0">Returns the banks have submitted: pick one up to review it, send it back for correction, or decide it.</p>
+</section>
+
+<partial name="_Flash" />
+
+@if (worklist is null)
+{
+    <div class="alert alert-warning" role="alert">@Model.Problem</div>
+    return;
+}
+
+<form method="get" asp-action="Index" class="row g-2 align-items-end mb-4" aria-label="Filter the worklist">
+    <div class="col-sm-6 col-lg-4">
+        <label for="filter-institution" class="form-label">Bank</label>
+        <select id="filter-institution" name="institution" class="form-select">
+            <option value="">All banks</option>
+            @foreach (var bank in worklist.Institutions)
+            {
+                <option value="@bank.Id" selected="@(Model.Filter.Institution == bank.Id ? "selected" : null)">@bank.Name (@bank.Code)</option>
+            }
+        </select>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <label for="filter-return-type" class="form-label">Return</label>
+        <select id="filter-return-type" name="returnType" class="form-select">
+            <option value="">All returns</option>
+            @foreach (var type in worklist.ReturnTypes)
+            {
+                <option value="@type.Id" selected="@(Model.Filter.ReturnType == type.Id ? "selected" : null)">@type.Code: @type.Name</option>
+            }
+        </select>
+    </div>
+    <div class="col-sm-6 col-lg-2">
+        <div class="form-check mb-2">
+            <input id="filter-late" name="late" type="checkbox" value="true" class="form-check-input" checked="@(Model.Filter.LateOnly ? "checked" : null)" />
+            <label for="filter-late" class="form-check-label">Late only</label>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3 d-flex gap-2">
+        <button type="submit" class="btn btn-outline-primary">Filter</button>
+        @if (Model.Filter.IsFiltered)
+        {
+            <a class="btn btn-link" asp-action="Index">Clear</a>
+        }
+    </div>
+</form>
+
+<nav aria-label="Worklist sections" class="mb-3">
+    <ul class="nav nav-pills small">
+        @foreach (var part in Model.Sections)
+        {
+            <li class="nav-item">
+                <a class="nav-link" href="#@part.Id">@part.Title <span class="badge text-bg-secondary">@part.Rows.Count</span></a>
+            </li>
+        }
+    </ul>
+</nav>
+
+@foreach (var part in Model.Sections)
+{
+    <partial name="_WorklistSection" model="part" />
+}

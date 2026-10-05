@@ -1,0 +1,10 @@
+@using RegReturns.Application.Returns
+@using RegReturns.Web.Models.Returns
+@model ReturnFinding
+<figure class="mb-0 border-start border-3 ps-2">
+    <blockquote class="mb-1 comment-text">@Model.Justification</blockquote>
+    <figcaption class="small text-body-secondary">
+        Justified by @(Model.JustifiedBy ?? "a former user")
+        @(Model.JustifiedAt is { } at ? $"on {ReturnDisplay.Utc(at)}" : null)
+    </figcaption>
+</figure>

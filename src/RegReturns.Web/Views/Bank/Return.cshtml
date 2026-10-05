@@ -5,6 +5,7 @@
     ViewData["Title"] = $"{form.ReturnTypeCode} {form.PeriodLabel}";
     var culture = System.Globalization.CultureInfo.InvariantCulture;
     var findingsOpen = outcome.Errors + outcome.UnjustifiedWarnings;
+    var workflow = form.Workflow;
 }
 
 <nav aria-label="Breadcrumb">
@@ -19,13 +20,38 @@
     <p class="mb-0">
         Period <strong>@form.PeriodLabel</strong>, due @form.DueDate.ToString(ReturnDisplay.DateFormat, culture).
         <span class="badge @ReturnDisplay.BadgeClass(form.Status) ms-1">@ReturnDisplay.Label(form.Status)</span>
+        @if (workflow.IsLate)
+        {
+            <span class="badge text-bg-danger ms-1">Late</span>
+        }
     </p>
     <p class="small text-body-secondary mb-0">
         Revision @form.Revision &middot; template version @form.TemplateVersion &middot; started from @ReturnDisplay.Label(form.Source).ToLowerInvariant()
+        @if (workflow.LastSubmittedAt is { } submittedAt)
+        {
+            <text>&middot; last submitted @ReturnDisplay.Utc(submittedAt)</text>
+        }
     </p>
 </section>
 
 <partial name="_Flash" />
+
+@if (workflow.SupervisorVerdict is { } verdict)
+{
+    var rejected = verdict.Action == WorkflowAction.Reject;
+    <div class="alert @(rejected ? "alert-danger" : "alert-warning")" role="status">
+        <p class="fw-semibold mb-1">@ReturnDisplay.Label(verdict.Action) by @verdict.ActorName on @ReturnDisplay.Utc(verdict.OccurredAt)</p>
+        <p class="mb-0 comment-text text-break">@verdict.Comment</p>
+        @if (rejected)
+        {
+            <p class="small mb-0 mt-2">The obligation is open again: start a new return for it from <a asp-action="Index">Bank returns</a>.</p>
+        }
+        else
+        {
+            <p class="small mb-0 mt-2">Correct the return, validate it and ask a checker to submit it again.</p>
+        }
+    </div>
+}
 
 <section aria-labelledby="summary-heading" class="card mb-4">
     <div class="card-body">
@@ -153,31 +179,15 @@
     else
     {
         <p class="small text-body-secondary">
-            @(form.Status == SubmissionStatus.Draft || form.Status == SubmissionStatus.ReturnedForCorrection
-                ? "Only a maker of your bank can change the values."
-                : "The return is with the Bank of Valoria and can no longer be changed.")
+            @(form.Status switch
+            {
+                SubmissionStatus.Draft or SubmissionStatus.ReturnedForCorrection => "Only a maker of your bank can change the values.",
+                SubmissionStatus.Approved => "The Bank of Valoria approved this return, so it can no longer be changed.",
+                SubmissionStatus.Rejected => "The Bank of Valoria rejected this return. It is kept as it was submitted.",
+                _ => "The return is with the Bank of Valoria and can no longer be changed.",
+            })
         </p>
-        @foreach (var group in form.Sections)
-        {
-            <div class="card mb-3">
-                <h3 class="card-header h6 mb-0">@group.Name</h3>
-                <div class="card-body">
-                    <dl class="row mb-0">
-                        @foreach (var field in group.Fields)
-                        {
-                            <dt class="col-md-5 fw-normal">
-                                @field.Label
-                                <span class="d-block small text-body-secondary font-monospace">@field.Code</span>
-                            </dt>
-                            <dd class="col-md-7">
-                                @(string.IsNullOrWhiteSpace(field.Value) ? "Not entered" : field.Value) @field.Unit
-                                <partial name="_FieldFindings" model="field" />
-                            </dd>
-                        }
-                    </dl>
-                </div>
-            </div>
-        }
+        <partial name="_ReturnValues" model="form" />
     }
 </section>
 
@@ -209,13 +219,7 @@
                     {
                         if (finding.Justification is not null)
                         {
-                            <figure class="mb-0 border-start border-3 ps-2">
-                                <blockquote class="mb-1">@finding.Justification</blockquote>
-                                <figcaption class="small text-body-secondary">
-                                    Justified by @(finding.JustifiedBy ?? "a former user")
-                                    @(finding.JustifiedAt is { } at ? $"on {at.UtcDateTime.ToString("d MMM yyyy HH:mm", culture)} UTC" : null)
-                                </figcaption>
-                            </figure>
+                            <partial name="_Justification" model="finding" />
                         }
                         else if (form.CanJustify)
                         {
@@ -245,42 +249,51 @@
     }
 </section>
 
-<section aria-labelledby="uploads-heading" class="mb-4">
-    <h2 id="uploads-heading" class="h4">Uploaded files</h2>
-    @if (form.Uploads.Count == 0)
-    {
-        <p>No files have been uploaded to this return.</p>
-    }
-    else
-    {
-        <p class="small text-body-secondary">Files are kept as evidence of what was loaded. They are never opened by the portal.</p>
-        <div class="table-responsive">
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th scope="col">File</th>
-                        <th scope="col">Size</th>
-                        <th scope="col">Revision</th>
-                        <th scope="col">Uploaded by</th>
-                        <th scope="col">When (UTC)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var upload in form.Uploads)
+@if (workflow.Allows(WorkflowAction.Submit) || workflow.SubmitBlocker is not null)
+{
+    <section id="submit" aria-labelledby="submit-heading" class="card border-primary mb-4">
+        <div class="card-body">
+            <h2 id="submit-heading" class="h5">Submit to the Bank of Valoria</h2>
+            @if (workflow.SubmitBlocker is { } blocker)
+            {
+                <p class="mb-0">@blocker</p>
+            }
+            else
+            {
+                var ready = form.IsValidated && outcome.IsReadyToSubmit;
+                var failed = Model.SubmitError is not null;
+                <p>
+                    As the checker, you confirm the figures are complete and correct. Once submitted, the return can no
+                    longer be changed unless the Bank of Valoria sends it back.
+                    @(workflow.LateIfSubmittedNow
+                        ? $"It was due on {form.DueDate.ToString(ReturnDisplay.DateFormat, culture)}, so it will be marked late."
+                        : null)
+                </p>
+                @if (!ready)
+                {
+                    <p class="text-warning-emphasis">
+                        @(form.IsValidated ? $"{ReturnDisplay.Describe(outcome)} Resolve them before submitting." : "Validate the latest values before submitting.")
+                    </p>
+                }
+                <form method="post" asp-action="Submit" asp-route-submissionId="@form.SubmissionId">
+                    <label for="submit-comment" class="form-label">Comment for the Bank of Valoria</label>
+                    <textarea id="submit-comment" name="comment" rows="3" maxlength="@WorkflowEvent.CommentMaxLength" required
+                              class="@(failed ? "form-control is-invalid" : "form-control")"
+                              aria-describedby="@(failed ? "submit-error" : null)">@Model.SubmitComment</textarea>
+                    @if (failed)
                     {
-                        <tr>
-                            <td class="text-break">@upload.FileName</td>
-                            <td>@ReturnDisplay.FileSize(upload.SizeBytes)</td>
-                            <td>@upload.Revision</td>
-                            <td>@upload.UploadedBy</td>
-                            <td>@upload.UploadedAt.UtcDateTime.ToString("d MMM yyyy HH:mm", culture)</td>
-                        </tr>
+                        <div id="submit-error" class="invalid-feedback">@Model.SubmitError</div>
                     }
-                </tbody>
-            </table>
+                    <button type="submit" class="btn btn-primary mt-2" disabled="@(ready ? null : "disabled")">Submit return</button>
+                </form>
+            }
         </div>
-    }
-</section>
+    </section>
+}
+
+<partial name="_ReturnUploads" model="form.Uploads" />
+
+<partial name="_ReturnHistory" model="workflow" />
 
 @section Scripts {
     <script src="~/js/returns.js" asp-append-version="true"></script>

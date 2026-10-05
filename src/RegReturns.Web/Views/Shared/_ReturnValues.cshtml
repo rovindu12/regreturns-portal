@@ -1,0 +1,24 @@
+@using RegReturns.Application.Returns
+@model ReturnForm
+@* The values of a return, read-only, by section. Each field carries its findings. *@
+@foreach (var group in Model.Sections)
+{
+    <div class="card mb-3">
+        <h3 class="card-header h6 mb-0">@group.Name</h3>
+        <div class="card-body">
+            <dl class="row mb-0">
+                @foreach (var field in group.Fields)
+                {
+                    <dt id="field-@field.Code" class="col-md-5 fw-normal">
+                        @field.Label
+                        <span class="d-block small text-body-secondary font-monospace">@field.Code</span>
+                    </dt>
+                    <dd class="col-md-7">
+                        @(string.IsNullOrWhiteSpace(field.Value) ? "Not entered" : field.Value) @field.Unit
+                        <partial name="_FieldFindings" model="field" />
+                    </dd>
+                }
+            </dl>
+        </div>
+    </div>
+}
