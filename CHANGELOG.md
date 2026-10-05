@@ -89,6 +89,18 @@ and the project uses [Semantic Versioning](https://semver.org/).
   unknown ids.
 - Log events 3301-3307 (idempotency and rate limits) and 5106-5107 (deliveries), the `regreturns.api.*` metrics, and
   a troubleshooting section for the API.
+- Phase 6: reports dashboard for every role, one return type at a time: summary cards, a bank × period compliance
+  grid (on time, late, overdue, not due yet) with a legend and dates on every cell, the overdue list across return
+  types with days overdue and the reason, a Chart.js trend of validation findings by rule with a data table, and
+  key-ratio sparklines with low, high and latest values. Bank staff see their own bank; regulator staff see every
+  bank but no bank's draft (ADR 0028).
+- SQL views in a new `reporting` schema (`ObligationCompliance`, `SubmittedFindings`, `ApprovedValues`) read with
+  Dapper, with SqlClient retries on open.
+- Compliance report export as Excel (grid, overdue and obligations sheets) and PDF (A4 landscape), each recorded in
+  the audit trail as `ReportExported` with its scope and format.
+- Key ratios configured in `Reports:KeyRatios`, labelled from the latest published template.
+- Log event 5401 (report exported), the `regreturns.reports.exports` metric, and a troubleshooting section for
+  reports.
 
 ### Changed
 

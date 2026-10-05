@@ -253,3 +253,29 @@ with the error code), `regreturns.api.idempotent_requests` (outcome started, rep
 | 429 `RateLimit.Exceeded` with `Retry-After` | More than `Api:RateLimit:PermitLimit` requests in the window from one client (or one IP without a token) | Back off for `Retry-After` seconds; raise the limit only for a known batch job |
 | 413 `Request.TooLarge` | The request body is over 1 MiB | A return is far smaller; check what the client sends |
 | Swagger UI "Authorize" fails with a CORS or `invalid_client` error | The API's origin is not on the demo client's allowed origins, or the secret is wrong | Set `IamBootstrap:ApiBaseUrl` to the API address and re-run `apply`; the demo secret is in `.env.generated` |
+
+## 10. Reports and exports
+
+The reports area reads the `reporting` views with Dapper (ADR 0028). Its queries show in traces as SqlClient spans
+under the request; exports log one event each, never with figures.
+
+```
+EventId.Id = 5401                                  -- report exported (report, return type, format, size, time)
+```
+
+Who exported what, when and from where is in the audit trail: filter the auditor screen by the action "Report
+exported", or query `audit.AuditEntries` for `Action = N'ReportExported'`.
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| The page says "No return types are set up yet." | No active return type | Run `migrate-db --seed`, or publish a template and activate its return type |
+| 404 on `/reports?returnType=...` | Unknown or inactive return type code | Use a code from the tabs (`MLR`, `MDA`, `QCAR`); case does not matter |
+| 400 on `/reports/compliance/export` | `format` is missing or not `xlsx` or `pdf` | Use the download buttons, which send the format |
+| `Invalid object name 'reporting.ObligationCompliance'` | The database predates the `AddReportingViews` migration | Run `migrate-db` |
+| `Invalid column name ...` from a reporting view after a migration | A migration renamed a column the views use | Recreate the view in the same migration; the read model's integration tests catch this |
+| A bank's current return shows "Not due yet" to a supervisor, though the bank has a draft | Expected: regulator staff never see a draft (ADR 0025) | None; it shows once the bank submits |
+| A key ratio is missing | Not listed in `Reports:KeyRatios`, or no published template has the field | Add `{ "ReturnType": "MLR", "Field": "LCR" }`; a field only appears once a template has it |
+| A key ratio has no line for a bank | No approved return of that bank in the window | Expected; sparklines use approved returns only |
+| Charts are blank but tables show figures | `chart.umd.min.js` or `reports.js` did not load (check the browser console) | Restore `wwwroot/lib/chart.js`; the page stays readable without charts |
+| PDF export fails with a QuestPDF licence exception | The licence was not set before rendering | It is set in `ComplianceReportRenderer`'s static constructor; render only through that class |
+| PDF export fails with `DllNotFoundException` for QuestPDF's native library | A runtime without a matching native build (for example an unusual Linux distribution) | Run on a glibc or musl x64/arm64 image; QuestPDF ships those builds |
