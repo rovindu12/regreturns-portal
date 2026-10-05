@@ -55,24 +55,26 @@ internal static class DotEnvFile
         var config = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, key) in ConfigurationKeys)
         {
-            var fromEnvironment = Environment.GetEnvironmentVariable(name);
-            if (!string.IsNullOrEmpty(fromEnvironment))
-            {
-                config[key] = fromEnvironment;
-            }
-            else if (values.TryGetValue(name, out var value))
+            if (FromEnvironmentOrFile(name, values) is { } value)
             {
                 config[key] = value;
             }
         }
 
-        var host = Environment.GetEnvironmentVariable("WSO2_HOSTNAME") ?? values.GetValueOrDefault("WSO2_HOSTNAME");
+        var host = FromEnvironmentOrFile("WSO2_HOSTNAME", values);
         if (!string.IsNullOrWhiteSpace(host))
         {
             config["Wso2:Authority"] = $"https://{host}:9443/";
         }
 
         return config;
+    }
+
+    // An empty environment variable (as docker compose passes for an unset one) counts as unset.
+    private static string? FromEnvironmentOrFile(string name, IReadOnlyDictionary<string, string> values)
+    {
+        var fromEnvironment = Environment.GetEnvironmentVariable(name);
+        return string.IsNullOrEmpty(fromEnvironment) ? values.GetValueOrDefault(name) : fromEnvironment;
     }
 
     /// <summary>

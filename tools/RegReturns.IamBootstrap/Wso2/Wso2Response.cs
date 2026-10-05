@@ -24,8 +24,23 @@ internal sealed record Wso2Response(string Method, string Path, HttpStatusCode S
         ? obj["description"]?.ToString() ?? obj["detail"]?.ToString() ?? obj["message"]?.ToString()
         : null;
 
-    /// <summary>Gets the last path segment of <see cref="Location"/> (the new resource id).</summary>
-    public string? LocationId => Location?.Segments.LastOrDefault()?.TrimEnd('/');
+    /// <summary>Gets the last path segment of <see cref="Location"/> (the new resource id), absolute or relative.</summary>
+    public string? LocationId
+    {
+        get
+        {
+            if (Location is null)
+            {
+                return null;
+            }
+
+            var raw = Location.IsAbsoluteUri ? Location.AbsolutePath : Location.OriginalString;
+            var end = raw.IndexOfAny(['?', '#']);
+            var path = (end < 0 ? raw : raw[..end]).TrimEnd('/');
+            var id = path[(path.LastIndexOf('/') + 1)..];
+            return id.Length == 0 ? null : id;
+        }
+    }
 
     /// <summary>Throws unless the status is 2xx or one of <paramref name="alsoAccepted"/>.</summary>
     /// <param name="alsoAccepted">Non-success statuses the caller handles itself.</param>

@@ -11,6 +11,8 @@ internal sealed class BootstrapOptions
     /// <summary>Minimum length of the shared demo user password.</summary>
     public const int MinimumDemoPasswordLength = 12;
 
+    private const char PathSeparator = '/';
+
     /// <summary>Gets or sets the WSO2 super admin user name (<c>WSO2_ADMIN_USERNAME</c>).</summary>
     [Required]
     public string? AdminUserName { get; set; }
@@ -60,14 +62,19 @@ internal sealed class BootstrapOptions
 
     /// <summary>Gets the effective back-channel logout URL.</summary>
     public Uri EffectiveBackchannelLogoutUrl =>
-        BackchannelLogoutUrl ?? new Uri(RequirePortal(), "signout-backchannel");
+        BackchannelLogoutUrl ?? new Uri(PortalBase(), "signout-backchannel");
 
     /// <summary>Gets the OIDC redirect URL.</summary>
-    public Uri RedirectUrl => new(RequirePortal(), "signin-oidc");
+    public Uri RedirectUrl => new(PortalBase(), "signin-oidc");
 
     /// <summary>Gets the post-logout redirect URL.</summary>
-    public Uri PostLogoutRedirectUrl => new(RequirePortal(), "signout-callback-oidc");
+    public Uri PostLogoutRedirectUrl => new(PortalBase(), "signout-callback-oidc");
 
-    private Uri RequirePortal() =>
-        PortalBaseUrl ?? throw new InvalidOperationException($"{SectionName}:{nameof(PortalBaseUrl)} is not configured.");
+    // A relative reference replaces the last path segment of a base without a trailing slash, so
+    // https://example.org/portal would otherwise lose /portal from every derived URL.
+    private Uri PortalBase()
+    {
+        var portal = PortalBaseUrl ?? throw new InvalidOperationException($"{SectionName}:{nameof(PortalBaseUrl)} is not configured.");
+        return portal.AbsolutePath.EndsWith(PathSeparator) ? portal : new Uri(portal.GetLeftPart(UriPartial.Path) + PathSeparator);
+    }
 }

@@ -847,6 +847,15 @@
           "xunit.v3.runner.common": "[4.0.1]"
         }
       },
+      "regreturns-iam-bootstrap": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Hosting": "[10.0.12, )",
+          "RegReturns.Infrastructure": "[0.1.0, )",
+          "RegReturns.ServiceDefaults": "[0.1.0, )",
+          "System.CommandLine": "[2.0.12, )"
+        }
+      },
       "regreturns.api": {
         "type": "Project",
         "dependencies": {
@@ -1204,6 +1213,12 @@
           "Grpc.Net.Client": "2.70.0",
           "Serilog": "4.2.0"
         }
+      },
+      "System.CommandLine": {
+        "type": "CentralTransitive",
+        "requested": "[2.0.12, )",
+        "resolved": "2.0.12",
+        "contentHash": "FpW672e6qqrTd1EfKqsvUtFZaJWlTlszUR1o8tdakXhkzKbnEZVndtpfd4K3fUPCFcIs9UmcswMyYGJP1zp/rg=="
       }
     }
   }

@@ -9,6 +9,7 @@
     <ProjectReference Include="..\..\src\RegReturns.ServiceDefaults\RegReturns.ServiceDefaults.csproj" />
     <ProjectReference Include="..\..\src\RegReturns.Web\RegReturns.Web.csproj" />
     <ProjectReference Include="..\..\src\RegReturns.Api\RegReturns.Api.csproj" />
+    <ProjectReference Include="..\..\tools\RegReturns.IamBootstrap\RegReturns.IamBootstrap.csproj" Aliases="IamBootstrapTool" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
