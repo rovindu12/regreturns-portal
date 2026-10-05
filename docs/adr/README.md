@@ -22,3 +22,6 @@
 | [0018](0018-api-token-validation-and-institution-scoping.md) | API token validation and institution scoping |
 | [0019](0019-portal-sign-in-and-sessions.md) | Portal sign-in and session lifetime |
 | [0020](0020-demo-mfa-and-self-service-lockdown.md) | Demo TOTP enrolment and self-service lockdown |
+| [0021](0021-in-house-rule-expressions.md) | A small in-house expression language for cross-field rules |
+| [0022](0022-safe-return-file-uploads.md) | Return files: checked by content, stored in the database, never served |
+| [0023](0023-one-live-return-per-obligation.md) | One live return per obligation, saved with optimistic concurrency |

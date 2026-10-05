@@ -115,3 +115,46 @@ from `scripts/dev-certs.sh` (ADR 0015).
 | API returns `401` and the API log has `The audience ... is invalid` (the response itself carries no details, by design) | The token was issued to a client without the RegReturns API audience, or an ID token was sent instead of an access token | Use a bank client created by IamBootstrap (`BANK_<CODE>_CLIENT_ID` in `.env.generated`) and send its access token |
 | API returns `403` | The token lacks the scope for the endpoint, or the client is not linked to an institution | Request the scope in the token call (`scope=returns:read`); re-run `IamBootstrap apply` to relink bank clients |
 | API returns `404` for another bank's data | By design: a bank cannot learn whether another bank's records exist | Use the client of the bank that owns the data |
+
+## 6. Returns, templates and uploads
+
+Use cases return stable error codes (`Upload.ContentMismatch`, `Submission.EditConflict`, ...). Refused uploads and
+edit conflicts are logged with the code, so search Seq by code or by event id:
+
+```
+EventId.Id = 5202 and ErrorCode = 'Upload.MacrosNotAllowed'
+```
+
+| Event id | Event |
+|---|---|
+| 5001-5004 | Template draft started, deleted, published, retired |
+| 5101 | Return draft started (with its source: web, upload, API) |
+| 5102 | Return values saved |
+| 5103 | Return validated (error and warning counts) |
+| 5104 | Warning justified |
+| 5105 | Edit refused: the page was older than the saved return |
+| 5201 | Upload accepted (format, size, fields loaded, stored file id) |
+| 5202 | Upload refused (error code and size) |
+
+Logs never contain figures, file names or justification text. Metrics: `regreturns.validation.runs` (by outcome),
+`regreturns.validation.findings` (by rule code and severity) and `regreturns.uploads` (by outcome and reason); the
+`returns.validate` span times each validation run.
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Bank page says `Your sign-in is not linked to an active RegReturns user` (`User.NotLinked`) | The session's WSO2 subject matches no active user record: the user was disabled, or relinked while signed in | Sign out and in again; if it persists, check the user's `Wso2UserId` and status |
+| "Someone else saved this return after you opened it" (`Submission.EditConflict`, event 5105) | Another maker saved the same draft first (ADR 0023) | Reload to see their values, or save again to replace them |
+| `Common.Conflict` on save or upload | Two saves of the same return raced in the same instant | Reload and save again |
+| Start or upload says no template applies (`Template.NoApplicableVersion`) | No published version of the return type has `EffectiveFrom` on or before the period start | Publish a version for that period in Administration, Templates (ADR 0009) |
+| Start says the obligation is closed (`Submission.ObligationClosed`) | A return for the period is already approved | Nothing to file; corrections to approved returns are out of scope |
+| Upload refused: `Upload.FileType` | The name does not end in `.xlsx` or `.csv` (`.xls` and `.xlsm` are not accepted) | Save as Excel Workbook (`.xlsx`) or CSV UTF-8 |
+| Upload refused: `Upload.ContentMismatch` | The content does not match the extension, for example a renamed `.xls`, a PDF or a CSV saved with an `.xlsx` name | Download the template again and save it in its own format |
+| Upload refused: `Upload.MacrosNotAllowed` | The workbook contains a VBA project | Save as `.xlsx` (Excel removes the macros) |
+| Upload refused: `Upload.NoHeader` or `Upload.NoValues` | The first sheet has no `FieldCode` and `Value` header row, or no field rows under it | Start from the downloaded template; keep its header row and the first sheet |
+| Upload refused: `Upload.UnknownFields` | The file names field codes the return's template version does not have (often a template from another return type or an older version) | Download the template for this obligation; the message lists up to ten unknown codes |
+| Upload refused: `Upload.DuplicateField` | A field code appears on two rows | Keep one row per field |
+| Upload refused: `Upload.TooLarge`, or the browser shows a 413 / connection reset | The file is over 5 MB (the server cuts requests a little above that) | Remove other sheets and formatting; a return template is a few KB |
+| A value from a spreadsheet shows as invalid although Excel displays it correctly | Excel shows a formatted number, but the cell holds text such as `1.234,56`, or more decimals than the field allows | Enter plain numbers with a full stop for decimals; the hint under each field gives the allowed decimals |
+| A variance warning appears for the first return of a new bank, or never appears | Variance rules compare with the last **approved** return for the previous period or the same period last year; without one, or when it was zero, they are skipped | Expected; check the prior return's status in Supervision |
+| A rule cannot be added to a draft template (`Template.InvalidExpression`) | The expression uses an unknown function, a field outside brackets or a comma as decimal separator | Allowed: `[CODE]`, numbers with a full stop, `+ - * /`, parentheses, `Min`, `Max`, `Abs` (ADR 0021) |
+| A field cannot be removed from a draft template (`Template.FieldInUse`) | Rules still refer to it; the message names them | Remove or change those rules first |

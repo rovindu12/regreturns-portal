@@ -17,7 +17,7 @@ This plan covers the solution structure, data model, WSO2 Identity Server integr
 | Web UI | ASP.NET Core MVC + Razor, Bootstrap 5.3, Chart.js 4, served via LibMan (no Node build) | Matches the brief; keeps the toolchain .NET-only |
 | API | ASP.NET Core controllers, `Asp.Versioning.Mvc` (URL segment `/v1`), Swashbuckle for Swagger UI with OAuth2 client-credentials flow **(ADR)** | Swashbuckle's UI has first-class OAuth config for reviewers |
 | Data | SQL Server 2025 (ADR 0013) + EF Core 10 code-first; Dapper for dashboard aggregates only **(ADR)** | EF for the write model; Dapper where a hand-tuned GROUP BY is clearer |
-| Expressions | NCalc (MIT) for cross-field rules, sandboxed (no reflection / custom functions beyond a whitelist) **(ADR)** | Safe, declarative, storable in the DB |
+| Expressions | Small in-house decimal expression language for cross-field rules: field references, `+ - * /`, `Min`, `Max`, `Abs` (ADR 0021, replaces NCalc) | Safe by construction, exact with money, storable in the DB |
 | Excel/PDF | ClosedXML (MIT) for import/export; QuestPDF Community licence for PDF **(ADR)** | Both free for this use; QuestPDF has a clean fluent API |
 | Scheduling | `BackgroundService` + Cronos (MIT) for nightly reset, obligation generation, SCIM outbox **(ADR)** | Avoids a Hangfire dependency for three small jobs |
 | Logging | Serilog (console JSON + rolling file), request logging with a destructuring policy that drops tokens, emails and figures | "No sensitive data in logs" is enforced in one place |
@@ -268,7 +268,7 @@ In the hosted demo `EnforceMfa=false`, so the password-only approver and admin a
 
 - `IValidationRule` implementations per `RuleType`, built from `ValidationRule` rows by a factory. The engine runs all of them against a `SubmissionSnapshot` and returns `ValidationFinding`s.
   - Required, Range (min/max, inclusive flags), DataType (parse against field type and precision)
-  - CrossField: an NCalc expression over field codes, e.g. `[TOTAL_HQLA] == [L1] + [L2A] + [L2B]` with an absolute tolerance, or `[LCR] >= 100`
+  - CrossField: two expressions over field codes compared with =, <= or >= and an absolute tolerance, e.g. `[TOTAL_HQLA]` = `[L1] + [L2A] + [L2B]` (ADR 0021)
   - Variance: `|current − prior| / |prior| > threshold%` against the last **approved** submission for the same institution, type and prior period (or the same period last year, as configured). Usually a warning.
 - Errors block *Submit*. Warnings need a justification of at least 20 characters per finding before the checker can submit. Findings are shown inline per field and in a summary panel.
 - The same engine runs for web forms, Excel/CSV upload (after parsing to the same snapshot), API submissions and the migrator.
