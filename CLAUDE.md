@@ -86,6 +86,10 @@ Key domain rules (see `src/RegReturns.Domain/Submissions/Submission.cs`):
 - Submit requires values, a validation run after the last edit, no errors and a justification (≥20 chars) per warning.
 - One live (not rejected) submission per obligation (`UX_Submissions_LiveObligation`). Saving unchanged values is not an
   edit. Forms post the `EditVersion` they were rendered with; an older one is `Submission.EditConflict` (ADR 0023).
+- `Submission.Permits(action, actor)` is the one check of state, role, organisation and segregation of duties;
+  `ActionsFor(actor)` lists the steps a page may offer. Every step runs through the `TransitionReturn` command (ADR 0025).
+- Bank staff see their bank's returns; regulator staff see a return only once it has been submitted
+  (`ReturnVisibility.VisibleTo`). Anything else is `Submission.NotFound` (404).
 
 Templates and validation (see `src/RegReturns.Domain/Templates` and `Validation/ValidationEngine.cs`):
 - A submission is captured with the published version whose `EffectiveFrom` (first period start) is the latest on or
@@ -112,7 +116,7 @@ Templates and validation (see `src/RegReturns.Domain/Templates` and `Validation/
 - No magic strings: field codes, rule codes and schema names are constants (`MlrTemplate.TotalHqla`, `Schemas.Returns`).
 - Logging: `[LoggerMessage]` source-generated methods with event ids grouped per area (1xxx persistence, 2xxx migrator,
   30xx audit and identity, 31xx portal sign-in, 32xx API authentication, 4xxx IamBootstrap, 50xx templates, 51xx returns,
-  52xx uploads and files, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
+  52xx uploads and files, 53xx workflow steps, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
 - Time: inject `TimeProvider`; store UTC `DateTimeOffset`; dates as `DateOnly`; parse numbers with `CultureInfo.InvariantCulture`.
 - Config: options classes with `ValidateDataAnnotations().ValidateOnStart()`. Secrets only in user-secrets or environment variables.
   Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web and Api share it), `Oidc:ClientSecret` (Web).
@@ -150,8 +154,14 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
   relational-only and Application references EF Core abstractions only). Rules have no stored order; sort them.
 - `@section` is a Razor keyword: do not name a loop variable `section` in a view. The HTML encoder escapes `+`, so
   tests decode the page (`WebUtility.HtmlDecode`) before matching rule messages.
-- Host tests sign in as seeded demo users by linking `AppUser.Wso2UserId` to the test subject (`BankPortal`);
-  without that link, use cases answer `User.NotLinked`.
+- Host tests sign in as seeded demo users by linking `AppUser.Wso2UserId` to the test subject (`BankPortal`,
+  `SupervisionPortal`); without that link, use cases answer `User.NotLinked`. Roles for use cases come from the user
+  record, so segregation-of-duties tests create users holding two roles (`SupervisionPortal.MultiRoleUserAsync`);
+  approver clients add `amr=totp` for the approval policy.
+- Host tests that depend on the date pass a `FakeTimeProvider` to `PortalHost.Create` (`WorkflowPagesTests` fixes the
+  clock at 1 March 2027, so a January 2027 return is late).
+- A form with several steps posts to the endpoint of the button pressed: `<button asp-action="Approve">` renders a
+  `formaction`. Each endpoint still carries its own policy (`PortalEndpointMetadataTests` checks the workflow ones).
 - WSO2 rejects role names starting with `system_`; the platform admin role is `portal_admin`.
 - WSO2 encrypts TOTP secrets with its own key: an administrator cannot set one. IamBootstrap enrols as the user
   (`DemoTotpStep`); never request `internal_login` from the portal, which would open WSO2's self-service APIs.

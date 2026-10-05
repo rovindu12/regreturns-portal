@@ -58,6 +58,16 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - Log events 50xx (templates), 51xx (returns) and 52xx (uploads); validation and upload metrics and a
   `returns.validate` span; troubleshooting section for returns, templates and uploads.
 
+- Phase 4: the submission workflow in the portal. Checkers submit from the return page with a comment (late returns
+  are flagged against the due date); supervisor reviewers pick returns up and send them back for correction;
+  approvers who did not review a return approve or reject it, behind the TOTP approval policy. Every step goes through
+  one `TransitionReturn` command, and pages offer only the steps `Submission.Permits` allows (ADR 0025).
+- Supervision worklist (waiting for a reviewer, under review, sent back to banks, decided in the last 30 days) with
+  bank, return type and late filters, and a review page with values, findings, justifications, uploads and history.
+- Bank return pages show the workflow history and the supervisor's comment when a return comes back or is rejected.
+- Log events 53xx (workflow steps and refusals), `regreturns.workflow.transitions` and
+  `regreturns.workflow.late_submissions` metrics and a `returns.transition` span.
+
 ### Changed
 
 - SQL Server 2025 replaces 2022 for local Docker Compose and the integration tests (ADR 0013).

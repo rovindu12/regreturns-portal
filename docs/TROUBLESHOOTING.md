@@ -160,3 +160,31 @@ Logs never contain figures, file names or justification text. Metrics: `regretur
 | A variance warning appears for the first return of a new bank, or never appears | Variance rules compare with the last **approved** return for the previous period or the same period last year; without one, or when it was zero, they are skipped | Expected; check the prior return's status in Supervision |
 | A rule cannot be added to a draft template (`Template.InvalidExpression`) | The expression uses an unknown function, a field outside brackets or a comma as decimal separator | Allowed: `[CODE]`, numbers with a full stop, `+ - * /`, parentheses, `Min`, `Max`, `Abs` (ADR 0021) |
 | A field cannot be removed from a draft template (`Template.FieldInUse`) | Rules still refer to it; the message names them | Remove or change those rules first |
+
+## 7. Workflow and supervision
+
+Every workflow step is logged: 5301 when it happens (action, from and to status, revision, late flag) and 5302 when
+it is refused, with the error code. Search Seq for one return or one kind of refusal:
+
+```
+EventId.Id in [5301, 5302] and SubmissionId = '...'
+EventId.Id = 5302 and ErrorCode = 'Submission.CheckerIsMaker'
+```
+
+Comments are never logged; they are in the return's history and the audit trail. The
+`regreturns.workflow.transitions` metric counts steps by action and outcome (with the error code when refused),
+`regreturns.workflow.late_submissions` counts returns first submitted after their due date, and the
+`returns.transition` span times each step.
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| A checker sees "You prepared or last edited this return, so another checker must submit it" (`Submission.CheckerIsMaker`) | The user holds both bank roles and created or last changed the values | Another checker submits it; segregation of duties is enforced on purpose |
+| Submit is greyed out or refused with `Submission.ValidationOutdated`, `HasErrors` or `UnjustifiedWarnings` | Values changed after the last validation, an error is open, or a warning has no justification | Validate again, fix the errors and justify each warning (at least 20 characters) |
+| "A comment is required for this step" (`Submission.CommentRequired`) | Submitting, returning, approving and rejecting all need a comment; only starting a review does not | Write a comment (up to 2,000 characters) |
+| An approver sees "Approving or rejecting needs a sign-in with your authenticator app", or approve answers 403 | The session's `amr` claim has no TOTP method and `Iam:EnforceMfa` is on (the `Supervision.Approve` policy) | Sign out and in again; WSO2 asks every approver for TOTP (ADR 0020). Check the access-denied entry in the audit trail |
+| "You reviewed this return, so another approver must decide it" (`Submission.ApproverIsReviewer`) | The approver also holds the reviewer role and picked the return up | Another approver decides it |
+| `Submission.InvalidTransition` | The return moved on in another tab or by another user, for example it was already picked up or decided | Reload the page to see its status and history |
+| `Common.Conflict` on a workflow step | Two people acted on the same return in the same instant; the second save lost on the row version | Reload; the first step stands |
+| A supervisor gets 404 for a return the bank can see | The bank has not submitted it yet: drafts are visible only to their bank (ADR 0025) | Expected; it appears in the worklist once a checker submits it |
+| A return is missing from "Decided in the last 30 days" | Only decisions of the last 30 days are listed, newest 50 | Open it from the bank's history or filter the worklist by bank |
+
