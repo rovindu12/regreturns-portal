@@ -2,7 +2,10 @@ using RegReturns.Domain.Auditing;
 
 namespace RegReturns.Application.Auditing;
 
-/// <summary>An audit event to append. Never include secrets, tokens, e-mail addresses or return figures.</summary>
+/// <summary>
+/// An event to append with <see cref="IAuditTrail"/>. Never include secrets, tokens or e-mail addresses, and keep return
+/// figures out of the details: data changes, figures included, are recorded with the change itself (ADR 0024).
+/// </summary>
 /// <param name="Action">What happened.</param>
 /// <param name="ActorType">The kind of actor.</param>
 /// <param name="ActorSubjectId">The WSO2 subject id, client id or <c>system</c>.</param>

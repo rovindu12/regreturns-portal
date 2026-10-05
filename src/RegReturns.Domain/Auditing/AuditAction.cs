@@ -14,4 +14,19 @@ public enum AuditAction
 
     /// <summary>An API caller presented a token that was rejected.</summary>
     AuthenticationFailed = 4,
+
+    /// <summary>An aggregate was created (with its child rows); the entry carries the values it was created with.</summary>
+    Created = 5,
+
+    /// <summary>An aggregate or its child rows changed; the entry carries the before and after values.</summary>
+    Updated = 6,
+
+    /// <summary>An aggregate was deleted; the entry carries the values it had.</summary>
+    Deleted = 7,
+
+    /// <summary>An aggregate's <c>Status</c> changed (a workflow or lifecycle step), possibly with other values.</summary>
+    StateChanged = 8,
+
+    /// <summary>Someone verified the hash chain; the details carry the outcome.</summary>
+    ChainVerified = 9,
 }

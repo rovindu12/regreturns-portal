@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
+using RegReturns.Application.Auditing;
+
 namespace RegReturns.Web.Identity;
 
 /// <summary>Registers WSO2 sign-in for the portal: session cookie, OpenID Connect, back-channel logout and auditing.</summary>
@@ -11,7 +13,8 @@ public static class PortalAuthenticationExtensions
 {
     /// <summary>
     /// Adds the session cookie (default scheme) and OpenID Connect against WSO2 (challenge scheme), the services they
-    /// use, the back-channel logout deny list, access-denied auditing and the <see cref="PortalPolicies"/>. Requires
+    /// use, the back-channel logout deny list, access-denied auditing, the <see cref="PortalAuditContext"/> that names
+    /// the actor of audited data changes, and the <see cref="PortalPolicies"/>. Requires
     /// <c>AddWso2Backchannel</c>, <c>AddAuditTrail</c> and <c>AddRegReturnsAuthorization</c>.
     /// </summary>
     /// <param name="services">The service collection.</param>
@@ -30,6 +33,8 @@ public static class PortalAuthenticationExtensions
         services.AddDistributedMemoryCache();
         services.TryAddSingleton<ISessionDenyList, DistributedSessionDenyList>();
         services.TryAddSingleton<LogoutTokenValidator>();
+        services.TryAddScoped<PortalAuditContext>();
+        services.AddScoped<IAuditContext>(sp => sp.GetRequiredService<PortalAuditContext>());
         services.TryAddScoped<SignInProcessor>();
         services.TryAddScoped<PortalCookieEvents>();
         services.TryAddScoped<PortalOpenIdConnectEvents>();

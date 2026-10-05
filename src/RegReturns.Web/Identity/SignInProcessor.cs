@@ -17,11 +17,13 @@ namespace RegReturns.Web.Identity;
 /// <param name="linkHandler">Links the signed-in user to their projection.</param>
 /// <param name="auditTrail">Records the sign-in.</param>
 /// <param name="failureAuditor">Records refused sign-ins, de-duplicated per minute.</param>
+/// <param name="auditContext">Attributes the projection's audited changes to the user signing in.</param>
 /// <param name="logger">The logger.</param>
 public sealed partial class SignInProcessor(
     ICommandHandler<LinkSignedInUser, Result<SignedInUserLink>> linkHandler,
     IAuditTrail auditTrail,
     AccessDeniedAuditor failureAuditor,
+    PortalAuditContext auditContext,
     ILogger<SignInProcessor> logger)
 {
     /// <summary>Processes a validated sign-in.</summary>
@@ -41,7 +43,13 @@ public sealed partial class SignInProcessor(
             LogUnknownRolesDropped(logger, claims.UnknownRoles.Count, string.Join(", ", claims.UnknownRoles));
         }
 
-        var link = await LinkAsync(claims, cancellationToken);
+        Result<SignedInUserLink> link;
+        using (auditContext.ActAs(claims.Principal))
+        {
+            // The request has no signed-in user yet; changes to the user's record are theirs, not anonymous.
+            link = await LinkAsync(claims, cancellationToken);
+        }
+
         var error = link.Error;
         if (error is not null)
         {

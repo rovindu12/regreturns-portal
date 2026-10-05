@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
+using RegReturns.Domain.Auditing;
 using RegReturns.Domain.Identity;
 using RegReturns.Domain.Institutions;
 using RegReturns.Domain.Obligations;
@@ -37,7 +38,13 @@ public interface IAppDbContext
     /// <summary>Gets the banks' machine-to-machine clients registered in WSO2.</summary>
     DbSet<ApiClient> ApiClients { get; }
 
-    /// <summary>Saves all changes in one transaction.</summary>
+    /// <summary>
+    /// Gets the audit trail, read-only and untracked. Entries are appended only by the audit chain writers: the
+    /// <c>IAuditTrail</c> service and the data-change auditing that runs when changes are saved (ADR 0024).
+    /// </summary>
+    IQueryable<AuditEntry> AuditEntries { get; }
+
+    /// <summary>Saves all changes in one transaction, with an audit entry per changed aggregate when the host audits changes.</summary>
     /// <param name="cancellationToken">Cancels the operation.</param>
     /// <returns>The number of rows written.</returns>
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
