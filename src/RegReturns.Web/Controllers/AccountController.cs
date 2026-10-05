@@ -37,14 +37,25 @@ public sealed partial class AccountController(ILogger<AccountController> logger)
     /// <c>id_token_hint</c>, which returns to <see cref="SignedOut"/>. Routed as <c>SignOut</c>.
     /// </summary>
     /// <param name="auditTrail">The audit trail.</param>
+    /// <param name="denyList">Revoked sessions; the signed-out cookie ticket is added so a copy of it stops working.</param>
     /// <param name="cancellationToken">Cancels the request.</param>
     /// <returns>The sign-out result for the cookie and OpenID Connect schemes.</returns>
     [HttpPost(PortalPaths.SignOutAction)]
     [ValidateAntiForgeryToken]
     [Authorize(Policy = PortalPolicies.SignedIn)]
-    public async Task<IActionResult> SignOutAsync([FromServices] IAuditTrail auditTrail, CancellationToken cancellationToken)
+    public async Task<IActionResult> SignOutAsync(
+        [FromServices] IAuditTrail auditTrail, [FromServices] ISessionDenyList denyList, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(auditTrail);
+        ArgumentNullException.ThrowIfNull(denyList);
+
+        // A copy of this cookie must stop working even if WSO2's back-channel logout never arrives.
+        var ticket = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        if (ticket.Properties is not null && PortalSession.TicketDenyKey(ticket.Properties) is { } ticketKey)
+        {
+            await denyList.DenyAsync(ticketKey, cancellationToken);
+        }
+
         var origin = RequestOrigin.From(HttpContext);
         var actor = AuditActor.FromPrincipal(User);
         try

@@ -26,7 +26,7 @@ public sealed class LinkSignedInUserTests(SqlServerFixture sql)
 
         result.IsSuccess.ShouldBeTrue();
         var user = await SingleUserAsync(connection, ct);
-        result.Value.ShouldBe(new SignedInUserLink(user.Id, "Nadia Fernhill"));
+        result.Value.ShouldBe(new SignedInUserLink(user.Id, "Nadia Fernhill", "ALPHA"));
         user.Wso2UserId.ShouldBe(Sub);
         user.UserName.ShouldBe("maker.alpha");
         user.Email.ShouldBe("maker.alpha@alpha.example");
@@ -69,16 +69,101 @@ public sealed class LinkSignedInUserTests(SqlServerFixture sql)
     }
 
     [Fact]
-    public async Task Same_user_name_with_a_new_subject_is_relinked_to_the_existing_user()
+    public async Task Demo_account_with_a_new_subject_is_relinked_to_the_existing_user()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (connection, alphaId) = await CreateDatabaseAsync(ct);
+        var demoUserId = await AddUserAsync(connection, alphaId, isDemoAccount: true, linkedTo: Sub, ct);
+
+        var result = await HandleAsync(connection, Maker(NewSub, "maker.alpha", "Nadia Fernhill"), ct);
+
+        result.Value.AppUserId.ShouldBe(demoUserId);
+        (await SingleUserAsync(connection, ct)).Wso2UserId.ShouldBe(NewSub);
+    }
+
+    [Fact]
+    public async Task Real_account_linked_to_another_subject_is_refused_and_keeps_its_link()
     {
         var ct = TestContext.Current.CancellationToken;
         var (connection, _) = await CreateDatabaseAsync(ct);
-        var first = await HandleAsync(connection, Maker(Sub, "maker.alpha", "Nadia Fernhill"), ct);
+        await HandleAsync(connection, Maker(Sub, "maker.alpha", "Nadia Fernhill"), ct);
 
-        var second = await HandleAsync(connection, Maker(NewSub, "maker.alpha", "Nadia Fernhill"), ct);
+        var result = await HandleAsync(connection, Maker(NewSub, "maker.alpha", "Someone Else"), ct);
 
-        second.Value.AppUserId.ShouldBe(first.Value.AppUserId);
-        (await SingleUserAsync(connection, ct)).Wso2UserId.ShouldBe(NewSub);
+        result.Error.ShouldBe(LinkSignedInUserHandler.IdentityConflict);
+        var user = await SingleUserAsync(connection, ct);
+        user.Wso2UserId.ShouldBe(Sub);
+        user.DisplayName.ShouldBe("Nadia Fernhill");
+    }
+
+    [Fact]
+    public async Task Token_naming_another_institution_is_refused_and_the_user_keeps_theirs()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (connection, alphaId) = await CreateDatabaseAsync(ct);
+        await AddInstitutionAsync(connection, "BETA", active: true, ct);
+        await HandleAsync(connection, Maker(Sub, "maker.alpha", "Nadia Fernhill"), ct);
+
+        var result = await HandleAsync(connection, Maker(Sub, "maker.alpha", "Nadia Fernhill") with { InstitutionCode = "BETA" }, ct);
+
+        result.Error.ShouldBe(LinkSignedInUserHandler.InstitutionChanged);
+        (await SingleUserAsync(connection, ct)).InstitutionId.ShouldBe(alphaId);
+    }
+
+    [Fact]
+    public async Task Bank_user_whose_token_drops_the_institution_is_refused()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (connection, _) = await CreateDatabaseAsync(ct);
+        await HandleAsync(connection, Maker(Sub, "maker.alpha", "Nadia Fernhill"), ct);
+        var regulator = Maker(Sub, "maker.alpha", "Nadia Fernhill") with { InstitutionCode = null, Roles = [Role.SupervisorReviewer] };
+
+        var result = await HandleAsync(connection, regulator, ct);
+
+        result.Error.ShouldBe(LinkSignedInUserHandler.InstitutionChanged);
+        (await SingleUserAsync(connection, ct)).Roles.ShouldBe([Role.BankMaker]);
+    }
+
+    [Fact]
+    public async Task Disabled_user_is_refused()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (connection, alphaId) = await CreateDatabaseAsync(ct);
+        var userId = await AddUserAsync(connection, alphaId, isDemoAccount: false, linkedTo: Sub, ct);
+        await using (var db = SqlServerFixture.CreateContext(connection))
+        {
+            (await db.Users.SingleAsync(u => u.Id == userId, ct)).Disable().IsSuccess.ShouldBeTrue();
+            await db.SaveChangesAsync(ct);
+        }
+
+        var result = await HandleAsync(connection, Maker(Sub, "maker.alpha", "Nadia Fernhill"), ct);
+
+        result.Error.ShouldBe(LinkSignedInUserHandler.UserDisabled);
+    }
+
+    [Fact]
+    public async Task Inactive_institution_is_refused_and_nothing_is_stored()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (connection, _) = await CreateDatabaseAsync(ct);
+        await AddInstitutionAsync(connection, "GAMMA", active: false, ct);
+
+        var result = await HandleAsync(connection, Maker(Sub, "maker.gamma", "Gamma Maker") with { InstitutionCode = "GAMMA" }, ct);
+
+        result.Error.ShouldBe(LinkSignedInUserHandler.InactiveInstitution);
+        (await UserCountAsync(connection, ct)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Institution_code_in_another_case_links_and_returns_the_stored_code()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (connection, alphaId) = await CreateDatabaseAsync(ct);
+
+        var result = await HandleAsync(connection, Maker(Sub, "maker.alpha", "Nadia Fernhill") with { InstitutionCode = "alpha" }, ct);
+
+        result.Value.InstitutionCode.ShouldBe("ALPHA");
+        (await SingleUserAsync(connection, ct)).InstitutionId.ShouldBe(alphaId);
     }
 
     [Fact]
@@ -175,6 +260,29 @@ public sealed class LinkSignedInUserTests(SqlServerFixture sql)
         // A fresh context per call, as each sign-in is its own request.
         await using var db = SqlServerFixture.CreateContext(connection);
         return await new LinkSignedInUserHandler(db).HandleAsync(command, ct);
+    }
+
+    private static async Task<Guid> AddUserAsync(string connection, Guid institutionId, bool isDemoAccount, string linkedTo, CancellationToken ct)
+    {
+        await using var db = SqlServerFixture.CreateContext(connection);
+        var user = AppUser.Create("maker.alpha", "Nadia Fernhill", "maker.alpha@alpha.example", institutionId, [Role.BankMaker], isDemoAccount).Value;
+        user.LinkIdentity(linkedTo);
+        await db.Users.AddAsync(user, ct);
+        await db.SaveChangesAsync(ct);
+        return user.Id;
+    }
+
+    private static async Task AddInstitutionAsync(string connection, string code, bool active, CancellationToken ct)
+    {
+        await using var db = SqlServerFixture.CreateContext(connection);
+        var institution = Institution.Create(code, $"{code} Bank of Valoria PLC", LicenceCategory.Commercial);
+        if (!active)
+        {
+            institution.Deactivate();
+        }
+
+        await db.Institutions.AddAsync(institution, ct);
+        await db.SaveChangesAsync(ct);
     }
 
     private static async Task<AppUser> SingleUserAsync(string connection, CancellationToken ct)

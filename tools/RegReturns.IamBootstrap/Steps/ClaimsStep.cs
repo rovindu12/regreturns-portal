@@ -43,9 +43,9 @@ internal sealed class ClaimsStep(Wso2AdminClient wso2) : IBootstrapStep
         {
             ["claimURI"] = IamNames.InstitutionLocalClaim,
             ["displayName"] = "Institution",
-            ["description"] = "Code of the bank a RegReturns user works for. Empty for regulator staff.",
+            ["description"] = "Code of the bank a RegReturns user works for. Empty for regulator staff. Set by administrators only.",
             ["supportedByDefault"] = true,
-            ["readOnly"] = false,
+            ["readOnly"] = true,
             ["required"] = false,
             ["attributeMapping"] = new JsonArray(new JsonObject
             {

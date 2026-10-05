@@ -165,12 +165,49 @@ public sealed class AccessDeniedAuditorTests : IDisposable
     }
 
     [Fact]
-    public async Task Cancellation_is_not_swallowed()
+    public async Task Request_cancelled_before_the_write_is_not_swallowed()
+    {
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        await Should.ThrowAsync<OperationCanceledException>(() =>
+            _auditor.RecordAsync(User("user-1"), AuditAction.AccessDenied, Path, Policy, Ip, TraceId, cancelled.Token));
+        await _auditTrail.DidNotReceive().RecordAsync(Arg.Any<AuditRecord>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Write_does_not_use_the_request_token()
+    {
+        using var request = new CancellationTokenSource();
+
+        await _auditor.RecordAsync(User("user-1"), AuditAction.AccessDenied, Path, Policy, Ip, TraceId, request.Token);
+
+        await _auditTrail.Received(1).RecordAsync(Arg.Any<AuditRecord>(), Arg.Is<CancellationToken>(t => t != request.Token));
+    }
+
+    [Fact]
+    public async Task Failed_write_is_retried_by_the_next_denial_in_the_same_minute()
     {
         _auditTrail.RecordAsync(Arg.Any<AuditRecord>(), Arg.Any<CancellationToken>())
-            .ThrowsAsync(new OperationCanceledException());
+            .Returns(Task.FromException<long>(new OperationCanceledException()), Task.FromResult(2L));
 
-        await Should.ThrowAsync<OperationCanceledException>(() => RecordAsync(User("user-1")));
+        (await RecordAsync(User("user-1"))).ShouldBeFalse();
+
+        (await RecordAsync(User("user-1"))).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Signed_in_caller_probing_many_ids_on_one_endpoint_is_recorded_once_a_minute()
+    {
+        var first = await _auditor.RecordAsync(
+            User("user-1"), AuditAction.AccessDenied, "/v1/institutions/AAA", "v1/institutions/{code}", Policy, Ip, TraceId,
+            TestContext.Current.CancellationToken);
+        var second = await _auditor.RecordAsync(
+            User("user-1"), AuditAction.AccessDenied, "/v1/institutions/BBB", "v1/institutions/{code}", Policy, Ip, TraceId,
+            TestContext.Current.CancellationToken);
+
+        first.ShouldBeTrue();
+        second.ShouldBeFalse();
     }
 
     [Fact]

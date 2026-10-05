@@ -28,9 +28,10 @@ public sealed class AuditingAuthorizationResultHandler : IAuthorizationMiddlewar
         {
             var origin = RequestOrigin.From(context);
             var auditor = context.RequestServices.GetRequiredService<AccessDeniedAuditor>();
+            var endpoint = context.GetEndpoint();
             await auditor.RecordAsync(
-                context.User, AuditAction.AccessDenied, origin.Path, PolicyNames(context.GetEndpoint()), origin.IpAddress, origin.TraceId,
-                context.RequestAborted);
+                context.User, AuditAction.AccessDenied, origin.Path, (endpoint as RouteEndpoint)?.RoutePattern.RawText,
+                PolicyNames(endpoint), origin.IpAddress, origin.TraceId, context.RequestAborted);
         }
 
         await _inner.HandleAsync(next, context, policy, authorizeResult);

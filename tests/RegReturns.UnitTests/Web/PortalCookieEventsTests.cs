@@ -73,10 +73,49 @@ public sealed class PortalCookieEventsTests
         context.Principal.ShouldBeNull();
     }
 
-    private CookieValidatePrincipalContext ValidateContext(DateTimeOffset absoluteExpiry)
+    [Fact]
+    public async Task Signing_in_gives_each_ticket_its_own_random_id()
+    {
+        var first = new AuthenticationProperties();
+        var second = new AuthenticationProperties();
+
+        await _events.SigningIn(new CookieSigningInContext(HttpContext(), Scheme(), new CookieAuthenticationOptions(), Principal(), first, new CookieOptions()));
+        await _events.SigningIn(new CookieSigningInContext(HttpContext(), Scheme(), new CookieAuthenticationOptions(), Principal(), second, new CookieOptions()));
+
+        PortalSession.TicketDenyKey(first).ShouldNotBeNull();
+        PortalSession.TicketDenyKey(first).ShouldNotBe(PortalSession.TicketDenyKey(second));
+    }
+
+    [Fact]
+    public async Task Ticket_revoked_at_sign_out_is_rejected()
+    {
+        var context = ValidateContext(SignedInAt.AddHours(8));
+        _denyList.IsDeniedAsync(PortalSession.TicketDenyKey(context.Properties)!, Arg.Any<CancellationToken>()).Returns(true);
+
+        await _events.ValidatePrincipal(context);
+
+        context.Principal.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Ticket_without_an_id_is_rejected()
+    {
+        var context = ValidateContext(SignedInAt.AddHours(8), withTicketId: false);
+
+        await _events.ValidatePrincipal(context);
+
+        context.Principal.ShouldBeNull();
+    }
+
+    private CookieValidatePrincipalContext ValidateContext(DateTimeOffset absoluteExpiry, bool withTicketId = true)
     {
         var properties = new AuthenticationProperties { IssuedUtc = SignedInAt, ExpiresUtc = SignedInAt + PortalSession.IdleTimeout };
         PortalSession.SetAbsoluteExpiry(properties, absoluteExpiry);
+        if (withTicketId)
+        {
+            PortalSession.SetNewTicketId(properties);
+        }
+
         var ticket = new AuthenticationTicket(Principal(), properties, CookieAuthenticationDefaults.AuthenticationScheme);
         return new CookieValidatePrincipalContext(HttpContext(), Scheme(), new CookieAuthenticationOptions(), ticket);
     }

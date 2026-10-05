@@ -100,6 +100,7 @@ internal sealed partial class ApiJwtBearerEvents(AccessDeniedAuditor auditor, IL
             principal,
             action,
             http.Request.PathBase.Add(http.Request.Path).Value ?? "/",
+            (http.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText,
             reason,
             http.Connection.RemoteIpAddress?.ToString(),
             WebDefaultsExtensions.CurrentTraceId(http),

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 
 using Microsoft.AspNetCore.Authentication;
 
@@ -45,6 +46,29 @@ public static class PortalSession
             DateTimeOffset.TryParseExact(raw, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var expiresAt)
             ? expiresAt
             : null;
+    }
+
+    /// <summary>Authentication property holding the random id of this cookie ticket, used to revoke it at sign-out.</summary>
+    public const string TicketIdKey = ".regreturns.ticket";
+
+    /// <summary>Gives a new ticket its random id.</summary>
+    /// <param name="properties">The ticket's authentication properties.</param>
+    public static void SetNewTicketId(AuthenticationProperties properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        properties.Items[TicketIdKey] = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
+    }
+
+    /// <summary>
+    /// The deny-list key for a ticket: the ticket's own id, so signing out revokes this cookie (and any copy of it)
+    /// without blocking a new sign-in that WSO2 completes with the same session id.
+    /// </summary>
+    /// <param name="properties">The ticket's authentication properties.</param>
+    /// <returns>The key, or <see langword="null"/> for a ticket without an id.</returns>
+    public static string? TicketDenyKey(AuthenticationProperties properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        return properties.Items.TryGetValue(TicketIdKey, out var id) && !string.IsNullOrEmpty(id) ? $"ticket:{id}" : null;
     }
 
     /// <summary>

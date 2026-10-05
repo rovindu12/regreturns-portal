@@ -106,6 +106,31 @@ public sealed class SignInProcessorTests : IDisposable
         await _linkHandler.DidNotReceive().HandleAsync(Arg.Any<LinkSignedInUser>(), Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task Token_without_a_session_id_is_refused_without_linking()
+    {
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            TokenPrincipal().Claims.Where(c => c.Type != ClaimNames.SessionId), "oidc"));
+
+        var result = await _processor.ProcessAsync(principal, Origin, TestContext.Current.CancellationToken);
+
+        result.Error.ShouldBe(SignInErrors.SessionMissing);
+        await _linkHandler.DidNotReceive().HandleAsync(Arg.Any<LinkSignedInUser>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Cookie_carries_the_institution_code_as_RegReturns_stores_it()
+    {
+        _linkHandler.HandleAsync(Arg.Any<LinkSignedInUser>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(new SignedInUserLink(Guid.CreateVersion7(), "Maker (Harbourline Bank PLC)", "HBL")));
+        var principal = new ClaimsPrincipal(new ClaimsIdentity(
+            TokenPrincipal().Claims.Select(c => c.Type == ClaimNames.InstitutionId ? new Claim(c.Type, "hbl") : c), "oidc"));
+
+        var result = await _processor.ProcessAsync(principal, Origin, TestContext.Current.CancellationToken);
+
+        result.Value.FindAll(ClaimNames.InstitutionId).Select(c => c.Value).ShouldBe(["HBL"]);
+    }
+
     public void Dispose() => _cache.Dispose();
 
     private void LinkSucceeds() =>

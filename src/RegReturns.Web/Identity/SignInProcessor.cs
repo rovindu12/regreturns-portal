@@ -41,7 +41,8 @@ public sealed partial class SignInProcessor(
             LogUnknownRolesDropped(logger, claims.UnknownRoles.Count, string.Join(", ", claims.UnknownRoles));
         }
 
-        var error = await LinkAsync(claims, cancellationToken);
+        var link = await LinkAsync(claims, cancellationToken);
+        var error = link.Error;
         if (error is not null)
         {
             LogSignInRejected(logger, error.Code);
@@ -50,6 +51,7 @@ public sealed partial class SignInProcessor(
             return error;
         }
 
+        UseCanonicalInstitutionCode(claims, link.Value.InstitutionCode);
         var details = claims.AuthenticationMethods.Count == 0 ? null : $"amr={string.Join(',', claims.AuthenticationMethods)}";
         await auditTrail.RecordAsync(
             AuditActor.FromPrincipal(claims.Principal).ToRecord(AuditAction.SignIn, details, origin.IpAddress, origin.TraceId),
@@ -58,7 +60,7 @@ public sealed partial class SignInProcessor(
         return claims.Principal;
     }
 
-    private async Task<Error?> LinkAsync(NormalizedClaims claims, CancellationToken cancellationToken)
+    private async Task<Result<SignedInUserLink>> LinkAsync(NormalizedClaims claims, CancellationToken cancellationToken)
     {
         if (claims.Subject is null)
         {
@@ -70,10 +72,31 @@ public sealed partial class SignInProcessor(
             return SignInErrors.UserNameMissing;
         }
 
-        var link = await linkHandler.HandleAsync(
+        // Without a session id, back-channel logout could never end this session.
+        if (claims.SessionId is null)
+        {
+            return SignInErrors.SessionMissing;
+        }
+
+        return await linkHandler.HandleAsync(
             new LinkSignedInUser(claims.Subject, claims.UserName, claims.Name, claims.Email, claims.InstitutionCode, claims.Roles),
             cancellationToken);
-        return link.Error;
+    }
+
+    // The token's institution matched case-insensitively; the cookie carries the code exactly as RegReturns stores it.
+    private static void UseCanonicalInstitutionCode(NormalizedClaims claims, string? institutionCode)
+    {
+        if (institutionCode is null || claims.Principal.Identity is not ClaimsIdentity identity)
+        {
+            return;
+        }
+
+        var current = identity.FindFirst(ClaimNames.InstitutionId);
+        if (current is not null && !string.Equals(current.Value, institutionCode, StringComparison.Ordinal))
+        {
+            identity.RemoveClaim(current);
+            identity.AddClaim(new Claim(ClaimNames.InstitutionId, institutionCode));
+        }
     }
 
     [LoggerMessage(EventId = 3101, Level = LogLevel.Warning, Message = "Dropped {Count} unknown role(s) from the sign-in token: {Roles}")]

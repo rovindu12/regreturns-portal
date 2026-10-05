@@ -56,6 +56,9 @@ internal sealed class ConfigureApiJwtBearerOptions(IOptions<Wso2Options> wso2, I
         options.Backchannel = backchannel;
 
         options.EventsType = typeof(ApiJwtBearerEvents);
+
+        // WWW-Authenticate says only "invalid_token"; why a token failed goes to the logs and the audit trail.
+        options.IncludeErrorDetails = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidIssuer = settings.Issuer.AbsoluteUri,

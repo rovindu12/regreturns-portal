@@ -22,6 +22,7 @@ public sealed partial class PortalCookieEvents(
     {
         ArgumentNullException.ThrowIfNull(context);
         PortalSession.SetAbsoluteExpiry(context.Properties, timeProvider.GetUtcNow() + PortalSession.AbsoluteLifetime);
+        PortalSession.SetNewTicketId(context.Properties);
         return base.SigningIn(context);
     }
 
@@ -44,6 +45,15 @@ public sealed partial class PortalCookieEvents(
             return;
         }
 
+        // A ticket without an id predates sign-out revocation; like a missing absolute expiry, it counts as ended.
+        var ticketKey = PortalSession.TicketDenyKey(context.Properties);
+        if (ticketKey is null || await denyList.IsDeniedAsync(ticketKey, context.HttpContext.RequestAborted))
+        {
+            LogTicketRevoked(logger, context.Principal?.FindFirst(ClaimNames.Subject)?.Value);
+            await RejectAsync(context);
+            return;
+        }
+
         await base.ValidatePrincipal(context);
     }
 
@@ -55,6 +65,9 @@ public sealed partial class PortalCookieEvents(
 
     [LoggerMessage(EventId = 3105, Level = LogLevel.Information, Message = "Session of {SubjectId} reached its absolute expiry")]
     private static partial void LogSessionExpired(ILogger logger, string? subjectId);
+
+    [LoggerMessage(EventId = 3110, Level = LogLevel.Information, Message = "Signed-out session cookie of {SubjectId} was presented again")]
+    private static partial void LogTicketRevoked(ILogger logger, string? subjectId);
 
     [LoggerMessage(EventId = 3106, Level = LogLevel.Information, Message = "Session of {SubjectId} was ended by WSO2 back-channel logout")]
     private static partial void LogSessionEnded(ILogger logger, string? subjectId);

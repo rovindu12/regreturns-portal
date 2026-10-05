@@ -24,6 +24,9 @@ public sealed partial class AccessDeniedAuditor(
     TimeProvider timeProvider,
     ILogger<AccessDeniedAuditor> logger)
 {
+    /// <summary>How long one audit write may take before it is abandoned and logged.</summary>
+    public static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(15);
+
     /// <summary>
     /// Records an <see cref="AuditAction.AccessDenied"/> or <see cref="AuditAction.AuthenticationFailed"/> event
     /// unless the same one was recorded in the current minute. Never throws for audit storage failures: the caller
@@ -35,12 +38,36 @@ public sealed partial class AccessDeniedAuditor(
     /// <param name="reason">The policy or failure reason. Never a token or exception message.</param>
     /// <param name="ipAddress">The caller's IP address.</param>
     /// <param name="correlationId">The W3C trace id.</param>
-    /// <param name="cancellationToken">Cancels the operation.</param>
+    /// <param name="cancellationToken">Cancels the operation before the write starts.</param>
+    /// <returns><see langword="true"/> if an entry was written.</returns>
+    public Task<bool> RecordAsync(
+        ClaimsPrincipal? principal,
+        AuditAction action,
+        string path,
+        string? reason,
+        string? ipAddress,
+        string? correlationId,
+        CancellationToken cancellationToken) =>
+        RecordAsync(principal, action, path, routePattern: null, reason, ipAddress, correlationId, cancellationToken);
+
+    /// <summary>
+    /// Records an access failure, de-duplicating signed-in callers by the endpoint's route pattern, so requests for
+    /// many different ids on one endpoint (<c>/v1/institutions/{code}</c>) write one entry a minute, not one each.
+    /// </summary>
+    /// <param name="principal">The caller, if authenticated.</param>
+    /// <param name="action">The action to record.</param>
+    /// <param name="path">The request path, without the query string; recorded in the details.</param>
+    /// <param name="routePattern">The matched endpoint's route pattern, if any; used instead of the path for de-duplication.</param>
+    /// <param name="reason">The policy or failure reason. Never a token or exception message.</param>
+    /// <param name="ipAddress">The caller's IP address.</param>
+    /// <param name="correlationId">The W3C trace id.</param>
+    /// <param name="cancellationToken">Cancels the operation before the write starts.</param>
     /// <returns><see langword="true"/> if an entry was written.</returns>
     public async Task<bool> RecordAsync(
         ClaimsPrincipal? principal,
         AuditAction action,
         string path,
+        string? routePattern,
         string? reason,
         string? ipAddress,
         string? correlationId,
@@ -51,13 +78,14 @@ public sealed partial class AccessDeniedAuditor(
             throw new ArgumentOutOfRangeException(nameof(action), action, "Only access-denied and authentication-failed events are recorded here.");
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         var actor = AuditActor.FromPrincipal(principal);
 
         // Anonymous callers are keyed by IP so one noisy client cannot hide others, and not by path, because an
         // unauthenticated client can invent paths and would otherwise write one entry per request.
         var anonymous = actor.Type == ActorType.Anonymous;
         var who = anonymous ? $"ip:{ipAddress}" : actor.SubjectId;
-        var where = anonymous ? "*" : path;
+        var where = anonymous ? "*" : routePattern ?? path;
         var minute = timeProvider.GetUtcNow().ToUnixTimeSeconds() / 60;
         var key = string.Create(CultureInfo.InvariantCulture, $"audit-denied|{action}|{who}|{where}|{minute}");
         if (cache.TryGetValue(key, out _))
@@ -71,11 +99,15 @@ public sealed partial class AccessDeniedAuditor(
         var details = string.IsNullOrWhiteSpace(reason) ? $"path={path}" : $"path={path}; reason={reason}";
         try
         {
-            await auditTrail.RecordAsync(actor.ToRecord(action, details, ipAddress, correlationId), cancellationToken);
+            // Not the request's token: a client that drops the connection must not be able to cancel its own entry.
+            using var timeout = new CancellationTokenSource(WriteTimeout);
+            await auditTrail.RecordAsync(actor.ToRecord(action, details, ipAddress, correlationId), timeout.Token);
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
+            // Forget the key so the next attempt in this minute tries again.
+            cache.Remove(key);
             LogAuditWriteFailed(logger, ex, action, path);
             return false;
         }
