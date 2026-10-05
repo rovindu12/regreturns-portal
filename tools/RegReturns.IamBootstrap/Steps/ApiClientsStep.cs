@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 using RegReturns.Application.Identity;
+using RegReturns.Domain.Identity;
 using RegReturns.Domain.Institutions;
 using RegReturns.IamBootstrap.Wso2;
 using RegReturns.Infrastructure.Persistence;
@@ -12,7 +13,9 @@ namespace RegReturns.IamBootstrap.Steps;
 
 /// <summary>
 /// Ensures one client-credentials app per active bank (all API scopes) plus the public Swagger demo client
-/// (read-only, one bank), and records every client id in <c>iam.ApiClients</c> so the API can scope tokens to a bank.
+/// (read-only, one bank, allowed to ask for tokens from the API's origin), and records every client id in
+/// <c>iam.ApiClients</c> so the API can scope tokens to a bank. Each registered client gets the client user it acts
+/// through (ADR 0026).
 /// </summary>
 /// <param name="applications">Application management.</param>
 /// <param name="db">The RegReturns database.</param>
@@ -38,8 +41,8 @@ internal sealed class ApiClientsStep(Wso2Applications applications, RegReturnsDb
         {
             var app = await EnsureClientAsync(
                 IamNames.BankApp(bank.Code), IamNames.BankClientId(bank.Code), $"Bank system of {bank.Name} (client credentials).",
-                apiResourceId, BankScopes, state, cancellationToken);
-            await EnsureApiClientRowAsync(bank, app.ClientId, IamNames.BankApp(bank.Code), cancellationToken);
+                apiResourceId, BankScopes, [], state, cancellationToken);
+            await EnsureApiClientAsync(bank, app.ClientId, IamNames.BankApp(bank.Code), state, cancellationToken);
             state.GeneratedSettings[$"BANK_{bank.Code.ToUpperInvariant()}_CLIENT_ID"] = app.ClientId;
             state.GeneratedSettings[$"BANK_{bank.Code.ToUpperInvariant()}_CLIENT_SECRET"] = app.ClientSecret;
         }
@@ -49,8 +52,8 @@ internal sealed class ApiClientsStep(Wso2Applications applications, RegReturnsDb
             ?? throw new InvalidOperationException($"The demo API institution '{demoCode}' is not an active institution.");
         var demo = await EnsureClientAsync(
             IamNames.DemoApiApp, IamNames.DemoApiClientId, $"Public Swagger demo client, read-only, acting for {demoBank.Name}.",
-            apiResourceId, DemoScopes, state, cancellationToken);
-        await EnsureApiClientRowAsync(demoBank, demo.ClientId, IamNames.DemoApiApp, cancellationToken);
+            apiResourceId, DemoScopes, options.Value.ApiOrigin is { } origin ? [origin] : [], state, cancellationToken);
+        await EnsureApiClientAsync(demoBank, demo.ClientId, IamNames.DemoApiApp, state, cancellationToken);
         state.GeneratedSettings["DEMO_API_CLIENT_ID"] = demo.ClientId;
         state.GeneratedSettings["DEMO_API_CLIENT_SECRET"] = demo.ClientSecret;
 
@@ -58,7 +61,14 @@ internal sealed class ApiClientsStep(Wso2Applications applications, RegReturnsDb
     }
 
     private async Task<Wso2Application> EnsureClientAsync(
-        string name, string clientId, string description, string apiResourceId, string[] scopes, BootstrapState state, CancellationToken ct)
+        string name,
+        string clientId,
+        string description,
+        string apiResourceId,
+        string[] scopes,
+        string[] allowedOrigins,
+        BootstrapState state,
+        CancellationToken ct)
     {
         var settings = new JsonObject { ["description"] = description };
         var createOnly = new JsonObject { ["templateId"] = "m2m-application" };
@@ -67,7 +77,7 @@ internal sealed class ApiClientsStep(Wso2Applications applications, RegReturnsDb
             ["grantTypes"] = new JsonArray("client_credentials"),
             ["publicClient"] = false,
             ["callbackURLs"] = new JsonArray(),
-            ["allowedOrigins"] = new JsonArray(),
+            ["allowedOrigins"] = new JsonArray([.. allowedOrigins.Select(o => JsonValue.Create(o))]),
             ["accessToken"] = new JsonObject
             {
                 ["type"] = "JWT",
@@ -85,12 +95,13 @@ internal sealed class ApiClientsStep(Wso2Applications applications, RegReturnsDb
         return app;
     }
 
-    private async Task EnsureApiClientRowAsync(Institution institution, string clientId, string name, CancellationToken ct)
+    private async Task EnsureApiClientAsync(Institution institution, string clientId, string name, BootstrapState state, CancellationToken ct)
     {
         var row = await db.ApiClients.SingleOrDefaultAsync(c => c.Wso2ClientId == clientId, ct);
         if (row is null)
         {
-            await db.ApiClients.AddAsync(ApiClient.Create(institution, clientId, name), ct);
+            row = ApiClient.Create(institution, clientId, name);
+            await db.ApiClients.AddAsync(row, ct);
         }
         else if (row.InstitutionId != institution.Id)
         {
@@ -99,6 +110,13 @@ internal sealed class ApiClientsStep(Wso2Applications applications, RegReturnsDb
         else if (!row.IsActive || row.Name != name)
         {
             row.Relink(clientId, name);
+        }
+
+        var clientUserId = row.Id;
+        if (!await db.Users.AnyAsync(u => u.ApiClientId == clientUserId, ct))
+        {
+            await db.Users.AddAsync(AppUser.ForApiClient(row), ct);
+            state.Record("client user", name, Outcome.Created);
         }
     }
 }

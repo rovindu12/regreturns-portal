@@ -36,6 +36,9 @@ public sealed class Wso2Options
     /// <summary>Gets the OpenID Connect discovery document address.</summary>
     public Uri MetadataAddress => new(AuthorityBase(), "oauth2/token/.well-known/openid-configuration");
 
+    /// <summary>Gets the public token endpoint, where clients (and Swagger UI in the browser) ask for tokens.</summary>
+    public Uri TokenEndpoint => new(AuthorityBase(), "oauth2/token");
+
     /// <summary>Gets the JSON Web Key Set address.</summary>
     public Uri JwksAddress => new(AuthorityBase(), "oauth2/jwks");
 

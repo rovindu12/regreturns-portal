@@ -36,7 +36,7 @@ public static class Policies
     /// <summary>API: read the calling bank's returns (scope <c>returns:read</c>).</summary>
     public const string ApiReturnsRead = "Api.Returns.Read";
 
-    /// <summary>API: submit returns for the calling bank (scope <c>returns:submit</c>).</summary>
+    /// <summary>API: deliver returns for the calling bank, as drafts (scope <c>returns:submit</c>, ADR 0026).</summary>
     public const string ApiReturnsSubmit = "Api.Returns.Submit";
 
     /// <summary>API: read reference data (scope <c>reference:read</c>).</summary>

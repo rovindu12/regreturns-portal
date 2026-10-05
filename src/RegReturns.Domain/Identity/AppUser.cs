@@ -1,11 +1,14 @@
+using System.Globalization;
+
 using RegReturns.Domain.Auditing;
 using RegReturns.Domain.Common;
+using RegReturns.Domain.Institutions;
 
 namespace RegReturns.Domain.Identity;
 
 /// <summary>
-/// A directory projection of a person known to WSO2 Identity Server.
-/// No credentials are stored here: WSO2 is the single source of identity.
+/// A directory projection of a person known to WSO2 Identity Server, or the client user a bank's API client acts
+/// through (ADR 0026). No credentials are stored here: WSO2 is the single source of identity.
 /// </summary>
 public sealed class AppUser : Entity
 {
@@ -18,13 +21,15 @@ public sealed class AppUser : Entity
     /// <summary>Maximum length of an e-mail address.</summary>
     public const int EmailMaxLength = 256;
 
+    /// <summary>The prefix of a client user's user name, which no WSO2 user name can be linked to (ADR 0026).</summary>
+    public const string ApiClientUserNamePrefix = "api-client.";
+
     private readonly List<Role> _roles = [];
 
     private AppUser()
     {
         UserName = string.Empty;
         DisplayName = string.Empty;
-        Email = string.Empty;
     }
 
     /// <summary>Gets the WSO2 user name (unique).</summary>
@@ -33,9 +38,12 @@ public sealed class AppUser : Entity
     /// <summary>Gets the display name.</summary>
     public string DisplayName { get; private set; }
 
-    /// <summary>Gets the e-mail address. Not audited: it is personal contact data and WSO2 holds its history.</summary>
+    /// <summary>
+    /// Gets the e-mail address, or <see langword="null"/> for a client user. Not audited: it is personal contact data
+    /// and WSO2 holds its history.
+    /// </summary>
     [NotAudited]
-    public string Email { get; private set; }
+    public string? Email { get; private set; }
 
     /// <summary>Gets the bank the user works for, or <see langword="null"/> for regulator staff.</summary>
     public Guid? InstitutionId { get; private set; }
@@ -51,6 +59,12 @@ public sealed class AppUser : Entity
 
     /// <summary>Gets a value indicating whether this is a shared demo account that visitors cannot modify.</summary>
     public bool IsDemoAccount { get; private set; }
+
+    /// <summary>Gets the API client this user stands for, or <see langword="null"/> for a person.</summary>
+    public Guid? ApiClientId { get; private set; }
+
+    /// <summary>Gets a value indicating whether this is a client user, which no person can sign in as.</summary>
+    public bool IsApiClientUser => ApiClientId is not null;
 
     /// <summary>
     /// Creates a user, enforcing role and institution rules:
@@ -90,6 +104,27 @@ public sealed class AppUser : Entity
             IsDemoAccount = isDemoAccount,
         };
         user._roles.AddRange(roleSet);
+        return user;
+    }
+
+    /// <summary>
+    /// Creates the user a bank's API client acts through (ADR 0026): a bank maker of the client's institution, with no
+    /// e-mail and no WSO2 user, so it can prepare returns but never submit them.
+    /// </summary>
+    /// <param name="client">The registered API client.</param>
+    /// <returns>The client user.</returns>
+    public static AppUser ForApiClient(ApiClient client)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        var user = new AppUser
+        {
+            UserName = string.Concat(ApiClientUserNamePrefix, client.Id.ToString("N", CultureInfo.InvariantCulture)),
+            DisplayName = Guard.NotBlank(client.Name, DisplayNameMaxLength),
+            InstitutionId = client.InstitutionId,
+            Status = UserStatus.Active,
+            ApiClientId = client.Id,
+        };
+        user._roles.Add(Role.BankMaker);
         return user;
     }
 

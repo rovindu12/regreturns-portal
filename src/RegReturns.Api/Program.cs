@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using RegReturns.Api.Authentication;
+using RegReturns.Api.Hosting;
 using RegReturns.Application;
 using RegReturns.Infrastructure;
 using RegReturns.ServiceDefaults.Web;
@@ -19,7 +20,7 @@ try
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddApiAuthentication(builder.Configuration);
-    builder.Services.AddControllers();
+    builder.Services.AddRegReturnsApi(builder.Configuration);
 
     var app = builder.Build();
 
@@ -32,11 +33,15 @@ try
     }
 
     app.UseHttpsRedirection();
+    app.UseApiDocumentation();
     app.UseAuthentication();
+
+    // After authentication, so each client has its own window; before authorization, so refused calls count too.
+    app.UseRateLimiter();
     app.UseAuthorization();
 
     app.MapDefaultEndpoints();
-    app.MapControllers();
+    app.MapRegReturnsApi();
 
     await app.RunAsync();
     return 0;

@@ -1,6 +1,6 @@
 # RegReturns – Regulatory Returns Portal
 
-> **Status:** under active development (phase 1 of 12 complete). Live demo link, screenshots and the full
+> **Status:** under active development (phase 5 of 12 complete). Live demo link, screenshots and the full
 > documentation set arrive in later phases.
 
 RegReturns lets licensed banks submit periodic regulatory returns to a central bank, validates them against
@@ -47,6 +47,18 @@ dotnet run --project src/RegReturns.Web
 Open https://localhost:7101, and http://localhost:8081 for logs and traces. Demo users sign in with
 `DEMO_USER_PASSWORD` from `.env`; approvers and the administrator also need the TOTP code from their secret in
 `.env.generated`. More commands are in [CLAUDE.md](CLAUDE.md#commands).
+
+## API for bank systems
+
+```bash
+dotnet run --project src/RegReturns.Api   # https://localhost:7201/swagger
+```
+
+Swagger UI signs in with client credentials: choose **Authorize** and enter `DEMO_API_CLIENT_SECRET` from
+`.env.generated` for the read-only demo client. Each bank's own client (`BANK_<CODE>_CLIENT_ID` and `_SECRET`) can
+also deliver a return with `POST /v1/submissions` and an `Idempotency-Key`; the return arrives as a draft that a bank
+checker submits in the portal ([ADR 0026](docs/adr/0026-api-delivers-drafts-through-a-client-user.md),
+[ADR 0027](docs/adr/0027-web-api-v1-conventions.md)).
 
 ## Tech stack
 

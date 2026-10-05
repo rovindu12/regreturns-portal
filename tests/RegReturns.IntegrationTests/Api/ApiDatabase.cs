@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 
 using RegReturns.Domain.Auditing;
+using RegReturns.Domain.Identity;
 using RegReturns.Domain.Institutions;
 using RegReturns.Infrastructure.Persistence;
 using RegReturns.IntegrationTests.Infrastructure;
@@ -32,10 +33,12 @@ public sealed class ApiDatabase
     }
 
     /// <summary>
-    /// Registers a new API client for an institution, as IamBootstrap does. Every call returns a new client id, so
-    /// tests never share the API's lookup cache or the audit de-duplication window.
+    /// Registers a new API client for an institution with the client user it acts through, as IamBootstrap does.
+    /// Every call returns a new client id, so tests never share the API's lookup cache or the audit de-duplication
+    /// window.
     /// </summary>
-    public async Task<string> RegisterClientAsync(string institutionCode, bool active, CancellationToken cancellationToken)
+    public async Task<string> RegisterClientAsync(
+        string institutionCode, bool active, CancellationToken cancellationToken, bool withClientUser = true)
     {
         var clientId = UnregisteredClientId(institutionCode);
         await using var context = SqlServerFixture.CreateContext(ConnectionString);
@@ -47,6 +50,11 @@ public sealed class ApiDatabase
         }
 
         await context.ApiClients.AddAsync(client, cancellationToken);
+        if (withClientUser)
+        {
+            await context.Users.AddAsync(AppUser.ForApiClient(client), cancellationToken);
+        }
+
         await context.SaveChangesAsync(cancellationToken);
         return clientId;
     }

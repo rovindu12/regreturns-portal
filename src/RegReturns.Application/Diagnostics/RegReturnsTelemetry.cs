@@ -48,6 +48,10 @@ public static class RegReturnsTelemetry
     public static Counter<long> Uploads { get; } = Meter.CreateCounter<long>(
         "regreturns.uploads", "{file}", "Return file uploads by outcome.");
 
+    /// <summary>Gets the count of returns delivered through the API, tagged with <c>outcome</c> (created, updated, refused) and, when refused, <c>error_code</c>.</summary>
+    public static Counter<long> Deliveries { get; } = Meter.CreateCounter<long>(
+        "regreturns.api.deliveries", "{return}", "Returns delivered through the API by outcome.");
+
     /// <summary>Gets the count of workflow steps, tagged with <c>action</c>, <c>outcome</c> (done, refused) and, when refused, <c>error_code</c>.</summary>
     public static Counter<long> WorkflowTransitions { get; } = Meter.CreateCounter<long>(
         "regreturns.workflow.transitions", "{step}", "Workflow steps by action and outcome.");

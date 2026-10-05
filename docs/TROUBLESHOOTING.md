@@ -217,3 +217,39 @@ EventId.Id = 3004
 | Saves fail with SQL error 51000 "Could not lock the audit chain." | A transaction held the chain lock for more than 10 seconds, so the writer gave up | Look for a long-running transaction in the logs at that time (a slow request that saved, or a session left open in SQL Server) |
 | Error 51001 from SQL Server | Something tried to update or delete an audit entry | Expected: the trail is append-only |
 | A change is not in the trail | It was made outside EF Core (raw SQL, the migrator and seeding), or it only touched properties that are never recorded (`AppUser.Email`, `StoredFile.Content`) | Expected; seeding writes no entries. Data fixed by hand in SQL is not audited, so avoid it |
+
+## 9. Web API
+
+Bank systems call the API with a WSO2 client-credentials token (ADR 0018) and deliver returns as drafts (ADR 0026).
+Every error is `application/problem+json` with a stable `code` and the `traceId` to search for in Seq (ADR 0027).
+Swagger UI is at `/swagger` and the OpenAPI document at `/openapi/v1.json`; neither needs a token.
+
+```
+EventId.Id in [5106, 5107]                         -- deliveries and refused deliveries
+EventId.Id in [3301, 3302, 3303, 3306]             -- idempotent replays, reused keys, retries in flight, takeovers
+EventId.Id = 3304                                  -- rate limit reached (Partition = client:<id> or ip:<address>)
+EventId.Id in [3305, 3307]                         -- purge of expired idempotency records
+```
+
+Values of a return are never logged. The metrics `regreturns.api.deliveries` (outcome created, updated or refused,
+with the error code), `regreturns.api.idempotent_requests` (outcome started, replayed, key_reused, in_progress) and
+`regreturns.api.rate_limited` show the same at a glance.
+
+| Status and `code` | Likely cause | Fix |
+|---|---|---|
+| 401 | No token, an expired one, or one from another issuer or for another audience | Get a new client-credentials token from WSO2; section 5 covers token checks |
+| 403 `User.NotLinked` | The client is registered and active but has no active client user | Re-run `IamBootstrap apply`, which creates the client user |
+| 403 without a code | The token lacks the scope (`returns:submit` to deliver, `returns:read` to read returns, `reference:read` for return types), or the client or its bank is not active in `iam.ApiClients` | Ask WSO2 for the scope (the public demo client is read-only on purpose); check `iam.ApiClients.IsActive` and the institution |
+| 400 `Idempotency.KeyRequired` or `Idempotency.KeyInvalid` | A `POST` without an `Idempotency-Key`, or with spaces or non-ASCII characters in it | Send a new UUID per delivery, and the same one when retrying it |
+| 422 `Idempotency.KeyReused` | The key was used in the last 24 hours for a different body or path | Use a new key for a new delivery; reuse a key only to retry the identical request |
+| 409 `Idempotency.InProgress` with `Retry-After: 2` | The first request with this key is still running, or stopped less than a minute ago | Retry after the delay; an abandoned claim is taken over after `Api:Idempotency:InFlightSeconds` (log 3306) |
+| A retry answers the first reply again, with `Idempotent-Replayed: true` | Expected: the delivery already happened | Read the stored answer; 403, 409, 429 and 5xx answers are never stored, so those retries run again |
+| 400 `Request.Invalid` | Malformed period, unknown status, page size over 100, or a value that is an object or array (`errors` names the field, such as `values.LCR`) | Fix the request; periods look like `2027-03` or `2027-Q1` |
+| 422 `Delivery.NoObligation` or `ReturnType.PeriodMismatch` | The bank owes no such return for the period, or a quarter was sent for a monthly return | Check `GET /v1/return-types` for the frequency and the bank's obligations in the portal |
+| 422 `Delivery.UnknownFields` | A field code is not in the template version for that period | Read `GET /v1/return-types/{code}/template?period=...`; codes are case-sensitive |
+| 409 `Submission.NotEditable` | The return was already submitted, is under review or was decided | Wait until the regulator returns it for correction, then deliver again |
+| 409 `Delivery.Concurrent` | Someone saved the same return (in the portal or with another key) at the same moment | Retry with a new key after reading the return |
+| 404 `Submission.NotFound` | Unknown id, or a return of another bank (they look the same on purpose) | Use ids from `GET /v1/submissions` |
+| 429 `RateLimit.Exceeded` with `Retry-After` | More than `Api:RateLimit:PermitLimit` requests in the window from one client (or one IP without a token) | Back off for `Retry-After` seconds; raise the limit only for a known batch job |
+| 413 `Request.TooLarge` | The request body is over 1 MiB | A return is far smaller; check what the client sends |
+| Swagger UI "Authorize" fails with a CORS or `invalid_client` error | The API's origin is not on the demo client's allowed origins, or the secret is wrong | Set `IamBootstrap:ApiBaseUrl` to the API address and re-run `apply`; the demo secret is in `.env.generated` |

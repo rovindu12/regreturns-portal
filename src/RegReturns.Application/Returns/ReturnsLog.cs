@@ -27,6 +27,14 @@ internal static partial class ReturnsLog
         Message = "Return {SubmissionId} edit refused: loaded at edit version {Expected}, now at {Actual}")]
     public static partial void EditConflict(ILogger logger, Guid submissionId, int expected, int actual);
 
+    [LoggerMessage(EventId = 5106, Level = LogLevel.Information,
+        Message = "Return {SubmissionId} delivered through the API: created {Created}, changed {Changed}, edit version {EditVersion}")]
+    public static partial void Delivered(ILogger logger, Guid submissionId, bool created, bool changed, int editVersion);
+
+    [LoggerMessage(EventId = 5107, Level = LogLevel.Warning,
+        Message = "API delivery of {ReturnTypeCode} for {Period} refused: {ErrorCode}")]
+    public static partial void DeliveryRefused(ILogger logger, string returnTypeCode, string period, string errorCode);
+
     [LoggerMessage(EventId = 5201, Level = LogLevel.Information,
         Message = "Upload accepted into return {SubmissionId}: {Format}, {SizeBytes} bytes, {FieldCount} field(s), file {StoredFileId}")]
     public static partial void UploadAccepted(ILogger logger, Guid submissionId, ReturnFileFormat format, int sizeBytes, int fieldCount, Guid storedFileId);

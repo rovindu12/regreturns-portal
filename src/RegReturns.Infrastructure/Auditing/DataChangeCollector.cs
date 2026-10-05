@@ -29,7 +29,8 @@ public sealed record DataChange(AuditAction Action, string EntityType, string En
 /// its principal when the principal reaches it through a collection navigation (or owns it); everything else is a root.
 /// A child row is identified by a readable key when a unique index pairs its parent key with one text property (a
 /// value's field code, a field's or rule's code), and by its id otherwise. Keys, the parent key, concurrency tokens and
-/// properties marked <see cref="NotAuditedAttribute"/> are left out, and <see cref="AuditEntry"/> is never audited.
+/// properties marked <see cref="NotAuditedAttribute"/> are left out, and neither <see cref="AuditEntry"/> nor an entity
+/// type marked <see cref="NotAuditedAttribute"/> is ever audited.
 /// </summary>
 internal static class DataChangeCollector
 {
@@ -46,7 +47,7 @@ internal static class DataChangeCollector
     public static IReadOnlyList<DataChange> Collect(ChangeTracker changeTracker)
     {
         ArgumentNullException.ThrowIfNull(changeTracker);
-        var tracked = changeTracker.Entries().Where(e => e.Entity is not AuditEntry).ToList();
+        var tracked = changeTracker.Entries().Where(e => e.Entity is not AuditEntry && !IsNotAudited(e.Metadata.ClrType)).ToList();
         var locator = new RootLocator(tracked);
         var groups = new Dictionary<(string Type, string Id), Group>();
         foreach (var entry in tracked.Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
@@ -158,6 +159,8 @@ internal static class DataChangeCollector
 
     private static bool IsNotAudited(PropertyInfo? property) =>
         property?.GetCustomAttribute<NotAuditedAttribute>(inherit: true) is not null;
+
+    private static bool IsNotAudited(Type entityType) => entityType.GetCustomAttribute<NotAuditedAttribute>(inherit: true) is not null;
 
     /// <summary>Where a tracked entity sits: its aggregate root and its path below it.</summary>
     /// <param name="RootType">The root's CLR type name.</param>

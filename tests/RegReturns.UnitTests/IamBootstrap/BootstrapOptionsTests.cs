@@ -121,6 +121,20 @@ public sealed class BootstrapOptionsTests
         new BootstrapOptions().LockDownSelfService.ShouldBeTrue();
     }
 
+    [Theory]
+    [InlineData("https://localhost:7201/", "https://localhost:7201")]
+    [InlineData("https://api.valoria.test/regreturns/", "https://api.valoria.test")]
+    public void Api_origin_is_the_scheme_host_and_port_of_the_api(string api, string origin)
+    {
+        new BootstrapOptions { ApiBaseUrl = new Uri(api) }.ApiOrigin.ShouldBe(origin);
+    }
+
+    [Fact]
+    public void Without_an_api_address_there_is_no_origin()
+    {
+        new BootstrapOptions().ApiOrigin.ShouldBeNull();
+    }
+
     private static BootstrapOptions Options(string portal) => new() { PortalBaseUrl = new Uri(portal) };
 
     private static BootstrapOptions Valid() => new()

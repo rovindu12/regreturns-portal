@@ -47,7 +47,8 @@ internal sealed class DemoUsersStep(Wso2Scim scim, Wso2Applications applications
         foreach (var entry in users)
         {
             var user = entry.User;
-            var userId = await EnsureUserAsync(user.UserName, user.DisplayName, user.Email, entry.InstitutionCode, state, cancellationToken);
+            var email = user.Email ?? throw new InvalidOperationException($"Demo user '{user.UserName}' has no e-mail address.");
+            var userId = await EnsureUserAsync(user.UserName, user.DisplayName, email, entry.InstitutionCode, state, cancellationToken);
             state.UserIds[user.UserName] = userId;
             state.DemoUserRoles[user.UserName] = [.. user.Roles.Select(RoleNames.For)];
             demoUserIds.Add(userId);

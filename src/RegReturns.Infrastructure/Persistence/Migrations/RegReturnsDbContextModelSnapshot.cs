@@ -114,13 +114,15 @@ namespace RegReturns.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid?>("ApiClientId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("Email")
-                        .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
@@ -155,6 +157,10 @@ namespace RegReturns.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ApiClientId")
+                        .IsUnique()
+                        .HasFilter("[ApiClientId] IS NOT NULL");
 
                     b.HasIndex("InstitutionId");
 
@@ -787,8 +793,72 @@ namespace RegReturns.Infrastructure.Persistence.Migrations
                     b.ToTable("ValidationRules", "reference");
                 });
 
+            modelBuilder.Entity("RegReturns.Infrastructure.Idempotency.IdempotencyRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<DateTimeOffset>("LockedUntil")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<byte[]>("ResponseBody")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<int?>("StatusCode")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("ClientId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("IdempotencyRecords", "api");
+                });
+
             modelBuilder.Entity("RegReturns.Domain.Identity.AppUser", b =>
                 {
+                    b.HasOne("RegReturns.Domain.Institutions.ApiClient", null)
+                        .WithMany()
+                        .HasForeignKey("ApiClientId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("RegReturns.Domain.Institutions.Institution", null)
                         .WithMany()
                         .HasForeignKey("InstitutionId")
