@@ -26,8 +26,9 @@ as the domain and server right before the phase 11 deploy.
 | 1. Scaffold, domain, DB, seed (+ observability baseline) | done |
 | 2. WSO2 in Docker, IamBootstrap, OIDC login, role policies | done |
 | 3. Templates, submission, validation engine | done |
-| 4. Workflow, queues, audit interceptor, auditor verify screen | next |
-| 5-12 | not started |
+| 4. Workflow, queues, audit interceptor, auditor verify screen | done |
+| 5. Web API: v1 endpoints, idempotency, paging, rate limits, Swagger | next |
+| 6-12 | not started |
 
 ## Commands
 
@@ -86,6 +87,10 @@ Key domain rules (see `src/RegReturns.Domain/Submissions/Submission.cs`):
 - Submit requires values, a validation run after the last edit, no errors and a justification (≥20 chars) per warning.
 - One live (not rejected) submission per obligation (`UX_Submissions_LiveObligation`). Saving unchanged values is not an
   edit. Forms post the `EditVersion` they were rendered with; an older one is `Submission.EditConflict` (ADR 0023).
+- `Submission.Permits(action, actor)` is the one check of state, role, organisation and segregation of duties;
+  `ActionsFor(actor)` lists the steps a page may offer. Every step runs through the `TransitionReturn` command (ADR 0025).
+- Bank staff see their bank's returns; regulator staff see a return only once it has been submitted
+  (`ReturnVisibility.VisibleTo`). Anything else is `Submission.NotFound` (404).
 
 Templates and validation (see `src/RegReturns.Domain/Templates` and `Validation/ValidationEngine.cs`):
 - A submission is captured with the published version whose `EffectiveFrom` (first period start) is the latest on or
@@ -97,6 +102,16 @@ Templates and validation (see `src/RegReturns.Domain/Templates` and `Validation/
 - Uploads (`.xlsx`, `.csv`) are checked by content, stored in `returns.StoredFiles` and never served (ADR 0022).
 - Comments are required on every step except "start review". Returning for correction bumps `Revision`.
 - `IsLate` is set on first submission if after the obligation's due date (UTC).
+
+Audit trail (see `src/RegReturns.Infrastructure/Auditing`, ADR 0016 and 0024):
+- Hash chain: gap-free `Sequence`, HMAC-SHA256 over `AuditEntry.ToCanonicalString()` plus the previous hash. Every
+  writer (`AuditTrail.RecordAsync` for events, audited saves for data changes) takes the `sp_getapplock` chain lock
+  (`AuditChain`) inside its transaction. An `INSTEAD OF UPDATE, DELETE` trigger makes the table append-only (51001).
+- In the hosts every `SaveChanges` audits itself: one entry per changed aggregate root, in the same transaction, with a
+  JSON change document (`AuditChanges`) and the actor from the host's `IAuditContext`. Contexts built without an
+  `IDataChangeAuditor` (migrator, seeding, design time, `SqlServerFixture.CreateContext`) write no entries.
+- Never add `AuditEntry` rows directly. Mark a property that must not be recorded `[NotAudited]` (with a unit test).
+  A new canonical field may only be appended, and only when not null, so old entries keep their hashes.
 
 ## Conventions
 
@@ -112,7 +127,7 @@ Templates and validation (see `src/RegReturns.Domain/Templates` and `Validation/
 - No magic strings: field codes, rule codes and schema names are constants (`MlrTemplate.TotalHqla`, `Schemas.Returns`).
 - Logging: `[LoggerMessage]` source-generated methods with event ids grouped per area (1xxx persistence, 2xxx migrator,
   30xx audit and identity, 31xx portal sign-in, 32xx API authentication, 4xxx IamBootstrap, 50xx templates, 51xx returns,
-  52xx uploads and files, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
+  52xx uploads and files, 53xx workflow steps, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
 - Time: inject `TimeProvider`; store UTC `DateTimeOffset`; dates as `DateOnly`; parse numbers with `CultureInfo.InvariantCulture`.
 - Config: options classes with `ValidateDataAnnotations().ValidateOnStart()`. Secrets only in user-secrets or environment variables.
   Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web and Api share it), `Oidc:ClientSecret` (Web).
@@ -150,8 +165,19 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
   relational-only and Application references EF Core abstractions only). Rules have no stored order; sort them.
 - `@section` is a Razor keyword: do not name a loop variable `section` in a view. The HTML encoder escapes `+`, so
   tests decode the page (`WebUtility.HtmlDecode`) before matching rule messages.
-- Host tests sign in as seeded demo users by linking `AppUser.Wso2UserId` to the test subject (`BankPortal`);
-  without that link, use cases answer `User.NotLinked`.
+- Host tests sign in as seeded demo users by linking `AppUser.Wso2UserId` to the test subject (`BankPortal`,
+  `SupervisionPortal`); without that link, use cases answer `User.NotLinked`. Roles for use cases come from the user
+  record, so segregation-of-duties tests create users holding two roles (`SupervisionPortal.MultiRoleUserAsync`);
+  approver clients add `amr=totp` for the approval policy.
+- Host tests that depend on the date pass a `FakeTimeProvider` to `PortalHost.Create` (`WorkflowPagesTests` fixes the
+  clock at 1 March 2027, so a January 2027 return is late).
+- A form with several steps posts to the endpoint of the button pressed: `<button asp-action="Approve">` renders a
+  `formaction`. Each endpoint still carries its own policy (`PortalEndpointMetadataTests` checks the workflow ones).
+- Host saves are audited, so a host test that counts audit entries filters by action or actor; helper contexts
+  (`SqlServerFixture.CreateContext`) are not audited, so test setup leaves no entries. Tamper tests disable
+  `audit.TR_AuditEntries_AppendOnly`, change rows and re-enable it in a `finally`, on a database of their own.
+- A user transaction around an audited save must run inside `CreateExecutionStrategy().ExecuteAsync` when retries are
+  on (as in the hosts); the save joins it and holds the chain lock until it commits or rolls back.
 - WSO2 rejects role names starting with `system_`; the platform admin role is `portal_admin`.
 - WSO2 encrypts TOTP secrets with its own key: an administrator cannot set one. IamBootstrap enrols as the user
   (`DemoTotpStep`); never request `internal_login` from the portal, which would open WSO2's self-service APIs.

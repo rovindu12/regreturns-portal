@@ -70,7 +70,10 @@ public sealed class AuditEntry
     /// <summary>Gets the id of the affected entity, if any.</summary>
     public string? EntityId { get; private set; }
 
-    /// <summary>Gets extra context such as the path and policy of a denied request. Never secrets or figures.</summary>
+    /// <summary>
+    /// Gets extra context such as the path and policy of a denied request or the status step of a data change.
+    /// Never secrets or figures (those that are recorded at all go in <see cref="Changes"/>).
+    /// </summary>
     public string? Details { get; private set; }
 
     /// <summary>Gets the caller's IP address.</summary>
@@ -84,6 +87,13 @@ public sealed class AuditEntry
 
     /// <summary>Gets the keyed hash of this entry's canonical form and <see cref="PreviousHash"/>.</summary>
     public string Hash { get; private set; }
+
+    /// <summary>
+    /// Gets the before and after values of a data change as compact, deterministic JSON (ADR 0024), or
+    /// <see langword="null"/> for entries that describe no data change. Return figures are recorded here; secrets,
+    /// personal contact data and properties marked <see cref="NotAuditedAttribute"/> never are.
+    /// </summary>
+    public string? Changes { get; private set; }
 
     /// <summary>
     /// Creates an unsealed entry; <see cref="Seal"/> must be called before it is stored. Control characters in
@@ -100,6 +110,7 @@ public sealed class AuditEntry
     /// <param name="details">Extra non-sensitive context.</param>
     /// <param name="ipAddress">The caller's IP address.</param>
     /// <param name="correlationId">The W3C trace id.</param>
+    /// <param name="changes">The before and after values of a data change, as JSON; blank means none.</param>
     /// <returns>The new entry.</returns>
     public static AuditEntry Create(
         DateTimeOffset occurredAt,
@@ -112,7 +123,8 @@ public sealed class AuditEntry
         string? entityId = null,
         string? details = null,
         string? ipAddress = null,
-        string? correlationId = null) => new()
+        string? correlationId = null,
+        string? changes = null) => new()
         {
             OccurredAt = occurredAt.ToUniversalTime(),
             Action = action,
@@ -125,11 +137,14 @@ public sealed class AuditEntry
             Details = Truncate(details, DetailsMaxLength),
             IpAddress = Truncate(ipAddress, IpAddressMaxLength),
             CorrelationId = Truncate(correlationId, CorrelationIdMaxLength),
+            Changes = string.IsNullOrWhiteSpace(changes) ? null : WithoutControlCharacters(changes),
         };
 
     /// <summary>
     /// Returns the canonical text the hash covers: every field in a fixed order, separated by the ASCII
-    /// unit separator, formatted culture-invariantly. Changing this breaks verification of existing chains.
+    /// unit separator, formatted culture-invariantly. Changing this breaks verification of existing chains, so a new
+    /// field joins only when it has a value: <see cref="Changes"/> follows <see cref="PreviousHash"/> when present,
+    /// and an entry without changes hashes exactly as entries written before the field existed (ADR 0024).
     /// </summary>
     /// <returns>The canonical form.</returns>
     public string ToCanonicalString()
@@ -149,6 +164,11 @@ public sealed class AuditEntry
             .Append(IpAddress).Append(separator)
             .Append(CorrelationId).Append(separator)
             .Append(PreviousHash);
+        if (Changes is not null)
+        {
+            builder.Append(separator).Append(Changes);
+        }
+
         return builder.ToString();
     }
 

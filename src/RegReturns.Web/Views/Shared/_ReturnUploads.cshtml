@@ -1,0 +1,39 @@
+@using RegReturns.Application.Returns
+@using RegReturns.Web.Models.Returns
+@model IReadOnlyList<ReturnUpload>
+<section aria-labelledby="uploads-heading" class="mb-4">
+    <h2 id="uploads-heading" class="h4">Uploaded files</h2>
+    @if (Model.Count == 0)
+    {
+        <p>No files have been uploaded to this return.</p>
+    }
+    else
+    {
+        <p class="small text-body-secondary">Files are kept as evidence of what was loaded. They are never opened by the portal.</p>
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th scope="col">File</th>
+                        <th scope="col">Size</th>
+                        <th scope="col">Revision</th>
+                        <th scope="col">Uploaded by</th>
+                        <th scope="col">When</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var upload in Model)
+                    {
+                        <tr>
+                            <td class="text-break">@upload.FileName</td>
+                            <td>@ReturnDisplay.FileSize(upload.SizeBytes)</td>
+                            <td>@upload.Revision</td>
+                            <td>@upload.UploadedBy</td>
+                            <td>@ReturnDisplay.Utc(upload.UploadedAt)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

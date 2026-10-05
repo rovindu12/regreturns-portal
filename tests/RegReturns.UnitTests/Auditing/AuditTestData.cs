@@ -32,6 +32,13 @@ internal static class AuditTestData
         CorrelationId: "4bf92f3577b34da6a3ce929d0e0e4736",
         PreviousHash: new string('a', AuditEntry.HashLength));
 
+    /// <summary>A data-change entry: <see cref="Complete"/> with a change document.</summary>
+    public static readonly EntryFields WithChanges = Complete with
+    {
+        Action = AuditAction.Updated,
+        Changes = "[{\"item\":\"Submission\",\"change\":\"Modified\",\"values\":{\"EditVersion\":{\"before\":1,\"after\":2}}}]",
+    };
+
     public static AuditHasher Hasher(string key) => new(Options.Create(new AuditOptions { HmacKey = key }));
 }
 
@@ -49,10 +56,11 @@ internal sealed record EntryFields(
     string? Details,
     string? IpAddress,
     string? CorrelationId,
-    string PreviousHash)
+    string PreviousHash,
+    string? Changes = null)
 {
     public AuditEntry Create() => AuditEntry.Create(
-        OccurredAt, Action, ActorType, Subject, DisplayName, InstitutionCode, EntityType, EntityId, Details, IpAddress, CorrelationId);
+        OccurredAt, Action, ActorType, Subject, DisplayName, InstitutionCode, EntityType, EntityId, Details, IpAddress, CorrelationId, Changes);
 
     public AuditEntry Seal(Func<string, string> computeHash)
     {

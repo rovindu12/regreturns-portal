@@ -1,0 +1,24 @@
+@using RegReturns.Application.Returns
+@using RegReturns.Web.Models.Returns
+@model ReturnWorkflowState
+<section id="history" aria-labelledby="history-heading" class="mb-4">
+    <h2 id="history-heading" class="h4">History</h2>
+    <p class="small text-body-secondary">Every workflow step, newest first. Names are as they were at the time.</p>
+    <ol class="list-group">
+        @foreach (var step in Model.History)
+        {
+            <li class="list-group-item">
+                <div class="d-flex flex-wrap gap-2 align-items-baseline">
+                    <span class="fw-semibold">@ReturnDisplay.Label(step.Action)</span>
+                    <span class="small text-body-secondary">
+                        by @step.ActorName, @ReturnDisplay.Utc(step.OccurredAt), revision @step.Revision
+                    </span>
+                </div>
+                @if (!string.IsNullOrEmpty(step.Comment))
+                {
+                    <p class="mb-0 mt-1 comment-text text-break">@step.Comment</p>
+                }
+            </li>
+        }
+    </ol>
+</section>

@@ -11,6 +11,23 @@ public sealed class AuditEntryTests
 
     private static readonly string PreviousHash = new('b', AuditEntry.HashLength);
 
+    // Pinned on purpose: changing the canonical form breaks verification of every chain already stored.
+    private static readonly string PinnedCanonicalForm = string.Join(
+        Separator,
+        "7",
+        "2026-10-04T09:30:15.0000000Z",
+        "3f2b9c1e-0d4a-4f6b-9e8c-2a7d5b1c0e9f",
+        "Nadia Fernhill",
+        "User",
+        "ALPHA",
+        "AccessDenied",
+        "Submission",
+        "0199b3c4-1d2e-7f00-8a9b-0c1d2e3f4a5b",
+        "path=/submissions/42; reason=Bank.SubmitReturn",
+        "10.1.2.3",
+        "4bf92f3577b34da6a3ce929d0e0e4736",
+        new string('a', 64));
+
     [Fact]
     public void Genesis_hash_is_sixty_four_zeros()
     {
@@ -203,25 +220,57 @@ public sealed class AuditEntryTests
     [Fact]
     public void Canonical_form_lists_every_field_in_a_fixed_order()
     {
-        // Pinned on purpose: changing the canonical form breaks verification of every chain already stored.
         var entry = AuditTestData.Complete.Seal(_ => "hash");
 
-        var expected = string.Join(
-            Separator,
-            "7",
-            "2026-10-04T09:30:15.0000000Z",
-            "3f2b9c1e-0d4a-4f6b-9e8c-2a7d5b1c0e9f",
-            "Nadia Fernhill",
-            "User",
-            "ALPHA",
-            "AccessDenied",
-            "Submission",
-            "0199b3c4-1d2e-7f00-8a9b-0c1d2e3f4a5b",
-            "path=/submissions/42; reason=Bank.SubmitReturn",
-            "10.1.2.3",
-            "4bf92f3577b34da6a3ce929d0e0e4736",
-            new string('a', 64));
-        entry.ToCanonicalString().ShouldBe(expected);
+        entry.ToCanonicalString().ShouldBe(PinnedCanonicalForm);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Entry_without_changes_has_the_canonical_form_entries_had_before_changes_were_recorded(string? changes)
+    {
+        // Phase 2 entries have no change document; their hashes must still verify (ADR 0024).
+        var entry = (AuditTestData.Complete with { Changes = changes }).Seal(_ => "hash");
+
+        entry.Changes.ShouldBeNull();
+        entry.ToCanonicalString().ShouldBe(PinnedCanonicalForm);
+    }
+
+    [Fact]
+    public void Entry_without_changes_hashes_exactly_as_before_changes_were_recorded()
+    {
+        // The HMAC of the pinned canonical form under AuditTestData.Key, computed before the change document existed.
+        var hasher = AuditTestData.Hasher(AuditTestData.Key);
+
+        AuditTestData.Complete.Seal(hasher.Compute).Hash.ShouldBe("49b9b1fb124259e23edbe231a0cf21f5fb39beef3b0cbdce535eeb0c32b60ca5");
+    }
+
+    [Fact]
+    public void Changes_follow_the_previous_hash_in_the_canonical_form()
+    {
+        var fields = AuditTestData.WithChanges;
+
+        var entry = fields.Seal(_ => "hash");
+
+        entry.ToCanonicalString().ShouldBe(
+            PinnedCanonicalForm.Replace("AccessDenied", "Updated", StringComparison.Ordinal) + Separator + fields.Changes);
+    }
+
+    [Fact]
+    public void Create_keeps_the_change_document()
+    {
+        AuditTestData.WithChanges.Create().Changes.ShouldBe(AuditTestData.WithChanges.Changes);
+    }
+
+    [Fact]
+    public void Create_replaces_control_characters_in_the_change_document_with_spaces()
+    {
+        var entry = AuditEntry.Create(
+            AuditTestData.OccurredAt, AuditAction.Updated, ActorType.User, "user-1", changes: $"[{Separator}]");
+
+        entry.Changes.ShouldBe("[ ]");
     }
 
     [Fact]

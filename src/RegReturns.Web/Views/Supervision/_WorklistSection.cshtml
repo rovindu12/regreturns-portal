@@ -1,0 +1,86 @@
+@model WorklistSection
+@{
+    var culture = System.Globalization.CultureInfo.InvariantCulture;
+}
+<section id="@Model.Id" aria-labelledby="@Model.Id-heading" class="mb-5">
+    <h2 id="@Model.Id-heading" class="h4">@Model.Title <span class="badge text-bg-secondary align-middle">@Model.Rows.Count</span></h2>
+    @if (Model.Rows.Count == 0)
+    {
+        <p class="text-body-secondary">@Model.EmptyText</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col">Bank</th>
+                        <th scope="col">Return</th>
+                        <th scope="col">Due</th>
+                        <th scope="col">Submitted</th>
+                        @switch (Model.Kind)
+                        {
+                            case WorklistSectionKind.UnderReview:
+                                <th scope="col">Reviewer</th>
+                                break;
+                            case WorklistSectionKind.WithBanks:
+                                <th scope="col">Sent back</th>
+                                break;
+                            case WorklistSectionKind.Decided:
+                                <th scope="col">Decision</th>
+                                break;
+                        }
+                        <th scope="col"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.Rows)
+                    {
+                        <tr>
+                            <td>
+                                <span class="fw-semibold">@row.InstitutionCode</span>
+                                <span class="d-block small">@row.InstitutionName</span>
+                            </td>
+                            <td>
+                                <span class="fw-semibold">@row.ReturnTypeCode</span> @row.PeriodLabel
+                                @if (row.Revision > 1)
+                                {
+                                    <span class="d-block small">Revision @row.Revision</span>
+                                }
+                            </td>
+                            <td>
+                                @row.DueDate.ToString(ReturnDisplay.DateFormat, culture)
+                                @if (row.IsLate)
+                                {
+                                    <span class="badge text-bg-danger ms-1">Late</span>
+                                }
+                            </td>
+                            <td>@(row.LastSubmittedAt is { } submitted ? ReturnDisplay.Utc(submitted) : null)</td>
+                            @switch (Model.Kind)
+                            {
+                                case WorklistSectionKind.UnderReview:
+                                    <td>@row.ReviewerName @(row.IsMine ? "(you)" : null)</td>
+                                    break;
+                                case WorklistSectionKind.WithBanks:
+                                    <td>@ReturnDisplay.Utc(row.LastActivityAt)</td>
+                                    break;
+                                case WorklistSectionKind.Decided:
+                                    <td>
+                                        <span class="badge @ReturnDisplay.BadgeClass(row.Status)">@ReturnDisplay.Label(row.Status)</span>
+                                        <span class="d-block small">
+                                            @row.DeciderName@(row.DecidedAt is { } decided ? $", {ReturnDisplay.Utc(decided)}" : null)
+                                        </span>
+                                    </td>
+                                    break;
+                            }
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-primary" asp-action="Return" asp-route-submissionId="@row.SubmissionId"
+                                   aria-label="Open @row.ReturnTypeCode @row.PeriodLabel from @row.InstitutionCode">Open</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

@@ -8,13 +8,15 @@ using RegReturns.Domain.Common;
 using RegReturns.Domain.Submissions;
 using RegReturns.Web.Models;
 using RegReturns.Web.Models.Bank;
+using RegReturns.Web.Models.Returns;
 using RegReturns.Web.Navigation;
 
 namespace RegReturns.Web.Controllers;
 
 /// <summary>
-/// The bank area (plan §6.1): the bank's filing obligations, the return entry form with drafts and validation, and
-/// returns as files (template download and upload). Use cases scope every read and write to the caller's bank.
+/// The bank area (plan §6.1): the bank's filing obligations, the return entry form with drafts and validation, returns
+/// as files (template download and upload) and submission by a checker. Use cases scope every read and write to the
+/// caller's bank.
 /// </summary>
 /// <param name="authorization">Checks what the caller may do, to show only the actions they can take.</param>
 [Route(PortalAreas.BankRoute)]
@@ -194,6 +196,48 @@ public sealed class BankController(IAuthorizationService authorization) : Contro
             JustifyText = justification,
             JustifyError = result.Error.Message,
         });
+    }
+
+    /// <summary>Submits the return to the Bank of Valoria (checkers only; the domain refuses the preparer and last editor).</summary>
+    /// <param name="submissionId">The submission id.</param>
+    /// <param name="comment">The checker's comment.</param>
+    /// <param name="handler">The workflow command.</param>
+    /// <param name="formHandler">The form query, to show the page again when the submission is refused.</param>
+    /// <param name="cancellationToken">Cancels the request.</param>
+    /// <returns>A redirect to the return, or the page again with the comment and the reason.</returns>
+    [HttpPost("returns/{submissionId:guid}/submit")]
+    [Authorize(Policy = Policies.BankSubmitReturn)]
+    public async Task<IActionResult> SubmitAsync(
+        Guid submissionId,
+        [FromForm] string? comment,
+        [FromServices] ICommandHandler<TransitionReturn, Result<TransitionOutcome>> handler,
+        [FromServices] IQueryHandler<GetReturnForm, Result<ReturnForm>> formHandler,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        ArgumentNullException.ThrowIfNull(formHandler);
+
+        var result = await handler.HandleAsync(new TransitionReturn(submissionId, WorkflowAction.Submit, comment), cancellationToken);
+        if (result.IsSuccess)
+        {
+            TempData.Success(result.Value.IsLate
+                ? "Return submitted to the Bank of Valoria. It arrived after the due date, so it is marked late."
+                : "Return submitted to the Bank of Valoria.");
+            return RedirectToAction("Return", new { submissionId });
+        }
+
+        if (result.Error!.Is(SubmissionErrors.NotFound))
+        {
+            return NotFound();
+        }
+
+        var form = await formHandler.HandleAsync(new GetReturnForm(submissionId), cancellationToken);
+        if (form.IsFailure)
+        {
+            return FailRedirect(form.Error!);
+        }
+
+        return View("Return", new ReturnFormViewModel(form.Value) { SubmitComment = comment, SubmitError = result.Error.Message });
     }
 
     /// <summary>Downloads an obligation's return as a file to fill in, with any values already entered.</summary>

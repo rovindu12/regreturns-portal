@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
+using RegReturns.Domain.Auditing;
 using RegReturns.Domain.Common;
 using RegReturns.Domain.Identity;
 
@@ -54,7 +55,8 @@ public sealed class StoredFile : Entity
     /// <summary>Gets the lower-case hex SHA-256 of the content.</summary>
     public string Sha256 { get; private set; }
 
-    /// <summary>Gets the content.</summary>
+    /// <summary>Gets the content. Not audited: the size and SHA-256 identify it in the audit trail.</summary>
+    [NotAudited]
     public byte[] Content { get; private set; }
 
     /// <summary>Gets the maker who uploaded the file.</summary>

@@ -28,3 +28,6 @@ Editing, deleting or re-ordering an entry breaks verification from that point on
 (phase 4) reports. The trigger stops casual edits; a DBA can still disable it, but cannot produce valid hashes without
 the key. Appends are serialised, which is acceptable at a regulator's volumes; a high-volume system would batch them.
 Rotating the HMAC key needs a "key changed" entry and keeping the old key for verification (backlog).
+
+Amended in phase 4 by ADR 0024: data changes are appended in the transaction that saves them, under the same lock, and
+the canonical form ends with the entry's change document when it has one.

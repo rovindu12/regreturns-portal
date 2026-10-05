@@ -61,7 +61,11 @@ public static class DependencyInjection
     }
 
     /// <summary>
-    /// Adds the tamper-evident audit trail and the de-duplicating <see cref="AccessDeniedAuditor"/>. Requires <c>Audit:HmacKey</c>; the app refuses to start without it.
+    /// Adds the tamper-evident audit trail, the de-duplicating <see cref="AccessDeniedAuditor"/>, the chain verifier and
+    /// the data-change auditor, which makes the <see cref="RegReturnsDbContext"/> record every save in the chain
+    /// (ADR 0024). Requires <c>Audit:HmacKey</c>, which the app refuses to start without, and an
+    /// <see cref="IAuditContext"/> from the host saying who is acting. The migrator does not call this, so seeding
+    /// writes no audit entries.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configuration">Application configuration.</param>
@@ -72,8 +76,11 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(AuditOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+        services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<AuditHasher>();
         services.TryAddScoped<IAuditTrail, AuditTrail>();
+        services.TryAddScoped<IAuditChainVerifier, AuditChainVerifier>();
+        services.TryAddScoped<IDataChangeAuditor, DataChangeAuditor>();
         services.AddMemoryCache();
         services.TryAddScoped<AccessDeniedAuditor>();
         return services;

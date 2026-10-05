@@ -27,7 +27,12 @@ internal sealed class AuditEntryConfiguration : IEntityTypeConfiguration<AuditEn
         builder.Property(e => e.CorrelationId).HasMaxLength(AuditEntry.CorrelationIdMaxLength).IsUnicode(false);
         builder.Property(e => e.PreviousHash).HasMaxLength(AuditEntry.HashLength).IsFixedLength().IsUnicode(false);
         builder.Property(e => e.Hash).HasMaxLength(AuditEntry.HashLength).IsFixedLength().IsUnicode(false);
+
+        // A change document can be long (a template with its fields and rules) and is never searched: no length limit,
+        // overriding the 400-character convention for strings, so the column is nvarchar(max).
+        builder.Property(e => e.Changes).Metadata.SetMaxLength(null);
         builder.HasIndex(e => e.OccurredAt);
         builder.HasIndex(e => new { e.ActorSubjectId, e.OccurredAt });
+        builder.HasIndex(e => new { e.EntityType, e.EntityId });
     }
 }

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
+using RegReturns.Application.Authorization;
 using RegReturns.IntegrationTests.Hosting;
 using RegReturns.IntegrationTests.Infrastructure;
 
@@ -45,6 +46,21 @@ public sealed class PortalEndpointMetadataTests(SqlServerFixture sql) : IDisposa
         actions.ShouldContain("Admin.Index");
         actions.ShouldContain("Templates.Index");
         actions.ShouldContain("Templates.Publish");
+    }
+
+    [Theory]
+    [InlineData("Bank", "Submit", Policies.BankSubmitReturn)]
+    [InlineData("Supervision", "StartReview", Policies.SupervisionReview)]
+    [InlineData("Supervision", "ReturnForCorrection", Policies.SupervisionAccess)]
+    [InlineData("Supervision", "Approve", Policies.SupervisionApprove)]
+    [InlineData("Supervision", "Reject", Policies.SupervisionApprove)]
+    public void Workflow_steps_require_the_policy_of_their_role(string controller, string action, string policy)
+    {
+        var endpoint = _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .Single(e => e.Metadata.GetMetadata<ControllerActionDescriptor>() is { } descriptor
+                && descriptor.ControllerName == controller && descriptor.ActionName == action);
+
+        endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Select(data => data.Policy).ShouldContain(policy);
     }
 
     public void Dispose() => _factory.Dispose();

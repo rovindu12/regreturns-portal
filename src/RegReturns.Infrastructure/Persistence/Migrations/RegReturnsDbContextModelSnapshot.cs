@@ -47,6 +47,9 @@ namespace RegReturns.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("nvarchar(40)");
 
+                    b.Property<string>("Changes")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<string>("CorrelationId")
                         .HasMaxLength(64)
                         .IsUnicode(false)
@@ -95,6 +98,8 @@ namespace RegReturns.Infrastructure.Persistence.Migrations
                     b.HasIndex("OccurredAt");
 
                     b.HasIndex("ActorSubjectId", "OccurredAt");
+
+                    b.HasIndex("EntityType", "EntityId");
 
                     b.ToTable("AuditEntries", "audit", t =>
                         {

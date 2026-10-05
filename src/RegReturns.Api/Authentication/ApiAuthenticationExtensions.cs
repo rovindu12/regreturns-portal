@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 
+using RegReturns.Application.Auditing;
+
 using RegReturns.Infrastructure;
 using RegReturns.Infrastructure.Identity.Authorization;
 
@@ -11,9 +13,9 @@ namespace RegReturns.Api.Authentication;
 internal static class ApiAuthenticationExtensions
 {
     /// <summary>
-    /// Adds the WSO2 back channel, the audit trail, the RegReturns policies, JWT bearer authentication as the default
-    /// scheme and the institution claims transformation. Requires <c>Wso2:Authority</c> and <c>Audit:HmacKey</c>;
-    /// the API refuses to start without them.
+    /// Adds the WSO2 back channel, the audit trail with the <see cref="ApiAuditContext"/> that names the actor of audited
+    /// data changes, the RegReturns policies, JWT bearer authentication as the default scheme and the institution claims
+    /// transformation. Requires <c>Wso2:Authority</c> and <c>Audit:HmacKey</c>; the API refuses to start without them.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configuration">Application configuration.</param>
@@ -30,6 +32,7 @@ internal static class ApiAuthenticationExtensions
 
         services.AddMemoryCache();
         services.AddHttpContextAccessor();
+        services.AddScoped<IAuditContext, ApiAuditContext>();
         services.AddScoped<IClaimsTransformation, InstitutionClaimsTransformation>();
         return services;
     }

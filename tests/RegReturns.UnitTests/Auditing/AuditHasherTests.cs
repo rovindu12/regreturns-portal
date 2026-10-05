@@ -24,6 +24,7 @@ public sealed class AuditHasherTests
         nameof(AuditEntry.IpAddress),
         nameof(AuditEntry.CorrelationId),
         nameof(AuditEntry.PreviousHash),
+        nameof(AuditEntry.Changes),
     ];
 
     [Fact]
@@ -86,6 +87,22 @@ public sealed class AuditHasherTests
         Should.Throw<ArgumentNullException>(() => _hasher.Verify(null!));
     }
 
+    [Fact]
+    public void Entry_with_changes_verifies()
+    {
+        _hasher.Verify(AuditTestData.WithChanges.Seal(_hasher.Compute)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Removing_the_change_document_breaks_verification()
+    {
+        var genuine = AuditTestData.WithChanges.Seal(_hasher.Compute);
+
+        var stripped = (AuditTestData.WithChanges with { Changes = null }).Seal(_ => genuine.Hash);
+
+        _hasher.Verify(stripped).ShouldBeFalse();
+    }
+
     [Theory]
     [MemberData(nameof(Fields))]
     public void Changing_any_field_breaks_verification(string field)
@@ -116,6 +133,7 @@ public sealed class AuditHasherTests
             nameof(AuditEntry.IpAddress) => original with { IpAddress = "10.1.2.4" },
             nameof(AuditEntry.CorrelationId) => original with { CorrelationId = "00000000000000000000000000000001" },
             nameof(AuditEntry.PreviousHash) => original with { PreviousHash = new string('c', AuditEntry.HashLength) },
+            nameof(AuditEntry.Changes) => original with { Changes = "[]" },
             _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown field."),
         };
     }

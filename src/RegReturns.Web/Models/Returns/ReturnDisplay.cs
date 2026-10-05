@@ -5,13 +5,16 @@ using RegReturns.Domain.Obligations;
 using RegReturns.Domain.Submissions;
 using RegReturns.Domain.Templates;
 
-namespace RegReturns.Web.Models.Bank;
+namespace RegReturns.Web.Models.Returns;
 
-/// <summary>Display text and Bootstrap classes for returns, so every bank page words states the same way.</summary>
+/// <summary>Display text and Bootstrap classes for returns, so bank and supervision pages word states the same way.</summary>
 public static class ReturnDisplay
 {
-    /// <summary>The date format used on bank pages.</summary>
+    /// <summary>The date format used on return pages.</summary>
     public const string DateFormat = "d MMM yyyy";
+
+    /// <summary>The date and time format used on return pages (times are shown in UTC).</summary>
+    public const string DateTimeFormat = "d MMM yyyy HH:mm";
 
     /// <summary>Gets the label of a workflow status.</summary>
     /// <param name="status">The status.</param>
@@ -49,6 +52,26 @@ public static class ReturnDisplay
         SubmissionSource.Migration => "Legacy migration",
         _ => source.ToString(),
     };
+
+    /// <summary>Gets the past-tense label of a workflow step, as the history shows it.</summary>
+    /// <param name="action">The step.</param>
+    /// <returns>The label.</returns>
+    public static string Label(WorkflowAction action) => action switch
+    {
+        WorkflowAction.Create => "Draft started",
+        WorkflowAction.Submit => "Submitted",
+        WorkflowAction.StartReview => "Review started",
+        WorkflowAction.ReturnForCorrection => "Returned for correction",
+        WorkflowAction.Approve => "Approved",
+        WorkflowAction.Reject => "Rejected",
+        _ => action.ToString(),
+    };
+
+    /// <summary>Formats a time in UTC, as every return page shows times.</summary>
+    /// <param name="at">The time.</param>
+    /// <returns>For example <c>5 Oct 2026 14:05 UTC</c>.</returns>
+    public static string Utc(DateTimeOffset at) =>
+        at.UtcDateTime.ToString(DateTimeFormat, CultureInfo.InvariantCulture) + " UTC";
 
     /// <summary>Gets the badge class of a workflow status.</summary>
     /// <param name="status">The status.</param>

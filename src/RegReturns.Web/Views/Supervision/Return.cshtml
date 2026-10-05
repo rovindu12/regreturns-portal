@@ -1,0 +1,169 @@
+@model SupervisionReturnViewModel
+@{
+    var form = Model.Form;
+    var workflow = form.Workflow;
+    var outcome = form.Outcome;
+    ViewData["Title"] = $"{workflow.InstitutionCode} {form.ReturnTypeCode} {form.PeriodLabel}";
+    var culture = System.Globalization.CultureInfo.InvariantCulture;
+    var decisionFailed = Model.Error is not null && Model.FailedAction != WorkflowAction.StartReview;
+}
+
+<nav aria-label="Breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">Supervision</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@workflow.InstitutionCode @form.ReturnTypeCode @form.PeriodLabel</li>
+    </ol>
+</nav>
+
+<section class="mb-4">
+    <h1 class="h2">@form.ReturnTypeName <span class="text-body-secondary">(@form.ReturnTypeCode)</span></h1>
+    <p class="mb-0">
+        <strong>@workflow.InstitutionName</strong> (@workflow.InstitutionCode), period <strong>@form.PeriodLabel</strong>,
+        due @form.DueDate.ToString(ReturnDisplay.DateFormat, culture).
+        <span class="badge @ReturnDisplay.BadgeClass(form.Status) ms-1">@ReturnDisplay.Label(form.Status)</span>
+        @if (workflow.IsLate)
+        {
+            <span class="badge text-bg-danger ms-1">Late</span>
+        }
+    </p>
+    <p class="small text-body-secondary mb-0">
+        Revision @form.Revision &middot; template version @form.TemplateVersion &middot; @ReturnDisplay.Label(form.Source).ToLowerInvariant()
+        @if (workflow.FirstSubmittedAt is { } first)
+        {
+            <text>&middot; first submitted @ReturnDisplay.Utc(first)</text>
+        }
+        @if (workflow.LastSubmittedAt is { } last && last != workflow.FirstSubmittedAt)
+        {
+            <text>&middot; resubmitted @ReturnDisplay.Utc(last)</text>
+        }
+    </p>
+</section>
+
+<partial name="_Flash" />
+
+<section aria-labelledby="next-step-heading" class="card border-primary mb-4">
+    <div class="card-body">
+        <h2 id="next-step-heading" class="h5">Next step</h2>
+        @if (workflow.Allows(WorkflowAction.StartReview))
+        {
+            <p>Pick the return up to review it. You become its reviewer, so another approver must make the decision.</p>
+            @if (Model.FailedAction == WorkflowAction.StartReview)
+            {
+                <div class="alert alert-danger" role="alert">@Model.Error</div>
+            }
+            <form method="post" asp-action="StartReview" asp-route-submissionId="@form.SubmissionId">
+                <button type="submit" class="btn btn-primary">Start review</button>
+            </form>
+        }
+        else if (Model.ShowsDecisionForm)
+        {
+            <p class="mb-2">
+                @(workflow.ReviewerName is { } reviewer ? $"Under review by {reviewer}." : "Under review.")
+                @(Model.ShowsDecision
+                    ? "Approve or reject it, or send it back to the bank for correction."
+                    : "Send it back to the bank if something must be corrected; an approver who did not review it makes the decision.")
+            </p>
+            @if (Model.NeedsStepUp)
+            {
+                <div class="alert alert-info" role="status">
+                    Approving or rejecting needs a sign-in with your authenticator app. Sign out and sign in again to decide this return.
+                </div>
+            }
+            <form method="post" asp-action="ReturnForCorrection" asp-route-submissionId="@form.SubmissionId">
+                <label for="decision-comment" class="form-label">Comment</label>
+                <textarea id="decision-comment" name="comment" rows="3" maxlength="@WorkflowEvent.CommentMaxLength" required
+                          class="@(decisionFailed ? "form-control is-invalid" : "form-control")"
+                          aria-describedby="decision-comment-hint@(decisionFailed ? " decision-error" : null)">@(decisionFailed ? Model.Comment : null)</textarea>
+                <div id="decision-comment-hint" class="form-text">Required. The bank sees it in the return's history.</div>
+                @if (decisionFailed)
+                {
+                    <div id="decision-error" class="invalid-feedback">@Model.Error</div>
+                }
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                    @if (Model.ShowsDecision && workflow.Allows(WorkflowAction.Approve))
+                    {
+                        <button type="submit" class="btn btn-success" asp-action="Approve" asp-route-submissionId="@form.SubmissionId">Approve</button>
+                    }
+                    @if (Model.ShowsDecision && workflow.Allows(WorkflowAction.Reject))
+                    {
+                        <button type="submit" class="btn btn-outline-danger" asp-action="Reject" asp-route-submissionId="@form.SubmissionId">Reject</button>
+                    }
+                    @if (workflow.Allows(WorkflowAction.ReturnForCorrection))
+                    {
+                        <button type="submit" class="btn btn-outline-secondary">Return for correction</button>
+                    }
+                </div>
+            </form>
+        }
+        else
+        {
+            <p class="mb-0">
+                @(form.Status switch
+                {
+                    SubmissionStatus.Submitted => "Waiting for a reviewer to pick it up.",
+                    SubmissionStatus.UnderReview => workflow.ReviewerName is { } name
+                        ? $"Under review by {name}. You reviewed it, or your role cannot decide it, so there is nothing for you to do."
+                        : "Under review.",
+                    SubmissionStatus.ReturnedForCorrection => "With the bank for correction. It comes back here when a checker submits it again.",
+                    SubmissionStatus.Approved => "Approved. Nothing more to do.",
+                    SubmissionStatus.Rejected => "Rejected. The bank can file the return again.",
+                    _ => "Nothing to do.",
+                })
+            </p>
+        }
+    </div>
+</section>
+
+<section aria-labelledby="validation-heading" class="mb-4">
+    <h2 id="validation-heading" class="h4">Validation</h2>
+    <p class="mb-2">
+        @(form.IsValidated ? ReturnDisplay.Describe(outcome) : "The values changed after the last validation run.")
+    </p>
+    <ul class="list-inline mb-0 small">
+        <li class="list-inline-item"><span class="badge text-bg-danger">@outcome.Errors</span> @(outcome.Errors == 1 ? "error" : "errors")</li>
+        <li class="list-inline-item"><span class="badge text-bg-warning">@outcome.Warnings</span> @(outcome.Warnings == 1 ? "warning" : "warnings")</li>
+        <li class="list-inline-item"><span class="badge text-bg-secondary">@outcome.UnjustifiedWarnings</span> not justified</li>
+    </ul>
+</section>
+
+<section aria-labelledby="values-heading" class="mb-4">
+    <h2 id="values-heading" class="h4">Values</h2>
+    <partial name="_ReturnValues" model="form" />
+</section>
+
+<section id="findings" aria-labelledby="findings-heading" class="mb-4">
+    <h2 id="findings-heading" class="h4">Findings and justifications</h2>
+    @if (form.Findings.Count == 0)
+    {
+        <p>Validation found no problems.</p>
+    }
+    else
+    {
+        <ol class="list-group list-group-numbered">
+            @foreach (var finding in form.Findings)
+            {
+                var isError = finding.Severity == Severity.Error;
+                <li id="finding-@finding.Id" class="list-group-item">
+                    <div class="d-flex flex-wrap gap-2 align-items-baseline">
+                        <span class="badge @(isError ? "text-bg-danger" : "text-bg-warning")">@(isError ? "Error" : "Warning")</span>
+                        <a href="#field-@finding.FieldCode" class="fw-semibold">@finding.FieldLabel</a>
+                        <span class="small text-body-secondary font-monospace">@finding.RuleCode</span>
+                    </div>
+                    <p class="mb-2 mt-1">@finding.Message</p>
+                    @if (finding.Justification is not null)
+                    {
+                        <partial name="_Justification" model="finding" />
+                    }
+                    else if (!isError)
+                    {
+                        <p class="small mb-0 text-warning-emphasis">Not justified.</p>
+                    }
+                </li>
+            }
+        </ol>
+    }
+</section>
+
+<partial name="_ReturnUploads" model="form.Uploads" />
+
+<partial name="_ReturnHistory" model="workflow" />

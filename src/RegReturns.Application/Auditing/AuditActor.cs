@@ -15,8 +15,14 @@ public sealed record AuditActor(ActorType Type, string SubjectId, string? Displa
     /// <summary>Subject id recorded for callers that are not signed in.</summary>
     public const string AnonymousSubject = "anonymous";
 
+    /// <summary>Subject id recorded for work the application does on its own, with no caller behind it.</summary>
+    public const string SystemSubject = "system";
+
     /// <summary>Gets the actor for callers that are not signed in.</summary>
     public static AuditActor Anonymous { get; } = new(ActorType.Anonymous, AnonymousSubject, null, null);
+
+    /// <summary>Gets the actor for work the application does on its own (no HTTP request, such as a background job).</summary>
+    public static AuditActor System { get; } = new(ActorType.System, SystemSubject, "RegReturns", null);
 
     /// <summary>
     /// Derives the actor from a WSO2 principal: client-credentials tokens (<c>aut=APPLICATION</c>) are API clients,

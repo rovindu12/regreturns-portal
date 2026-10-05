@@ -1,6 +1,7 @@
 using RegReturns.Application.Returns;
+using RegReturns.Domain.Submissions;
 using RegReturns.Domain.Templates;
-using RegReturns.Web.Models.Bank;
+using RegReturns.Web.Models.Returns;
 
 namespace RegReturns.UnitTests.Web;
 
@@ -63,5 +64,18 @@ public sealed class ReturnDisplayTests
     public void File_sizes_use_the_largest_sensible_unit(int bytes, string expected)
     {
         ReturnDisplay.FileSize(bytes).ShouldBe(expected);
+    }
+
+    [Fact]
+    public void Workflow_steps_read_in_the_past_tense()
+    {
+        ReturnDisplay.Label(WorkflowAction.StartReview).ShouldBe("Review started");
+        ReturnDisplay.Label(WorkflowAction.ReturnForCorrection).ShouldBe("Returned for correction");
+    }
+
+    [Fact]
+    public void Times_are_shown_in_utc()
+    {
+        ReturnDisplay.Utc(new DateTimeOffset(2026, 10, 5, 16, 5, 0, TimeSpan.FromHours(2))).ShouldBe("5 Oct 2026 14:05 UTC");
     }
 }

@@ -1,3 +1,4 @@
+using RegReturns.Domain.Auditing;
 using RegReturns.Domain.Common;
 
 namespace RegReturns.Domain.Identity;
@@ -32,7 +33,8 @@ public sealed class AppUser : Entity
     /// <summary>Gets the display name.</summary>
     public string DisplayName { get; private set; }
 
-    /// <summary>Gets the e-mail address.</summary>
+    /// <summary>Gets the e-mail address. Not audited: it is personal contact data and WSO2 holds its history.</summary>
+    [NotAudited]
     public string Email { get; private set; }
 
     /// <summary>Gets the bank the user works for, or <see langword="null"/> for regulator staff.</summary>

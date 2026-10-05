@@ -51,13 +51,14 @@ internal sealed partial class BankPortal(WebApplicationFactory<Program> factory,
     public HttpClient UnlinkedMaker() => Client("unlinked-maker", DemoBank.Harbourline, RoleNames.BankMaker);
 
     /// <summary>Adds an open Monthly Liquidity Return obligation for Harbourline for a future month.</summary>
-    /// <param name="month">The month of 2027, unique per test.</param>
-    public async Task<Guid> NewMlrObligationAsync(int month)
+    /// <param name="month">The month, unique per test of the class.</param>
+    /// <param name="year">The year.</param>
+    public async Task<Guid> NewMlrObligationAsync(int month, int year = 2027)
     {
         await using var context = SqlServerFixture.CreateContext(connectionString);
         var bank = await context.Institutions.SingleAsync(i => i.Code == DemoBank.Harbourline);
         var returnType = await context.ReturnTypes.SingleAsync(r => r.Code == MlrTemplate.Code);
-        var obligation = ReturnObligation.Create(bank.Id, returnType, ReportingPeriod.Monthly(2027, month));
+        var obligation = ReturnObligation.Create(bank.Id, returnType, ReportingPeriod.Monthly(year, month));
         await context.Obligations.AddAsync(obligation);
         await context.SaveChangesAsync();
         return obligation.Id;

@@ -4,7 +4,7 @@ using RegReturns.Domain.Submissions;
 
 namespace RegReturns.Application.Returns;
 
-/// <summary>Log events for bank returns (51xx) and uploads (52xx). Never log figures, values or file names.</summary>
+/// <summary>Log events for bank returns (51xx), uploads (52xx) and the workflow (53xx). Never log figures, values, comments or file names.</summary>
 internal static partial class ReturnsLog
 {
     [LoggerMessage(EventId = 5101, Level = LogLevel.Information,
@@ -34,4 +34,13 @@ internal static partial class ReturnsLog
     [LoggerMessage(EventId = 5202, Level = LogLevel.Warning,
         Message = "Upload refused for obligation {ObligationId}: {ErrorCode}, {SizeBytes} bytes")]
     public static partial void UploadRefused(ILogger logger, Guid obligationId, string errorCode, int sizeBytes);
+
+    [LoggerMessage(EventId = 5301, Level = LogLevel.Information,
+        Message = "Return {SubmissionId} {Action}: {FromStatus} -> {ToStatus}, revision {Revision}, late {IsLate}")]
+    public static partial void Transitioned(
+        ILogger logger, Guid submissionId, WorkflowAction action, SubmissionStatus fromStatus, SubmissionStatus toStatus, int revision, bool isLate);
+
+    [LoggerMessage(EventId = 5302, Level = LogLevel.Warning,
+        Message = "Return {SubmissionId} {Action} refused: {ErrorCode}")]
+    public static partial void TransitionRefused(ILogger logger, Guid submissionId, WorkflowAction action, string errorCode);
 }

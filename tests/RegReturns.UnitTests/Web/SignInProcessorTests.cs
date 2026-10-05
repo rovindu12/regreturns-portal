@@ -1,5 +1,6 @@
 using System.Security.Claims;
 
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
@@ -29,13 +30,15 @@ public sealed class SignInProcessorTests : IDisposable
 
     private readonly IAuditTrail _auditTrail = Substitute.For<IAuditTrail>();
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
+    private readonly PortalAuditContext _auditContext = new(new HttpContextAccessor());
     private readonly SignInProcessor _processor;
 
     public SignInProcessorTests()
     {
         var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 4, 12, 0, 0, TimeSpan.Zero));
         var failureAuditor = new AccessDeniedAuditor(_auditTrail, _cache, clock, NullLogger<AccessDeniedAuditor>.Instance);
-        _processor = new SignInProcessor(_linkHandler, _auditTrail, failureAuditor, NullLogger<SignInProcessor>.Instance);
+        _processor = new SignInProcessor(
+            _linkHandler, _auditTrail, failureAuditor, _auditContext, NullLogger<SignInProcessor>.Instance);
     }
 
     [Fact]
@@ -50,6 +53,24 @@ public sealed class SignInProcessorTests : IDisposable
                 c.SubjectId == Subject && c.UserName == "maker" && c.DisplayName == "Maker (Harbourline Bank PLC)" &&
                 c.Email == "maker@harbourline.example" && c.InstitutionCode == "HBL" && c.Roles.SequenceEqual(new[] { Role.BankMaker })),
             Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Changes_saved_while_linking_are_attributed_to_the_user_signing_in()
+    {
+        AuditActor? actorWhileLinking = null;
+        _linkHandler.HandleAsync(Arg.Any<LinkSignedInUser>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                actorWhileLinking = _auditContext.Current.Actor;
+                return Result.Success(new SignedInUserLink(Guid.CreateVersion7(), "Maker (Harbourline Bank PLC)"));
+            });
+
+        await _processor.ProcessAsync(TokenPrincipal(), Origin, TestContext.Current.CancellationToken);
+
+        actorWhileLinking.ShouldNotBeNull().SubjectId.ShouldBe(Subject);
+        actorWhileLinking.InstitutionCode.ShouldBe("HBL");
+        _auditContext.Current.Actor.ShouldBe(AuditActor.System);
     }
 
     [Fact]
