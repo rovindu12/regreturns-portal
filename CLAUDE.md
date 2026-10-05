@@ -27,8 +27,9 @@ as the domain and server right before the phase 11 deploy.
 | 2. WSO2 in Docker, IamBootstrap, OIDC login, role policies | done |
 | 3. Templates, submission, validation engine | done |
 | 4. Workflow, queues, audit interceptor, auditor verify screen | done |
-| 5. Web API: v1 endpoints, idempotency, paging, rate limits, Swagger | next |
-| 6-12 | not started |
+| 5. Web API: v1 endpoints, idempotency, paging, rate limits, Swagger | done |
+| 6. Dashboards and reports | next |
+| 7-12 | not started |
 
 ## Commands
 
@@ -46,7 +47,7 @@ dotnet run --project tools/RegReturns.IamBootstrap -- apply           # WSO2 cla
 scripts/dev-secrets.sh                                                # again, to pick up the portal client secret
 dotnet run --project tools/RegReturns.IamBootstrap -- demo-users      # reset demo users only (passwords, roles, TOTP)
 dotnet run --project src/RegReturns.Web                               # https://localhost:7101
-dotnet run --project src/RegReturns.Api                               # https://localhost:7201
+dotnet run --project src/RegReturns.Api                               # https://localhost:7201 (/swagger, /openapi/v1.json)
 scripts/smoke-wso2.sh --browser                                       # identity smoke test (needs Web + Api running;
                                                                       # --browser needs Node with Playwright)
 
@@ -70,7 +71,7 @@ src/RegReturns.Application     Use-case handlers, IAppDbContext, telemetry names
 src/RegReturns.Infrastructure  EF Core context, configurations, migrations, seeding, DI.
 src/RegReturns.ServiceDefaults Serilog, OpenTelemetry, health endpoints, ProblemDetails, exception handler.
 src/RegReturns.Web             MVC portal (Razor + Bootstrap 5).
-src/RegReturns.Api             REST API (versioned from phase 5).
+src/RegReturns.Api             REST API v1 for bank systems: reference data, reads, draft delivery (ADR 0026, 0027).
 tools/RegReturns.Migrator      `migrate-db [--seed]`, `seed`; legacy migration from phase 7.
 tools/RegReturns.IamBootstrap  `apply`, `demo-users`: idempotent WSO2 setup over its REST APIs (ADR 0017, 0020).
 scripts/smoke-wso2.sh          End-to-end identity smoke test against a running WSO2 + API (`--browser`: + portal).
@@ -113,6 +114,21 @@ Audit trail (see `src/RegReturns.Infrastructure/Auditing`, ADR 0016 and 0024):
 - Never add `AuditEntry` rows directly. Mark a property that must not be recorded `[NotAudited]` (with a unit test).
   A new canonical field may only be appended, and only when not null, so old entries keep their hashes.
 
+API (see `src/RegReturns.Api`, ADR 0026 and 0027):
+- The API is a maker channel: `POST /v1/submissions` delivers a whole return (fields left out become blank) into a
+  new or open draft (`Source=Api`) and validates it; findings are part of the answer, not a refusal. A bank checker
+  justifies warnings and submits in the portal. Each `ApiClient` acts through its client user (`AppUser.ForApiClient`:
+  bank maker, no e-mail, no WSO2 link, cannot sign in); in the API `ICurrentActor` is `ClientActor`.
+- URL-segment versions (`v{version:apiVersion}`), `[ApiVersion(1)]` on every controller. Every action names a policy;
+  every `POST` is `[Idempotent]` (unit tests check both). Success types declare `application/json` in
+  `ProducesResponseType`; never put `[Produces]` on a controller (see Gotchas).
+- Refusals go through `this.Problem(error)` (status from `ApiProblems.StatusFor`: 400 malformed, 403 caller, 404
+  `*.NotFound`, 409 state, 422 rule) and `this.InvalidRequest()` for model errors (`Request.Invalid`); both are
+  `application/problem+json` with `code` and `traceId`. Lists page with `page`/`pageSize` (≤100) and a `Link` header.
+- Idempotency (`Api:Idempotency`): keys per client, fingerprint of method, path and body; replays carry
+  `Idempotent-Replayed: true`; 403, 409, 429 and 5xx answers release the key instead of being stored.
+  Rate limit (`Api:RateLimit`): fixed window per client id (per IP without a token), controllers only.
+
 ## Conventions
 
 - .NET 10, C# latest, nullable on, `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, SonarAnalyzer and
@@ -126,8 +142,9 @@ Audit trail (see `src/RegReturns.Infrastructure/Auditing`, ADR 0016 and 0024):
 - Entities: private setters, factory methods, `Guid.CreateVersion7()` ids assigned in `Entity`.
 - No magic strings: field codes, rule codes and schema names are constants (`MlrTemplate.TotalHqla`, `Schemas.Returns`).
 - Logging: `[LoggerMessage]` source-generated methods with event ids grouped per area (1xxx persistence, 2xxx migrator,
-  30xx audit and identity, 31xx portal sign-in, 32xx API authentication, 4xxx IamBootstrap, 50xx templates, 51xx returns,
-  52xx uploads and files, 53xx workflow steps, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
+  30xx audit and identity, 31xx portal sign-in, 32xx API authentication, 33xx API idempotency and rate limits,
+  4xxx IamBootstrap, 50xx templates, 51xx returns and API deliveries, 52xx uploads and files, 53xx workflow steps,
+  9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
 - Time: inject `TimeProvider`; store UTC `DateTimeOffset`; dates as `DateOnly`; parse numbers with `CultureInfo.InvariantCulture`.
 - Config: options classes with `ValidateDataAnnotations().ValidateOnStart()`. Secrets only in user-secrets or environment variables.
   Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web and Api share it), `Oidc:ClientSecret` (Web).
@@ -149,6 +166,8 @@ Audit trail (see `src/RegReturns.Infrastructure/Auditing`, ADR 0016 and 0024):
 - Tests: `Method_or_behaviour_in_plain_words` names, Shouldly assertions, one behaviour per test. Host tests join the
   `HostedAppsDefinition` collection, sign in with `UseTestAuth()` (`X-Test-Claims` header) and use an `https://localhost`
   base address when they render signed-in pages (the session and antiforgery cookies are `Secure`). Integration tests that write data use `SqlServerFixture.NewDatabaseConnectionString()`.
+  API tests register a fresh client per test (`ApiDatabase.RegisterClientAsync`, with its client user) and call as it
+  with `ApiCallers.ClientAs`; `ReadProblemCodeAsync` also checks the problem content type.
 - Commits: Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `build:`, `ci:`, `refactor:`). Record decisions as ADRs.
 
 ## Observability
@@ -194,6 +213,11 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
   database with WSO2 tables but no marker stops the job (see the troubleshooting guide).
 - EF Core cannot index complex-type columns; the unique obligation index is raw SQL in the `InitialCreate` migration.
 - The Api's `Program` is referenced from integration tests through the `ApiHost` extern alias (both hosts define `Program`).
+- `[Produces]` is a result filter that overwrites the content type of every object result, so problem details would go
+  out as `application/json`. `ControllerBase.ValidationProblem()` does not run `InvalidModelStateResponseFactory`, so
+  it lacks the `code`: use `this.InvalidRequest()`. The requested version is `HttpContext.RequestedApiVersion`.
+- API pipeline order matters: Swagger UI before authentication (the fallback policy would demand a token for its
+  static files), the rate limiter after authentication (to partition by client id) and before authorization.
 - Docker must be running for integration tests; in a fresh cloud container start it with `sudo dockerd &`.
 - The SQL Server image is pinned twice: the `sqlserver` service in `docker-compose.yml` and `SqlServerFixture.Image`.
   Dependabot only bumps the compose file, so update the fixture in the same PR (ADR 0013).

@@ -74,6 +74,21 @@ and the project uses [Semantic Versioning](https://semver.org/).
   changes, and chain verification that names the first missing, re-ordered or edited entry and records the check.
 - Log events 3003 (chain intact, with the head) and 3004 (chain broken), `audit.append-data-changes` and
   `audit.verify-chain` spans; troubleshooting sections for workflow steps and the audit trail.
+- Phase 5: REST API v1 for bank systems with URL-segment versions, an OpenAPI 3.1 document at `/openapi/v1.json`
+  and Swagger UI at `/swagger` that signs in with client credentials as the read-only demo client (ADR 0027).
+- `GET /v1/return-types` and `GET /v1/return-types/{code}/template?period=` (field codes and rules of the template
+  in force for a period); `GET /v1/submissions` (paged with `Link` headers, filters by status, return type and
+  period), `GET /v1/submissions/{id}` (values and workflow history) and `GET /v1/submissions/{id}/validation`.
+- `POST /v1/submissions` delivers a whole return into a new or open draft and validates it; a bank checker submits it
+  in the portal. Each API client acts through its own client user, so the audit trail and segregation of duties treat
+  it as a bank maker (ADR 0026).
+- Idempotency keys on every `POST`: stored replies for 24 hours, `Idempotent-Replayed` on replays, 422 for a key
+  reused with another body, 409 with `Retry-After` while the first request runs, and takeover of abandoned claims.
+- Per-client fixed-window rate limit (120 requests a minute by default) with a 429 problem and `Retry-After`.
+- Problem details with a stable `code` and `traceId` on every API error; another bank's ids answer the same 404 as
+  unknown ids.
+- Log events 3301-3307 (idempotency and rate limits) and 5106-5107 (deliveries), the `regreturns.api.*` metrics, and
+  a troubleshooting section for the API.
 
 ### Changed
 
