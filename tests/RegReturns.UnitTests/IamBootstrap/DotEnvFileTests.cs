@@ -231,6 +231,39 @@ public sealed class DotEnvFileTests : IDisposable
     }
 
     [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public void Write_does_not_reuse_a_world_readable_temporary_file_left_by_an_interrupted_run()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix file modes only.");
+        var leftover = EnvPath + ".tmp";
+        File.WriteAllText(leftover, "STALE=1\n");
+        File.SetUnixFileMode(leftover, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+
+        DotEnvFile.Write(EnvPath, new Dictionary<string, string> { ["SECRET"] = "x" }, "header");
+
+        File.GetUnixFileMode(EnvPath).ShouldBe(UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        File.ReadAllText(EnvPath).ShouldNotContain("STALE");
+        File.Exists(leftover).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Read_drops_an_inline_comment_after_an_unquoted_value()
+    {
+        var values = ReadLines("WSO2_HOSTNAME=localhost # the compose host");
+
+        values["WSO2_HOSTNAME"].ShouldBe("localhost");
+    }
+
+    [Fact]
+    public void Read_keeps_a_hash_inside_a_quoted_value_or_without_a_space_before_it()
+    {
+        var values = ReadLines("QUOTED=\"pa ss #1\"", "BARE=pa#ss");
+
+        values["QUOTED"].ShouldBe("pa ss #1");
+        values["BARE"].ShouldBe("pa#ss");
+    }
+
+    [Fact]
     public void Write_leaves_no_temporary_file_behind()
     {
         DotEnvFile.Write(EnvPath, new Dictionary<string, string> { ["KEY"] = "value" }, "header");

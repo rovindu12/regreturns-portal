@@ -63,8 +63,17 @@ public sealed class AdaptiveScriptTests
         var script = PortalAppStep.AdaptiveScript(enforceMfa: false, ["approver.mfa"]);
 
         // The user check is not guarded by the enforce flag; only the role check is.
-        script.ShouldContain("alwaysUsers.indexOf(user.username) >= 0 ||");
+        script.ShouldContain("alwaysUsers.indexOf(String(user.username).toLowerCase()) >= 0 ||");
         script.ShouldContain("(enforce && hasAnyOfTheRolesV2(context, enforceForRoles))");
+    }
+
+    [Fact]
+    public void Always_mfa_users_are_matched_in_lower_case_so_another_spelling_cannot_skip_totp()
+    {
+        var script = PortalAppStep.AdaptiveScript(enforceMfa: false, ["Approver.MFA"]);
+
+        script.ShouldContain("var alwaysUsers = [\"approver.mfa\"];");
+        script.ShouldContain("String(user.username).toLowerCase()");
     }
 
     [Fact]

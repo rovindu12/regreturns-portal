@@ -8,7 +8,7 @@ namespace RegReturns.IamBootstrap.Steps;
 
 /// <summary>
 /// Closes WSO2's self-service paths so demo users cannot change their password, profile or MFA (plan §4.5): turns off
-/// self-registration and account recovery, and disables the My Account app. The portal itself never requests the
+/// self-registration, account recovery and TOTP enrolment during sign-in, and disables the My Account app. The portal itself never requests the
 /// <c>internal_login</c> scope, so its tokens cannot call WSO2's self-service APIs either.
 /// </summary>
 /// <param name="wso2">The management API client.</param>
@@ -26,6 +26,10 @@ internal sealed class SelfServiceStep(Wso2AdminClient wso2, Wso2Applications app
         ("User Onboarding", "lite-user-sign-up", ["LiteRegistration.Enable"]),
         ("Account Management", "account-recovery",
             ["Recovery.Notification.Password.Enable", "Recovery.Question.Password.Enable", "Recovery.Notification.Username.Enable"]),
+
+        // Otherwise anyone who knows a shared demo password could enrol their own authenticator at the TOTP step and
+        // lock every other visitor out; the demo-totp step enrols the users who reach that step instead.
+        ("Multi Factor Authenticators", "totp", ["TOTP.EnrolUserInAuthenticationFlow"]),
     ];
 
     /// <inheritdoc />

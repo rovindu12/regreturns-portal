@@ -17,8 +17,9 @@ public sealed class MfaRequirementHandler(IOptionsMonitor<IamOptions> options) :
     {
         ArgumentNullException.ThrowIfNull(context);
         var settings = options.CurrentValue;
+        var accepted = settings.AcceptedMfaAuthenticationMethods();
         var usedMfa = context.User.FindAll(ClaimNames.AuthenticationMethods)
-            .Any(claim => settings.MfaAuthenticationMethods.Contains(claim.Value, StringComparer.OrdinalIgnoreCase));
+            .Any(claim => accepted.Contains(claim.Value, StringComparer.OrdinalIgnoreCase));
 
         if (!settings.EnforceMfa || usedMfa)
         {

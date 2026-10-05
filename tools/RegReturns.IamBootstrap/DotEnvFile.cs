@@ -11,7 +11,10 @@ internal static class DotEnvFile
         ["DEMO_USER_PASSWORD"] = $"{BootstrapOptions.SectionName}:{nameof(BootstrapOptions.DemoUserPassword)}",
     };
 
-    /// <summary>Parses an env file. Blank lines and <c>#</c> comments are skipped; surrounding quotes are removed.</summary>
+    /// <summary>
+    /// Parses an env file. Blank lines, <c>#</c> comment lines and inline comments after unquoted values are skipped;
+    /// surrounding quotes are removed.
+    /// </summary>
     /// <param name="path">The file path.</param>
     /// <returns>The values, or an empty map if the file does not exist.</returns>
     public static Dictionary<string, string> Read(string path)
@@ -35,6 +38,11 @@ internal static class DotEnvFile
             if (value.Length >= 2 && (value[0] == '"' || value[0] == '\'') && value[^1] == value[0])
             {
                 value = value[1..^1];
+            }
+            else if (value.IndexOf(" #", StringComparison.Ordinal) is var comment and >= 0)
+            {
+                // Like docker compose: in an unquoted value, a space followed by # starts a comment.
+                value = value[..comment].TrimEnd();
             }
 
             values[line[..equals].Trim()] = value;
@@ -95,11 +103,22 @@ internal static class DotEnvFile
         var lines = new List<string> { $"# {header}" };
         lines.AddRange(merged.Select(p => $"{p.Key}={p.Value}"));
 
+        // The temporary file is created owner-only, so the secrets are never readable by others, not even briefly.
+        // A leftover from an interrupted run is removed first: CreateNew applies the mode only to a new file.
         var temp = path + ".tmp";
-        File.WriteAllLines(temp, lines);
+        File.Delete(temp);
+        var create = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
         if (!OperatingSystem.IsWindows())
         {
-            File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            create.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+
+        using (var writer = new StreamWriter(temp, create))
+        {
+            foreach (var line in lines)
+            {
+                writer.WriteLine(line);
+            }
         }
 
         File.Move(temp, path, overwrite: true);

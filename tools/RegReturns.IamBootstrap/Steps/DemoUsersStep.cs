@@ -49,6 +49,7 @@ internal sealed class DemoUsersStep(Wso2Scim scim, Wso2Applications applications
             var user = entry.User;
             var userId = await EnsureUserAsync(user.UserName, user.DisplayName, user.Email, entry.InstitutionCode, state, cancellationToken);
             state.UserIds[user.UserName] = userId;
+            state.DemoUserRoles[user.UserName] = [.. user.Roles.Select(RoleNames.For)];
             demoUserIds.Add(userId);
             foreach (var role in user.Roles)
             {

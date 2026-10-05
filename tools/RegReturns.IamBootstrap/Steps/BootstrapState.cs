@@ -18,6 +18,9 @@ internal sealed class BootstrapState
     /// <summary>Gets the WSO2 user ids by user name.</summary>
     public Dictionary<string, string> UserIds { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>Gets the WSO2 role names of each demo user, by user name (filled by the demo-users step).</summary>
+    public Dictionary<string, IReadOnlyList<string>> DemoUserRoles { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Gets the values written to the generated env file (secrets: never logged).</summary>
     public SortedDictionary<string, string> GeneratedSettings { get; } = new(StringComparer.Ordinal);
 

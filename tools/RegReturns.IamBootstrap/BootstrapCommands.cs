@@ -50,11 +50,9 @@ internal static partial class BootstrapCommands
         // Content root is the tool's own folder so its appsettings.json loads whatever the working directory is.
         var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { ContentRootPath = AppContext.BaseDirectory });
 
-        // Values from ./.env sit between appsettings.json and real environment variables.
-        var dotEnv = new MemoryConfigurationSource { InitialData = DotEnvFile.ToConfiguration(DotEnvFile.Read(".env")) };
-        var sources = builder.Configuration.Sources;
-        var firstEnvironment = sources.ToList().FindIndex(s => s is EnvironmentVariablesConfigurationSource);
-        sources.Insert(firstEnvironment < 0 ? sources.Count : firstEnvironment, dotEnv);
+        InsertDotEnv(
+            builder.Configuration.Sources,
+            new MemoryConfigurationSource { InitialData = DotEnvFile.ToConfiguration(DotEnvFile.Read(".env")) });
         if (overrides is not null)
         {
             builder.Configuration.AddInMemoryCollection(overrides);
@@ -100,6 +98,20 @@ internal static partial class BootstrapCommands
         builder.Services.AddScoped<IBootstrapStep, DemoTotpStep>();
 
         return builder.Build();
+    }
+
+    /// <summary>
+    /// Inserts the values from <c>./.env</c> just before the application's (unprefixed) environment variables, so they
+    /// override appsettings.json and user-secrets but not real environment variables or the command line. The
+    /// <c>DOTNET_</c>-prefixed host source comes first in the list and must not be the anchor.
+    /// </summary>
+    /// <param name="sources">The configuration sources, in priority order (last wins).</param>
+    /// <param name="dotEnv">The source holding the <c>.env</c> values.</param>
+    internal static void InsertDotEnv(IList<IConfigurationSource> sources, IConfigurationSource dotEnv)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+        var environment = sources.ToList().FindLastIndex(s => s is EnvironmentVariablesConfigurationSource { Prefix: null or "" });
+        sources.Insert(environment < 0 ? sources.Count : environment, dotEnv);
     }
 
     private static Option<string?> EnvFileOption() => new("--env-file")

@@ -86,6 +86,14 @@ public sealed class MfaPolicyTests
     }
 
     [Fact]
+    public async Task Configured_authentication_methods_replace_the_default()
+    {
+        var settings = new Dictionary<string, string?> { ["Iam:EnforceMfa"] = "true", ["Iam:MfaAuthenticationMethods:0"] = "otp" };
+
+        (await PolicyHarness.AllowsAsync(Policies.SupervisionApprove, Approver((ClaimNames.AuthenticationMethods, "totp")), settings)).ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task Review_does_not_require_totp()
     {
         var allowed = await PolicyHarness.AllowsAsync(

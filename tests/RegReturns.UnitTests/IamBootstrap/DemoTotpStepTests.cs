@@ -43,6 +43,7 @@ public sealed class DemoTotpStepTests : IDisposable
     public async Task Known_secret_of_an_enrolled_user_is_kept_without_signing_in()
     {
         UserExists(totpEnabled: true);
+        NoLeftoverHelper();
 
         var state = await RunAsync(known: Known);
 
@@ -170,6 +171,19 @@ public sealed class DemoTotpStepTests : IDisposable
     }
 
     [Fact]
+    public async Task Html_error_page_from_the_token_endpoint_gives_a_clear_error()
+    {
+        UserExists(totpEnabled: false);
+        HelperCanBeCreated();
+        _wso2.On(HttpMethod.Post, "oauth2/token", HttpStatusCode.BadGateway);
+
+        var failure = await Should.ThrowAsync<InvalidOperationException>(() => RunAsync(known: null));
+
+        failure.Message.ShouldContain("502");
+        HelperDeleted().ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task Known_secret_is_replaced_when_the_user_has_no_active_totp()
     {
         UserExists(totpEnabled: false);
@@ -204,6 +218,7 @@ public sealed class DemoTotpStepTests : IDisposable
     public async Task Missing_mfa_user_stops_the_step_before_any_app_is_created()
     {
         _wso2.OnJson(HttpMethod.Get, "scim2/Users", """{"Resources":[]}""");
+        NoLeftoverHelper();
 
         var failure = await Should.ThrowAsync<InvalidOperationException>(() => RunAsync(known: null));
 
@@ -215,6 +230,7 @@ public sealed class DemoTotpStepTests : IDisposable
     public async Task User_listed_twice_is_handled_once()
     {
         UserExists(totpEnabled: true);
+        NoLeftoverHelper();
 
         var state = await RunAsync(known: Known, users: [UserName, "Approver.MFA"]);
 
@@ -222,12 +238,77 @@ public sealed class DemoTotpStepTests : IDisposable
     }
 
     [Fact]
-    public async Task No_mfa_users_means_no_calls()
+    public async Task No_mfa_users_means_nothing_is_enrolled()
     {
+        NoLeftoverHelper();
+
         var state = await RunAsync(known: null, users: []);
 
-        _wso2.Requests.ShouldBeEmpty();
+        _wso2.Writes().ShouldBeEmpty();
         state.Changes.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Helper_left_by_an_interrupted_run_is_deleted_even_when_nothing_is_enrolled()
+    {
+        _wso2.OnJson(HttpMethod.Get, Apps, """{"applications":[{"id":"helper-1"}]}""")
+            .OnJson(HttpMethod.Get, Helper, """{"id":"helper-1"}""")
+            .On(HttpMethod.Delete, Helper, HttpStatusCode.NoContent);
+
+        await RunAsync(known: null, users: []);
+
+        _wso2.Requests.ShouldContain(r => r.PathAndQuery == $"{Apps}?filter=clientId+eq+regreturns-totp-enrolment");
+        HelperDeleted().ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Failed_helper_delete_does_not_hide_the_enrolment_error()
+    {
+        UserExists(totpEnabled: false);
+        _wso2.OnJson(HttpMethod.Get, Apps, """{"applications":[]}""")
+            .On(HttpMethod.Post, Apps, HttpStatusCode.Created, location: $"{StubWso2.Authority}{Helper}")
+            .OnJson(HttpMethod.Get, $"{Helper}/inbound-protocols/oidc", """{"clientId":"regreturns-totp-enrolment","clientSecret":"helper-secret"}""")
+            .On(HttpMethod.Delete, Helper, HttpStatusCode.InternalServerError)
+            .On(HttpMethod.Post, "oauth2/token", HttpStatusCode.BadRequest, new JsonObject { ["error"] = "invalid_grant" });
+
+        var failure = await Should.ThrowAsync<InvalidOperationException>(() => RunAsync(known: null));
+
+        failure.Message.ShouldContain("DEMO_USER_PASSWORD");
+    }
+
+    [Fact]
+    public async Task Demo_reset_re_enrols_a_user_whose_totp_is_off_even_if_the_known_secret_is_still_stored()
+    {
+        UserExists(totpEnabled: false);
+        HelperCanBeCreated();
+        UserCanSignIn();
+        _wso2.OnJson(HttpMethod.Get, $"{TotpPath}/secret", $$"""{"secret":"{{Known}}"}""");
+        EnrolmentSucceeds();
+
+        var state = await RunAsync(known: Known, reset: true);
+
+        state.GeneratedSettings[Key].ShouldBe(Issued);
+        OutcomeOf(state).ShouldBe(Outcome.Updated);
+    }
+
+    [Fact]
+    public void Demo_users_holding_an_mfa_role_need_totp_when_mfa_is_enforced()
+    {
+        var state = StateWithDemoRoles();
+
+        var users = DemoTotpStep.UsersNeedingTotp(new BootstrapOptions { EnforceMfa = true, MfaAlwaysUsers = [UserName] }, state);
+
+        users.ShouldBe([UserName, "admin", "approver"]);
+    }
+
+    [Fact]
+    public void Only_the_always_users_need_totp_when_mfa_is_not_enforced()
+    {
+        var state = StateWithDemoRoles();
+
+        var users = DemoTotpStep.UsersNeedingTotp(new BootstrapOptions { EnforceMfa = false, MfaAlwaysUsers = [UserName] }, state);
+
+        users.ShouldBe([UserName]);
     }
 
     public void Dispose() => _wso2.Dispose();
@@ -245,6 +326,18 @@ public sealed class DemoTotpStepTests : IDisposable
                 "scim2/Users/user-1",
                 HttpStatusCode.OK,
                 new JsonObject { ["id"] = "user-1", [Wso2Scim.Wso2UserSchema] = new JsonObject { ["totpEnabled"] = totpEnabled } });
+
+    private static BootstrapState StateWithDemoRoles()
+    {
+        var state = new BootstrapState();
+        state.DemoUserRoles["maker.hlb"] = ["bank_maker"];
+        state.DemoUserRoles["approver"] = ["supervisor_approver"];
+        state.DemoUserRoles[UserName] = ["supervisor_approver"];
+        state.DemoUserRoles["admin"] = ["portal_admin"];
+        return state;
+    }
+
+    private void NoLeftoverHelper() => _wso2.OnJson(HttpMethod.Get, Apps, """{"applications":[]}""");
 
     private void HelperCanBeCreated() =>
         _wso2.OnJson(HttpMethod.Get, Apps, """{"applications":[]}""")

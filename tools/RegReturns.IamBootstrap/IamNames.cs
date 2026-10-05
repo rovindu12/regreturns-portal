@@ -47,6 +47,9 @@ internal static class IamNames
     /// <summary>Client id of the public Swagger demo client.</summary>
     public const string DemoApiClientId = "regreturns-demo-api";
 
+    /// <summary>The roles whose holders get the TOTP step at sign-in when MFA is enforced (ADR 0020).</summary>
+    public static readonly IReadOnlyList<string> MfaRoles = [RoleNames.SupervisorApprover, RoleNames.SystemAdmin];
+
     /// <summary>Access token lifetime for every RegReturns client (plan §4.2).</summary>
     public const int AccessTokenSeconds = 300;
 

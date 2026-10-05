@@ -15,6 +15,7 @@ public sealed class SelfServiceStepTests : IDisposable
 {
     private const string Onboarding = "User Onboarding";
     private const string AccountManagement = "Account Management";
+    private const string Mfa = "Multi Factor Authenticators";
     private const string MyAccount = "api/server/v1/applications/my-account-1";
 
     private readonly StubWso2 _wso2 = new();
@@ -42,6 +43,7 @@ public sealed class SelfServiceStepTests : IDisposable
             ("self-sign-up", Outcome.Unchanged),
             ("lite-user-sign-up", Outcome.Unchanged),
             ("account-recovery", Outcome.Unchanged),
+            ("totp", Outcome.Unchanged),
         ]);
     }
 
@@ -56,6 +58,7 @@ public sealed class SelfServiceStepTests : IDisposable
             ("Recovery.Notification.Password.Enable", "true"),
             ("Recovery.Question.Password.Enable", "false"),
             ("Recovery.ReCaptcha.Password.Enable", "true"));
+        TotpEnrolmentInFlow("false");
         _wso2.On(HttpMethod.Patch, ConnectorPath(AccountManagement, "account-recovery"), HttpStatusCode.OK);
         MyAccountIs(enabled: false);
 
@@ -82,11 +85,35 @@ public sealed class SelfServiceStepTests : IDisposable
             ("Recovery.Notification.Password.Enable", "false"),
             ("Recovery.Question.Password.Enable", "false"),
             ("Recovery.Notification.Username.Enable", "false"));
+        TotpEnrolmentInFlow("False");
         MyAccountIs(enabled: false);
 
         await RunAsync();
 
         _wso2.Writes().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Totp_enrolment_during_sign_in_is_switched_off()
+    {
+        Connector(Onboarding, "self-sign-up", ("SelfRegistration.Enable", "false"));
+        Connector(Onboarding, "lite-user-sign-up", ("LiteRegistration.Enable", "false"));
+        Connector(
+            AccountManagement,
+            "account-recovery",
+            ("Recovery.Notification.Password.Enable", "false"),
+            ("Recovery.Question.Password.Enable", "false"),
+            ("Recovery.Notification.Username.Enable", "false"));
+        TotpEnrolmentInFlow("true");
+        _wso2.On(HttpMethod.Patch, ConnectorPath(Mfa, "totp"), HttpStatusCode.OK);
+        MyAccountIs(enabled: false);
+
+        var state = await RunAsync();
+
+        var patch = _wso2.Writes().ShouldHaveSingleItem();
+        patch.PathAndQuery.ShouldBe("api/server/v1/identity-governance/TXVsdGkgRmFjdG9yIEF1dGhlbnRpY2F0b3Jz/connectors/dG90cA");
+        patch.Body!["properties"]!.ToJsonString().ShouldBe("""[{"name":"TOTP.EnrolUserInAuthenticationFlow","value":"false"}]""");
+        state.Changes.Single(c => c.Name == "totp").Outcome.ShouldBe(Outcome.Updated);
     }
 
     [Fact]
@@ -163,7 +190,10 @@ public sealed class SelfServiceStepTests : IDisposable
             ("Recovery.Notification.Password.Enable", "false"),
             ("Recovery.Question.Password.Enable", "false"),
             ("Recovery.Notification.Username.Enable", "false"));
+        TotpEnrolmentInFlow("false");
     }
+
+    private void TotpEnrolmentInFlow(string value) => Connector(Mfa, "totp", ("TOTP.EnrolUserInAuthenticationFlow", value));
 
     private void MyAccountIs(bool enabled) =>
         _wso2.OnJson(HttpMethod.Get, "api/server/v1/applications", """{"applications":[{"id":"my-account-1","name":"My Account"}]}""")

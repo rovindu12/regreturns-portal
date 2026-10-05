@@ -12,8 +12,18 @@ public sealed class IamOptions
     /// </summary>
     public bool EnforceMfa { get; set; } = true;
 
+    /// <summary>The <c>amr</c> values that prove a TOTP step when none are configured.</summary>
+    public static readonly IReadOnlyList<string> DefaultMfaAuthenticationMethods = ["totp"];
+
     /// <summary>
-    /// Gets or sets the <c>amr</c> values that prove a TOTP step happened (compared case-insensitively).
+    /// Gets or sets the <c>amr</c> values that prove a TOTP step happened (compared case-insensitively). Empty means
+    /// <see cref="DefaultMfaAuthenticationMethods"/>. Empty by default because configuration binding appends to a
+    /// list's initial items, so a configured list could otherwise never drop <c>totp</c>.
     /// </summary>
-    public IList<string> MfaAuthenticationMethods { get; set; } = ["totp"];
+    public IList<string> MfaAuthenticationMethods { get; set; } = [];
+
+    /// <summary>Returns the <c>amr</c> values in effect: the configured ones, or the defaults when none are configured.</summary>
+    /// <returns>The accepted methods.</returns>
+    public IReadOnlyCollection<string> AcceptedMfaAuthenticationMethods() =>
+        MfaAuthenticationMethods.Count == 0 ? DefaultMfaAuthenticationMethods : [.. MfaAuthenticationMethods];
 }
