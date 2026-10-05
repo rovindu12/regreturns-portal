@@ -215,4 +215,41 @@ public sealed class SubmissionTests
         submission.StartReview(_f.Reviewer, DomainFixture.Now).Error.ShouldBe(SubmissionErrors.InvalidTransition);
         submission.Approve(_f.Approver, _f.Obligation, "Approved.", DomainFixture.Now).Error.ShouldBe(SubmissionErrors.InvalidTransition);
     }
+
+    [Fact]
+    public void Saving_unchanged_values_is_not_an_edit()
+    {
+        var submission = _f.ValidatedDraft();
+        var editVersion = submission.EditVersion;
+
+        submission.SetValues(_f.Template, DomainFixture.ValidValues(assets: " 1000.00 "), _f.SecondMaker, DomainFixture.Now.AddHours(1))
+            .IsSuccess.ShouldBeTrue();
+
+        submission.EditVersion.ShouldBe(editVersion);
+        submission.LastEditedByUserId.ShouldBe(_f.Maker.UserId);
+        submission.ValidatedEditVersion.ShouldBe(editVersion);
+    }
+
+    [Fact]
+    public void Values_longer_than_the_column_are_refused_without_changing_anything()
+    {
+        var submission = _f.ValidatedDraft();
+        var values = DomainFixture.ValidValues(assets: "1", ratio: new string('9', SubmissionValue.RawValueMaxLength + 1));
+
+        submission.SetValues(_f.Template, values, _f.Maker, DomainFixture.Now).Error!.Code.ShouldBe(SubmissionErrors.ValueTooLong.Code);
+
+        submission.FindValue("ASSETS")!.RawValue.ShouldBe("1000.00");
+    }
+
+    [Fact]
+    public void Invalid_numbers_are_kept_as_entered_without_a_numeric_value()
+    {
+        var submission = Submission.CreateDraft(_f.Obligation, _f.Template, _f.Maker, SubmissionSource.Web, DomainFixture.Now).Value;
+
+        submission.SetValues(_f.Template, DomainFixture.ValidValues(assets: "12.345", ratio: "1,2,3"), _f.Maker, DomainFixture.Now);
+
+        submission.FindValue("ASSETS")!.RawValue.ShouldBe("12.345");
+        submission.FindValue("ASSETS")!.NumericValue.ShouldBeNull();
+        submission.FindValue("RATIO")!.NumericValue.ShouldBeNull();
+    }
 }

@@ -1,5 +1,3 @@
-using System.Globalization;
-
 using RegReturns.Domain.Common;
 using RegReturns.Domain.Templates;
 
@@ -25,7 +23,10 @@ public sealed class SubmissionValue : Entity
     /// <summary>Gets the value exactly as entered or uploaded (trimmed), or <see langword="null"/> if blank.</summary>
     public string? RawValue { get; private set; }
 
-    /// <summary>Gets the parsed number for numeric fields, or <see langword="null"/> if blank or not a number.</summary>
+    /// <summary>
+    /// Gets the parsed number for numeric fields, or <see langword="null"/> if blank or not valid for the field
+    /// (<see cref="FieldValueParser"/>), so reports only ever sum values the validation engine accepts.
+    /// </summary>
     public decimal? NumericValue { get; private set; }
 
     internal static SubmissionValue Create(TemplateField field, string? raw)
@@ -35,18 +36,20 @@ public sealed class SubmissionValue : Entity
         return value;
     }
 
+    /// <summary>Returns a raw value as it is stored: trimmed, or <see langword="null"/> if blank.</summary>
+    /// <param name="raw">The raw value.</param>
+    /// <returns>The stored form.</returns>
+    public static string? Normalize(string? raw) => string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+
     internal void Update(TemplateField field, string? raw)
     {
-        var trimmed = string.IsNullOrWhiteSpace(raw) ? null : raw.Trim();
+        var trimmed = Normalize(raw);
         if (trimmed?.Length > RawValueMaxLength)
         {
             throw new DomainException($"Value for {field.Code} must be at most {RawValueMaxLength} characters.");
         }
 
         RawValue = trimmed;
-        NumericValue = field.IsNumeric
-            && decimal.TryParse(trimmed, NumberStyles.Number, CultureInfo.InvariantCulture, out var number)
-                ? number
-                : null;
+        NumericValue = field.IsNumeric ? FieldValueParser.Parse(field, trimmed).Number : null;
     }
 }

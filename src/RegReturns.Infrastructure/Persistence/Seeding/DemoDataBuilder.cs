@@ -7,6 +7,7 @@ using RegReturns.Domain.Obligations;
 using RegReturns.Domain.Periods;
 using RegReturns.Domain.Submissions;
 using RegReturns.Domain.Templates;
+using RegReturns.Domain.Validation;
 
 namespace RegReturns.Infrastructure.Persistence.Seeding;
 
@@ -186,8 +187,23 @@ internal sealed class DemoDataBuilder(DateTimeOffset now)
         DemoBank bank, ReturnType returnType, TemplateVersion template, Submission submission, ReturnObligation obligation,
         IReadOnlyDictionary<string, decimal> values, ReportingPeriod period, int periodsAgo, DateTimeOffset submittedAt, string context)
     {
-        var warnings = SeedFindingCalculator.Warnings(template, values, basis => PriorValues(bank, returnType, period, basis));
-        Ensure(submission.RecordValidation(warnings), context);
+        var prior = new Dictionary<VarianceBasis, IReadOnlyDictionary<string, decimal>>();
+        foreach (var basis in Enum.GetValues<VarianceBasis>())
+        {
+            if (PriorValues(bank, returnType, period, basis) is { } figures)
+            {
+                prior[basis] = figures;
+            }
+        }
+
+        // The real engine judges seeded figures; the figure generator must never trip an error rule.
+        var findings = ValidationEngine.Validate(template, AsInput(values), prior);
+        if (findings.FirstOrDefault(f => f.Severity == Severity.Error) is { } error)
+        {
+            throw new InvalidOperationException($"Seed data for {context} fails error rule {error.RuleCode}: {error.Message}");
+        }
+
+        Ensure(submission.RecordValidation(findings), context);
 
         var checker = _users.Checker(bank.Code);
         foreach (var finding in submission.CurrentFindings.ToList())
