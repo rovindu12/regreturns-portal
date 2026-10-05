@@ -6,7 +6,9 @@ using Microsoft.Extensions.Options;
 
 using RegReturns.Application.Abstractions;
 using RegReturns.Application.Auditing;
+using RegReturns.Application.Returns;
 using RegReturns.Infrastructure.Auditing;
+using RegReturns.Infrastructure.Files;
 using RegReturns.Infrastructure.Identity.Wso2;
 using RegReturns.Infrastructure.Persistence;
 
@@ -18,7 +20,7 @@ public static class DependencyInjection
     /// <summary>Health check tag for checks that must pass before the app accepts traffic.</summary>
     public const string ReadyTag = "ready";
 
-    /// <summary>Adds the database context, initializer, clock and database health check.</summary>
+    /// <summary>Adds the database context, initializer, clock, return file reader and writer, and database health check.</summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configuration">Application configuration.</param>
     /// <returns>The same service collection.</returns>
@@ -49,6 +51,8 @@ public static class DependencyInjection
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<RegReturnsDbContext>());
         services.AddScoped<IDatabaseInitializer, DatabaseInitializer>();
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IReturnFileReader, ReturnFileReader>();
+        services.TryAddSingleton<IReturnFileWriter, ReturnFileWriter>();
 
         services.AddHealthChecks()
             .AddDbContextCheck<RegReturnsDbContext>("database", tags: [ReadyTag]);
