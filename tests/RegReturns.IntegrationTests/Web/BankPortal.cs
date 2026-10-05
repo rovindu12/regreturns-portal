@@ -63,6 +63,20 @@ internal sealed partial class BankPortal(WebApplicationFactory<Program> factory,
         return obligation.Id;
     }
 
+    /// <summary>Returns Harbourline's seeded Monthly Liquidity Return obligation for the month being filed (nothing filed yet).</summary>
+    public async Task<Guid> CurrentMlrObligationAsync()
+    {
+        await using var context = SqlServerFixture.CreateContext(connectionString);
+        var bank = await context.Institutions.SingleAsync(i => i.Code == DemoBank.Harbourline);
+        var returnType = await context.ReturnTypes.SingleAsync(r => r.Code == MlrTemplate.Code);
+        return await context.Obligations
+            .Where(o => o.InstitutionId == bank.Id && o.ReturnTypeId == returnType.Id && o.Status == ObligationStatus.Open)
+            .Where(o => !context.Submissions.Any(s => s.ObligationId == o.Id))
+            .Where(o => o.Period.Year == 2026)
+            .Select(o => o.Id)
+            .SingleAsync();
+    }
+
     /// <summary>Loads a submission with its values and findings.</summary>
     public async Task<Submission> SubmissionAsync(Guid submissionId)
     {

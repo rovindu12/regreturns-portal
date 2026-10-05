@@ -3,6 +3,7 @@ using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 using RegReturns.Domain.Submissions;
+using RegReturns.Domain.Templates;
 using RegReturns.Infrastructure.Persistence.Seeding;
 using RegReturns.IntegrationTests.Hosting;
 
@@ -172,6 +173,22 @@ public sealed class BankReturnPagesTests : IClassFixture<PortalDatabaseFixture>,
         var justified = (await _portal.SubmissionAsync(submissionId)).CurrentFindings.Single();
         justified.Justification.ShouldStartWith("Covered bonds");
         justified.BlocksSubmission.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Variance_rules_compare_with_the_last_approved_return_of_the_previous_month()
+    {
+        var obligationId = await _portal.CurrentMlrObligationAsync();
+        using var client = await _portal.MakerAsync();
+        var submissionId = await BankPortal.StartDraftAsync(client, obligationId);
+
+        await BankPortal.SaveAsync(client, submissionId, BankPortal.ValidMlr);
+
+        var findings = (await _portal.SubmissionAsync(submissionId)).CurrentFindings.ToList();
+        var hqla = findings.Single(f => f.RuleCode == MlrTemplate.RuleHqlaVariance);
+        hqla.Severity.ShouldBe(Severity.Warning);
+        hqla.Message.ShouldContain("against the previous period (limit 30%)");
+        findings.ShouldAllBe(f => f.Severity == Severity.Warning);
     }
 
     [Fact]
