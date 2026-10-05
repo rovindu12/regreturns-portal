@@ -1,0 +1,54 @@
+@model FieldInputsViewModel
+@{
+    var form = Model.Form;
+}
+<div class="row g-3">
+    @if (Model.CodeEditable)
+    {
+        <div class="col-md-4">
+            <label for="field-code" class="form-label">Code</label>
+            <input id="field-code" name="Code" class="form-control font-monospace" value="@form.Code" required autocomplete="off"
+                   maxlength="@TemplateField.CodeMaxLength" aria-describedby="field-code-help" />
+            <div id="field-code-help" class="form-text">
+                Capital letters, digits and _, starting with a letter, such as TOTAL_DEPOSITS. It cannot change later.
+            </div>
+        </div>
+    }
+    <div class="@(Model.CodeEditable ? "col-md-8" : "col-12")">
+        <label for="field-label" class="form-label">Label</label>
+        <input id="field-label" name="Label" class="form-control" value="@form.Label" required maxlength="@TemplateField.LabelMaxLength" />
+    </div>
+    <div class="col-md-4">
+        <label for="field-section" class="form-label">Section</label>
+        <input id="field-section" name="Section" class="form-control" value="@form.Section" required list="field-sections"
+               maxlength="@TemplateField.SectionMaxLength" aria-describedby="field-section-help" />
+        <datalist id="field-sections">
+            @foreach (var sectionName in Model.Sections)
+            {
+                <option value="@sectionName"></option>
+            }
+        </datalist>
+        <div id="field-section-help" class="form-text">The heading the field is grouped under.</div>
+    </div>
+    <div class="col-md-3">
+        <label for="field-data-type" class="form-label">Data type</label>
+        <select id="field-data-type" name="DataType" class="form-select">
+            @foreach (var dataType in TemplateDisplay.DataTypes)
+            {
+                <option value="@dataType" selected="@(form.DataType == dataType.ToString())">@TemplateDisplay.DataTypeLabel(dataType)</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-2">
+        <label for="field-unit" class="form-label">Unit</label>
+        <input id="field-unit" name="Unit" class="form-control" value="@form.Unit" maxlength="@TemplateField.UnitMaxLength"
+               aria-describedby="field-unit-help" />
+        <div id="field-unit-help" class="form-text">Optional, such as VLD m or %.</div>
+    </div>
+    <div class="col-md-3">
+        <label for="field-precision" class="form-label">Decimal places</label>
+        <input id="field-precision" name="Precision" type="number" min="0" max="@TemplateField.MaxPrecision" step="1"
+               inputmode="numeric" class="form-control" value="@form.Precision" aria-describedby="field-precision-help" />
+        <div id="field-precision-help" class="form-text">0 to @TemplateField.MaxPrecision, for amounts and percentages.</div>
+    </div>
+</div>

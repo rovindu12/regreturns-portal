@@ -12,8 +12,8 @@ namespace RegReturns.Web.Controllers;
 [Authorize(Policy = Policies.AdminManage)]
 public sealed class AdminController : Controller
 {
-    /// <summary>Shows who is signed in and what the area will offer.</summary>
+    /// <summary>Shows the administration tools, such as return templates, and who is signed in.</summary>
     /// <returns>The landing page.</returns>
     [HttpGet]
-    public IActionResult Index() => View(LandingViewModel.ViewName, LandingViewModel.Create(PortalAreas.Admin, User));
+    public IActionResult Index() => View(LandingViewModel.Create(PortalAreas.Admin, User));
 }

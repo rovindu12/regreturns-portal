@@ -1,0 +1,39 @@
+@model EditFieldViewModel
+@{
+    ViewData["Title"] = Model.Title;
+    var template = Model.Template;
+    var definition = Model.Field.Definition;
+}
+
+<nav aria-label="Breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="@PortalAreas.Admin.Path">@PortalAreas.Admin.Title</a></li>
+        <li class="breadcrumb-item"><a asp-action="Index">Return templates</a></li>
+        <li class="breadcrumb-item">
+            <a asp-action="Version" asp-route-id="@template.Id">@template.ReturnTypeCode version @template.Version</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">@Model.Title</li>
+    </ol>
+</nav>
+
+<section class="mb-4">
+    <h1 class="h2">Edit field <code>@definition.Code</code></h1>
+    <p class="mb-0">
+        @template.ReturnTypeName, draft version @template.Version. The code names the field and cannot change.
+        @if (Model.Field.UsedByRules.Count > 0)
+        {
+            <text>Rules @string.Join(", ", Model.Field.UsedByRules) use it, so it must stay a number while range,
+            cross-field or variance rules refer to it.</text>
+        }
+    </p>
+</section>
+
+<partial name="_Notice" model="Model.Notice" />
+
+<form method="post" asp-action="UpdateField" asp-route-id="@template.Id" asp-route-code="@definition.Code" class="card card-body">
+    <partial name="_FieldInputs" model="new FieldInputsViewModel(Model.Form, false, template)" />
+    <div class="mt-3 d-flex flex-wrap gap-2">
+        <button type="submit" class="btn btn-primary">Save field</button>
+        <a class="btn btn-outline-secondary" asp-action="Version" asp-route-id="@template.Id" asp-fragment="@TemplateSections.Fields">Cancel</a>
+    </div>
+</form>

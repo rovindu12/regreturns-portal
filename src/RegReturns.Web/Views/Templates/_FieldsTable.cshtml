@@ -1,0 +1,75 @@
+@model TemplateVersionViewModel
+@{
+    var template = Model.Template;
+    var editable = template.IsDraft;
+}
+@if (template.Fields.Count == 0)
+{
+    <p>No fields yet.@(editable ? " Add the first one below." : string.Empty)</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <caption class="visually-hidden">Fields of @Model.Title, in display order</caption>
+            <thead class="table-light">
+                <tr>
+                    <th scope="col" class="text-end">Order</th>
+                    <th scope="col">Code</th>
+                    <th scope="col">Label</th>
+                    <th scope="col">Section</th>
+                    <th scope="col">Data type</th>
+                    <th scope="col">Unit</th>
+                    <th scope="col" class="text-end">Decimal places</th>
+                    <th scope="col">Used by rules</th>
+                    @if (editable)
+                    {
+                        <th scope="col">Actions</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @for (var i = 0; i < template.Fields.Count; i++)
+                {
+                    var field = template.Fields[i];
+                    var definition = field.Definition;
+                    var inUse = field.UsedByRules.Count > 0;
+                    <tr>
+                        <td class="text-end">@field.DisplayOrder</td>
+                        <th scope="row"><code>@definition.Code</code></th>
+                        <td>@definition.Label</td>
+                        <td>@definition.Section</td>
+                        <td>@TemplateDisplay.DataTypeLabel(definition.DataType)</td>
+                        <td>@definition.Unit</td>
+                        <td class="text-end">@definition.Precision</td>
+                        <td>@(inUse ? string.Join(", ", field.UsedByRules) : "None")</td>
+                        @if (editable)
+                        {
+                            <td class="text-nowrap">
+                                <a class="btn btn-outline-secondary btn-sm" asp-action="EditField" asp-route-id="@template.Id" asp-route-code="@definition.Code">Edit<span class="visually-hidden"> @definition.Code</span></a>
+                                <form method="post" asp-action="MoveField" asp-route-id="@template.Id" asp-route-code="@definition.Code" class="d-inline">
+                                    <button type="submit" name="offset" value="-1" class="btn btn-outline-secondary btn-sm" disabled="@(i == 0)"><span class="visually-hidden">Move @definition.Code </span>Up</button>
+                                    <button type="submit" name="offset" value="1" class="btn btn-outline-secondary btn-sm" disabled="@(i == template.Fields.Count - 1)"><span class="visually-hidden">Move @definition.Code </span>Down</button>
+                                </form>
+                                @if (inUse)
+                                {
+                                    var reason = $"Rules {string.Join(", ", field.UsedByRules)} use this field. Remove or change those rules first.";
+                                    <span class="d-inline-block" title="@reason">
+                                        <button type="button" class="btn btn-outline-danger btn-sm" disabled title="@reason" aria-describedby="remove-reason-@definition.Code">Remove<span class="visually-hidden"> @definition.Code</span></button>
+                                    </span>
+                                    <span id="remove-reason-@definition.Code" class="visually-hidden">@reason</span>
+                                }
+                                else
+                                {
+                                    <form method="post" asp-action="RemoveField" asp-route-id="@template.Id" asp-route-code="@definition.Code" class="d-inline">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">Remove<span class="visually-hidden"> @definition.Code</span></button>
+                                    </form>
+                                }
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

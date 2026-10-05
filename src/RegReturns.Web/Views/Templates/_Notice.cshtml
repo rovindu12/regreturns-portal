@@ -1,0 +1,9 @@
+@model TemplateNotice?
+@if (Model is { IsError: true })
+{
+    <div class="alert alert-danger" role="alert"><strong>Not saved.</strong> @Model.Text</div>
+}
+else if (Model is not null)
+{
+    <div class="alert alert-success" role="status">@Model.Text</div>
+}
