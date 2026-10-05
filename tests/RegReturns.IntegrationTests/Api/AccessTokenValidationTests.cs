@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
@@ -130,7 +132,9 @@ public sealed class AccessTokenValidationTests(BearerApiFixture api) : IClassFix
         var ct = TestContext.Current.CancellationToken;
         const string otherAudience = "https://api.elsewhere.example";
 
-        // A path of its own, because anonymous failures are de-duplicated per address and path each minute.
+        // Anonymous failures are de-duplicated per address each minute, and every test request comes from the same
+        // (empty) address, so forget earlier failures from this class first.
+        ((MemoryCache)api.Factory.Services.GetRequiredService<IMemoryCache>()).Clear();
         var path = $"/v1/institutions/{Guid.NewGuid():N}";
         using var client = ClientWith(ApiTokens.Create(await RegisteredClientAsync(), t => t.Audience = otherAudience));
 
