@@ -1,0 +1,28 @@
+@model LandingViewModel
+@{
+    ViewData["Title"] = Model.Area.Title;
+}
+
+<section class="mb-4">
+    <h1 class="h2">@Model.Area.Title</h1>
+    <p class="lead mb-0">@Model.Area.Summary</p>
+</section>
+
+<section aria-labelledby="who-heading" class="card mb-4">
+    <div class="card-body">
+        <h2 id="who-heading" class="h5">You are signed in</h2>
+        <dl class="row mb-0">
+            <dt class="col-sm-3">Name</dt>
+            <dd class="col-sm-9">@Model.User.Name</dd>
+            <dt class="col-sm-3">Institution</dt>
+            <dd class="col-sm-9">@(Model.User.InstitutionCode ?? "Bank of Valoria (regulator)")</dd>
+            <dt class="col-sm-3">Roles</dt>
+            <dd class="col-sm-9 mb-0">@(Model.User.Roles.Count == 0 ? "None" : string.Join(", ", Model.User.Roles))</dd>
+        </dl>
+    </div>
+</section>
+
+<div class="alert alert-info" role="status">
+    The features of this area arrive in later phases of the build. Your access to it is already checked by the
+    <code>@Model.Area.Policy</code> policy.
+</div>

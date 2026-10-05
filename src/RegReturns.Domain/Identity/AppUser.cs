@@ -91,6 +91,33 @@ public sealed class AppUser : Entity
         return user;
     }
 
+    /// <summary>
+    /// Brings the projection in line with WSO2 (the source of truth) after a sign-in:
+    /// display name, e-mail, institution and roles, subject to the same role rules as <see cref="Create"/>.
+    /// </summary>
+    /// <param name="displayName">The display name from the directory.</param>
+    /// <param name="email">The e-mail address from the directory.</param>
+    /// <param name="institutionId">The user's bank, if a bank user.</param>
+    /// <param name="roles">The roles the directory grants.</param>
+    /// <returns>Failure if the directory data breaks a role rule; the projection is then left unchanged.</returns>
+    public Result SyncFromDirectory(string displayName, string email, Guid? institutionId, IEnumerable<Role> roles)
+    {
+        ArgumentNullException.ThrowIfNull(roles);
+        var roleSet = roles.Distinct().Order().ToList();
+        var roleCheck = CheckRoles(roleSet, institutionId);
+        if (roleCheck.IsFailure)
+        {
+            return roleCheck;
+        }
+
+        DisplayName = Guard.NotBlank(displayName, DisplayNameMaxLength);
+        Email = Guard.NotBlank(email, EmailMaxLength).ToLowerInvariant();
+        InstitutionId = institutionId;
+        _roles.Clear();
+        _roles.AddRange(roleSet);
+        return Result.Success();
+    }
+
     /// <summary>Links the user to their WSO2 account after provisioning or first sign-in.</summary>
     /// <param name="wso2UserId">The SCIM user id.</param>
     public void LinkIdentity(string wso2UserId) => Wso2UserId = Guard.NotBlank(wso2UserId, 64);

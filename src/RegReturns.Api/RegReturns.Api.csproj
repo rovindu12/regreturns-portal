@@ -7,6 +7,10 @@
     <ProjectReference Include="..\RegReturns.ServiceDefaults\RegReturns.ServiceDefaults.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="RegReturns.UnitTests" />
     <InternalsVisibleTo Include="RegReturns.IntegrationTests" />
   </ItemGroup>
 </Project>

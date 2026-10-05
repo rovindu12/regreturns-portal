@@ -31,6 +31,9 @@ public interface IAppDbContext
     /// <summary>Gets the submissions, including values, findings and workflow events.</summary>
     DbSet<Submission> Submissions { get; }
 
+    /// <summary>Gets the banks' machine-to-machine clients registered in WSO2.</summary>
+    DbSet<ApiClient> ApiClients { get; }
+
     /// <summary>Saves all changes in one transaction.</summary>
     /// <param name="cancellationToken">Cancels the operation.</param>
     /// <returns>The number of rows written.</returns>

@@ -480,3 +480,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# RegReturns: local secrets and generated development keys (.env is ignored above)
+.env.generated
+.certs/
