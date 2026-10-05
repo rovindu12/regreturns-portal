@@ -40,7 +40,29 @@ and the project uses [Semantic Versioning](https://semver.org/).
   (copies local secrets into user-secrets). No script passes a secret on the command line.
 - Troubleshooting guide section for sign-in, tokens and WSO2.
 
+- Phase 3: validation engine that runs every active rule of a template version (required, data type, range,
+  cross-field and variance) in field order, with per-field findings and detail such as "Entered 1,400; calculated
+  1,300." The same engine validates web entries, uploads and the demo seed.
+- In-house decimal expression language for cross-field rules: field references, `+ - * /`, `Min`, `Max`, `Abs`, with
+  length and depth limits (ADR 0021).
+- Strict, culture-independent value parsing: invariant numbers with optional thousand groups, precision and column
+  limits, ISO dates, yes/no booleans and percentages with an optional `%`.
+- Variance rules compare with the last approved return for the previous period or the same period last year.
+- Bank return pages: obligations overview, entry form by section with inline findings, draft save with optimistic
+  concurrency and a clear conflict message, re-validation, warning justifications and upload history (ADR 0023).
+- Excel and CSV template download and upload with ClosedXML: extension, signature, macro, zip-bomb, row and cell
+  limits; percentage-formatted cells read as percentages; CSV formula-injection guard that round-trips; accepted
+  files are kept as evidence in `returns.StoredFiles` and never served (ADR 0022).
+- Template administration: draft versions copied from the published one, field and rule editing, publish, retire and
+  delete draft (ADR 0009 amendment).
+- Log events 50xx (templates), 51xx (returns) and 52xx (uploads); validation and upload metrics and a
+  `returns.validate` span; troubleshooting section for returns, templates and uploads.
+
 ### Changed
 
 - SQL Server 2025 replaces 2022 for local Docker Compose and the integration tests (ADR 0013).
 - The platform administrator role is `portal_admin`: WSO2 reserves the `system_` prefix.
+- Cross-field rules use the in-house expression language instead of NCalc (ADR 0021).
+- An obligation can have one live return; a filtered unique index replaces the plain obligation index (ADR 0023).
+- Template `EffectiveFrom` is the first reporting period a version applies to; retiring is an explicit step (ADR 0009).
+- Collections load with split queries by default.

@@ -1,0 +1,71 @@
+@model TemplateVersionViewModel
+@{
+    var template = Model.Template;
+    var editable = template.IsDraft;
+}
+@if (template.Rules.Count == 0)
+{
+    <p>No rules yet.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <caption class="visually-hidden">Validation rules of @Model.Title</caption>
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Code</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Severity</th>
+                    <th scope="col">Target</th>
+                    <th scope="col">Parameters</th>
+                    <th scope="col">Message</th>
+                    <th scope="col">Active</th>
+                    @if (editable)
+                    {
+                        <th scope="col">Remove</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var rule in template.Rules)
+                {
+                    var definition = rule.Definition;
+                    <tr>
+                        <th scope="row"><code>@definition.Code</code></th>
+                        <td>@TemplateDisplay.RuleTypeLabel(definition.RuleType)</td>
+                        <td><span class="badge @TemplateDisplay.SeverityBadge(definition.Severity)">@TemplateDisplay.SeverityLabel(definition.Severity)</span></td>
+                        <td><code>@definition.TargetFieldCode</code></td>
+                        <td class="text-break">@TemplateDisplay.Parameters(definition)</td>
+                        <td>@definition.Message</td>
+                        <td class="text-nowrap">
+                            @if (rule.IsActive)
+                            {
+                                <span class="badge text-bg-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">Inactive</span>
+                            }
+                            @if (editable)
+                            {
+                                <form method="post" asp-action="SetRuleActive" asp-route-id="@template.Id" asp-route-code="@definition.Code" class="d-inline">
+                                    <input type="hidden" name="active" value="@(rule.IsActive ? "false" : "true")" />
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm ms-1">@(rule.IsActive ? "Switch off" : "Switch on")<span class="visually-hidden"> @definition.Code</span></button>
+                                </form>
+                            }
+                        </td>
+                        @if (editable)
+                        {
+                            <td>
+                                <form method="post" asp-action="RemoveRule" asp-route-id="@template.Id" asp-route-code="@definition.Code" class="d-inline">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">Remove<span class="visually-hidden"> rule @definition.Code</span></button>
+                                </form>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

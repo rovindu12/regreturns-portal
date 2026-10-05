@@ -1,0 +1,39 @@
+@model LandingViewModel
+@{
+    ViewData["Title"] = Model.Area.Title;
+}
+
+<section class="mb-4">
+    <h1 class="h2">@Model.Area.Title</h1>
+    <p class="lead mb-0">@Model.Area.Summary</p>
+</section>
+
+<section aria-labelledby="manage-heading" class="mb-4">
+    <h2 id="manage-heading" class="h5">Manage</h2>
+    <div class="list-group">
+        <a class="list-group-item list-group-item-action" asp-controller="Templates" asp-action="Index">
+            <span class="d-block fw-semibold">Return templates</span>
+            <span class="d-block small text-muted">
+                The fields and validation rules of each return: start drafts, publish and retire template versions.
+            </span>
+        </a>
+        <div class="list-group-item">
+            <span class="d-block fw-semibold">Institutions and users</span>
+            <span class="d-block small text-muted">Arrives in a later phase of the build.</span>
+        </div>
+    </div>
+</section>
+
+<section aria-labelledby="who-heading" class="card mb-4">
+    <div class="card-body">
+        <h2 id="who-heading" class="h5">You are signed in</h2>
+        <dl class="row mb-0">
+            <dt class="col-sm-3">Name</dt>
+            <dd class="col-sm-9">@Model.User.Name</dd>
+            <dt class="col-sm-3">Institution</dt>
+            <dd class="col-sm-9">@(Model.User.InstitutionCode ?? "Bank of Valoria (regulator)")</dd>
+            <dt class="col-sm-3">Roles</dt>
+            <dd class="col-sm-9 mb-0">@(Model.User.Roles.Count == 0 ? "None" : string.Join(", ", Model.User.Roles))</dd>
+        </dl>
+    </div>
+</section>

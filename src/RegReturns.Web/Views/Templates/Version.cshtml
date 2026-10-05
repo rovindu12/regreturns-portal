@@ -1,0 +1,321 @@
+@model TemplateVersionViewModel
+@{
+    ViewData["Title"] = Model.Title;
+    var template = Model.Template;
+    var status = TemplateDisplay.StatusLabel(template.Status);
+    var rule = Model.NewRule;
+}
+
+<nav aria-label="Breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="@PortalAreas.Admin.Path">@PortalAreas.Admin.Title</a></li>
+        <li class="breadcrumb-item"><a asp-action="Index">Return templates</a></li>
+        <li class="breadcrumb-item active" aria-current="page">@Model.Title</li>
+    </ol>
+</nav>
+
+<section class="mb-4" aria-labelledby="version-heading">
+    <h1 id="version-heading" class="h2 d-flex flex-wrap align-items-center gap-2">
+        @template.ReturnTypeName, version @template.Version
+        <span class="badge fs-6 @TemplateDisplay.StatusBadge(template.Status)">@status</span>
+    </h1>
+    <dl class="row mb-0">
+        <dt class="col-sm-3">Return type</dt>
+        <dd class="col-sm-9">@template.ReturnTypeCode &middot; @template.ReturnTypeName</dd>
+        <dt class="col-sm-3">Version</dt>
+        <dd class="col-sm-9">@template.Version</dd>
+        <dt class="col-sm-3">Status</dt>
+        <dd class="col-sm-9">@status</dd>
+        <dt class="col-sm-3">Effective from</dt>
+        <dd class="col-sm-9">@TemplateDisplay.Date(template.EffectiveFrom)</dd>
+        <dt class="col-sm-3">Returns captured</dt>
+        <dd class="col-sm-9 mb-0">@template.SubmissionCount</dd>
+    </dl>
+</section>
+
+<partial name="_Notice" model="Model.PageNotice" />
+
+@if (template.IsDraft)
+{
+    <div class="alert alert-warning" role="note">
+        <strong>This version is a draft.</strong> Banks cannot file against it until it is published, and once it is
+        published it cannot be changed.
+    </div>
+
+    <section id="@TemplateSections.EffectiveDate" class="mb-4" aria-labelledby="effective-date-heading">
+        <h2 id="effective-date-heading" class="h4">Effective date</h2>
+        <partial name="_Notice" model="Model.NoticeFor(TemplateSections.EffectiveDate)" />
+        <form method="post" asp-action="ChangeEffectiveDate" asp-route-id="@template.Id" class="row g-2 align-items-end">
+            <div class="col-sm-auto">
+                <label for="effective-from" class="form-label">Applies to reporting periods starting on or after</label>
+                <input type="date" id="effective-from" name="effectiveFrom" class="form-control" required
+                       value="@TemplateDisplay.DateInput(template.EffectiveFrom)" />
+            </div>
+            <div class="col-sm-auto">
+                <button type="submit" class="btn btn-outline-primary">Change date</button>
+            </div>
+        </form>
+    </section>
+}
+else if (template.Status == TemplateStatus.Published)
+{
+    <div class="alert alert-info" role="note">
+        <strong>This version is published</strong> and cannot be changed. To change the template, start a new draft
+        from it below.
+    </div>
+}
+else
+{
+    <div class="alert alert-secondary" role="note">
+        <strong>This version is retired.</strong> No new return is filed against it; it is kept, read-only, so returns
+        captured with it still show as they were filed.
+    </div>
+}
+
+<section id="@TemplateSections.Fields" class="mb-4" aria-labelledby="fields-heading">
+    <h2 id="fields-heading" class="h4">Fields <span class="text-muted fw-normal">(@template.Fields.Count)</span></h2>
+    <partial name="_Notice" model="Model.NoticeFor(TemplateSections.Fields)" />
+    <partial name="_FieldsTable" model="Model" />
+</section>
+
+@if (template.IsDraft)
+{
+    <section id="@TemplateSections.AddField" class="mb-4" aria-labelledby="add-field-heading">
+        <h2 id="add-field-heading" class="h4">Add a field</h2>
+        <partial name="_Notice" model="Model.NoticeFor(TemplateSections.AddField)" />
+        <form method="post" asp-action="AddField" asp-route-id="@template.Id" class="card card-body">
+            <partial name="_FieldInputs" model="new FieldInputsViewModel(Model.NewField, true, template)" />
+            <div class="mt-3">
+                <button type="submit" class="btn btn-primary">Add field</button>
+            </div>
+        </form>
+    </section>
+}
+
+<section id="@TemplateSections.Rules" class="mb-4" aria-labelledby="rules-heading">
+    <h2 id="rules-heading" class="h4">Validation rules <span class="text-muted fw-normal">(@template.Rules.Count)</span></h2>
+    <partial name="_Notice" model="Model.NoticeFor(TemplateSections.Rules)" />
+    <partial name="_RulesTable" model="Model" />
+</section>
+
+@if (template.IsDraft)
+{
+    <section id="@TemplateSections.AddRule" class="mb-4" aria-labelledby="add-rule-heading">
+        <h2 id="add-rule-heading" class="h4">Add a rule</h2>
+        <partial name="_Notice" model="Model.NoticeFor(TemplateSections.AddRule)" />
+        @if (template.Fields.Count == 0)
+        {
+            <p>Add a field first: every rule reports against a field.</p>
+        }
+        else
+        {
+            <form method="post" asp-action="AddRule" asp-route-id="@template.Id" class="card card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="rule-code" class="form-label">Code</label>
+                        <input id="rule-code" name="Code" class="form-control font-monospace" value="@rule.Code" required autocomplete="off"
+                               maxlength="@ValidationRule.CodeMaxLength" aria-describedby="rule-code-help" />
+                        <div id="rule-code-help" class="form-text">Capital letters, digits and _, such as @(template.ReturnTypeCode)_DEPOSIT_CHECK.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="rule-type" class="form-label">Rule type</label>
+                        <select id="rule-type" name="RuleType" class="form-select" data-rule-type aria-describedby="rule-type-help">
+                            @foreach (var ruleType in TemplateDisplay.RuleTypes)
+                            {
+                                <option value="@ruleType" selected="@(rule.RuleType == ruleType.ToString())">@TemplateDisplay.RuleTypeLabel(ruleType)</option>
+                            }
+                        </select>
+                        <div id="rule-type-help" class="form-text">Required and data type rules have no parameters and are always errors.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="rule-severity" class="form-label">Severity</label>
+                        <select id="rule-severity" name="Severity" class="form-select" aria-describedby="rule-severity-help">
+                            @foreach (var severity in TemplateDisplay.Severities)
+                            {
+                                <option value="@severity" selected="@(rule.Severity == severity.ToString())">@TemplateDisplay.SeverityLabel(severity)</option>
+                            }
+                        </select>
+                        <div id="rule-severity-help" class="form-text">An error blocks submission; a warning needs a written justification.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="rule-target" class="form-label">Target field</label>
+                        <select id="rule-target" name="TargetFieldCode" class="form-select" aria-describedby="rule-target-help">
+                            @foreach (var field in template.Fields.Select(f => f.Definition))
+                            {
+                                <option value="@field.Code" selected="@(rule.TargetFieldCode == field.Code)">@field.Code &middot; @field.Label</option>
+                            }
+                        </select>
+                        <div id="rule-target-help" class="form-text">The field the finding is shown against.</div>
+                    </div>
+                    <div class="col-md-8">
+                        <label for="rule-message" class="form-label">Message</label>
+                        <input id="rule-message" name="Message" class="form-control" value="@rule.Message" required
+                               maxlength="@ValidationRule.MessageMaxLength" aria-describedby="rule-message-help" />
+                        <div id="rule-message-help" class="form-text">Shown to the bank when the rule fails.</div>
+                    </div>
+                </div>
+
+                <fieldset class="mt-4" data-rule-params="@RuleType.Range">
+                    <legend class="h6">Range <span class="fw-normal text-muted">(range rules only)</span></legend>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="rule-min" class="form-label">Minimum</label>
+                            <input id="rule-min" name="MinValue" class="form-control" inputmode="decimal" value="@rule.MinValue" aria-describedby="rule-range-help" />
+                        </div>
+                        <div class="col-md-3">
+                            <label for="rule-max" class="form-label">Maximum</label>
+                            <input id="rule-max" name="MaxValue" class="form-control" inputmode="decimal" value="@rule.MaxValue" aria-describedby="rule-range-help" />
+                        </div>
+                    </div>
+                    <div id="rule-range-help" class="form-text">Both are inclusive; leave one blank for an open range. Write decimals with a dot, such as 12.5.</div>
+                </fieldset>
+
+                <fieldset class="mt-4" data-rule-params="@RuleType.CrossField">
+                    <legend class="h6">Cross-field comparison <span class="fw-normal text-muted">(cross-field rules only)</span></legend>
+                    <div class="row g-3">
+                        <div class="col-lg-5">
+                            <label for="rule-left" class="form-label">Left expression</label>
+                            <input id="rule-left" name="LeftExpression" class="form-control font-monospace" value="@rule.LeftExpression"
+                                   maxlength="@ValidationRule.ExpressionMaxLength" autocomplete="off" aria-describedby="expression-help" />
+                        </div>
+                        <div class="col-lg-2">
+                            <label for="rule-operator" class="form-label">Comparison</label>
+                            <select id="rule-operator" name="Operator" class="form-select">
+                                @foreach (var comparison in TemplateDisplay.Operators)
+                                {
+                                    <option value="@comparison" selected="@(rule.Operator == comparison.ToString())">@TemplateDisplay.OperatorLabel(comparison)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-lg-5">
+                            <label for="rule-right" class="form-label">Right expression</label>
+                            <input id="rule-right" name="RightExpression" class="form-control font-monospace" value="@rule.RightExpression"
+                                   maxlength="@ValidationRule.ExpressionMaxLength" autocomplete="off" aria-describedby="expression-help" />
+                        </div>
+                        <div class="col-md-3">
+                            <label for="rule-tolerance" class="form-label">Tolerance</label>
+                            <input id="rule-tolerance" name="Tolerance" class="form-control" inputmode="decimal" value="@rule.Tolerance" aria-describedby="rule-tolerance-help" />
+                            <div id="rule-tolerance-help" class="form-text">The difference allowed, such as 0.05. Blank means none.</div>
+                        </div>
+                    </div>
+                    <div id="expression-help" class="form-text">
+                        Write field codes in square brackets, such as <code>[TOTAL_HQLA]</code>, with <code>+ - * /</code>,
+                        parentheses, the functions <code>Min(a, b)</code>, <code>Max(a, b)</code> and <code>Abs(a)</code>,
+                        and numbers with a dot for decimals, such as <code>0.15</code>.
+                        Example: <code>[L1_HQLA] + [L2A_HQLA] + [L2B_HQLA]</code>.
+                    </div>
+                </fieldset>
+
+                <fieldset class="mt-4" data-rule-params="@RuleType.Variance">
+                    <legend class="h6">Variance <span class="fw-normal text-muted">(variance rules only)</span></legend>
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="rule-threshold" class="form-label">Threshold (%)</label>
+                            <input id="rule-threshold" name="ThresholdPercent" class="form-control" inputmode="decimal" value="@rule.ThresholdPercent"
+                                   aria-describedby="rule-threshold-help" />
+                            <div id="rule-threshold-help" class="form-text">The largest change allowed, such as 25.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="rule-basis" class="form-label">Compared with</label>
+                            <select id="rule-basis" name="VarianceBasis" class="form-select">
+                                @foreach (var basis in TemplateDisplay.VarianceBases)
+                                {
+                                    <option value="@basis" selected="@(rule.VarianceBasis == basis.ToString())">@TemplateDisplay.BasisLabel(basis)</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary">Add rule</button>
+                </div>
+            </form>
+        }
+    </section>
+
+    <section id="@TemplateSections.Publish" class="card border-success mb-4" aria-labelledby="publish-heading">
+        <div class="card-body">
+            <h2 id="publish-heading" class="h4">Publish</h2>
+            <partial name="_Notice" model="Model.NoticeFor(TemplateSections.Publish)" />
+            <p>
+                Publishing makes version @template.Version the template banks file against for reporting periods
+                starting on or after @TemplateDisplay.Date(template.EffectiveFrom), until a later version applies.
+                <strong>A published version cannot be changed</strong>: later changes need a new draft.
+            </p>
+            <form method="post" asp-action="Publish" asp-route-id="@template.Id">
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="publish-confirm" name="confirm" value="true" required />
+                    <label class="form-check-label" for="publish-confirm">
+                        I have checked the fields and rules, and understand that version @template.Version cannot be changed once published.
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-success">Publish version @template.Version</button>
+            </form>
+        </div>
+    </section>
+
+    <section id="@TemplateSections.DeleteDraft" class="mb-4" aria-labelledby="delete-draft-heading">
+        <h2 id="delete-draft-heading" class="h4">Delete draft</h2>
+        <partial name="_Notice" model="Model.NoticeFor(TemplateSections.DeleteDraft)" />
+        <form method="post" asp-action="DeleteDraft" asp-route-id="@template.Id">
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="delete-confirm" name="confirm" value="true" required />
+                <label class="form-check-label" for="delete-confirm">Delete draft version @template.Version with all its fields and rules.</label>
+            </div>
+            <button type="submit" class="btn btn-outline-danger">Delete draft</button>
+        </form>
+    </section>
+}
+else if (template.Status == TemplateStatus.Published)
+{
+    <section id="@TemplateSections.NewDraft" class="mb-4" aria-labelledby="new-draft-heading">
+        <h2 id="new-draft-heading" class="h4">Start a new draft from this version</h2>
+        <partial name="_Notice" model="Model.NoticeFor(TemplateSections.NewDraft)" />
+        @if (Model.ExistingDraft is { } draft)
+        {
+            <p>
+                @template.ReturnTypeCode already has a draft, version @draft.Version.
+                <a asp-action="Version" asp-route-id="@draft.Id">Continue editing draft version @draft.Version</a>
+            </p>
+        }
+        else
+        {
+            <form method="post" asp-action="StartDraft" class="row g-2 align-items-end">
+                <input type="hidden" name="returnTypeId" value="@template.ReturnTypeId" />
+                <input type="hidden" name="copyFromVersionId" value="@template.Id" />
+                <div class="col-sm-auto">
+                    <label for="new-draft-effective-from" class="form-label">Effective from</label>
+                    <input type="date" id="new-draft-effective-from" name="effectiveFrom" class="form-control" required
+                           value="@TemplateDisplay.DateInput(Model.DefaultEffectiveFrom)" aria-describedby="new-draft-help" />
+                </div>
+                <div class="col-sm-auto">
+                    <button type="submit" class="btn btn-primary">Start new draft from this version</button>
+                </div>
+                <div id="new-draft-help" class="form-text col-12 mt-1">
+                    Copies the fields and rules of version @template.Version into a new draft.
+                </div>
+            </form>
+        }
+    </section>
+
+    <section id="@TemplateSections.Retire" class="mb-4" aria-labelledby="retire-heading">
+        <h2 id="retire-heading" class="h4">Retire</h2>
+        <partial name="_Notice" model="Model.NoticeFor(TemplateSections.Retire)" />
+        <p>Retiring stops new returns being filed against this version. Returns already captured with it keep it.</p>
+        <form method="post" asp-action="Retire" asp-route-id="@template.Id">
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="retire-confirm" name="confirm" value="true" required />
+                <label class="form-check-label" for="retire-confirm">Retire version @template.Version. This cannot be undone.</label>
+            </div>
+            <button type="submit" class="btn btn-outline-danger">Retire version @template.Version</button>
+        </form>
+    </section>
+}
+
+@section Scripts {
+    @if (template.IsDraft)
+    {
+        <script src="~/js/template-rules.js" asp-append-version="true"></script>
+    }
+}

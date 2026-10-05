@@ -31,10 +31,14 @@ internal static partial class Guard
             : throw new DomainException($"{name} '{code}' must contain only A-Z, 0-9 and '_' and start with a letter.");
     }
 
+    /// <summary>Returns whether a value is a valid code: A-Z, 0-9 and '_', starting with a letter, at most <paramref name="maxLength"/>.</summary>
+    public static bool IsCode(string? value, int maxLength) =>
+        value is not null && value.Length <= maxLength && CodePattern().IsMatch(value);
+
     /// <summary>Ensures a Guid is not empty.</summary>
     public static Guid NotEmpty(Guid value, [CallerArgumentExpression(nameof(value))] string? name = null) =>
         value == Guid.Empty ? throw new DomainException($"{name} is required.") : value;
 
-    [GeneratedRegex("^[A-Z][A-Z0-9_]*$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
+    [GeneratedRegex(@"^[A-Z][A-Z0-9_]*\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex CodePattern();
 }

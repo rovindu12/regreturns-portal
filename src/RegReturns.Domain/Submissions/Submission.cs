@@ -148,7 +148,10 @@ public sealed class Submission : Entity
     public SubmissionValue? FindValue(string fieldCode) =>
         _values.Find(v => string.Equals(v.FieldCode, fieldCode, StringComparison.Ordinal));
 
-    /// <summary>Sets field values. Blank values are kept as blanks so required-field rules can report them.</summary>
+    /// <summary>
+    /// Sets field values. Blank values are kept as blanks so required-field rules can report them. Only a real change
+    /// counts as an edit (bumping <see cref="EditVersion"/> and recording the editor).
+    /// </summary>
     /// <param name="template">The submission's template version.</param>
     /// <param name="values">Values keyed by field code.</param>
     /// <param name="editor">The bank maker making the change.</param>
@@ -186,20 +189,35 @@ public sealed class Submission : Entity
                 return SubmissionErrors.UnknownField.WithMessage($"Field '{code}' is not in the return template.");
             }
 
+            if (raw?.Trim().Length > SubmissionValue.RawValueMaxLength)
+            {
+                return SubmissionErrors.ValueTooLong.WithMessage(
+                    $"{field.Label} must be at most {SubmissionValue.RawValueMaxLength} characters.");
+            }
+
             fields.Add((field, raw));
         }
 
+        var changed = false;
         foreach (var (field, raw) in fields)
         {
             var existing = FindValue(field.Code);
             if (existing is null)
             {
                 _values.Add(SubmissionValue.Create(field, raw));
+                changed = true;
             }
-            else
+            else if (!string.Equals(existing.RawValue, SubmissionValue.Normalize(raw), StringComparison.Ordinal))
             {
                 existing.Update(field, raw);
+                changed = true;
             }
+        }
+
+        // Saving an unchanged form is not an edit: it must not make the saver the last editor or outdate validation.
+        if (!changed)
+        {
+            return Result.Success();
         }
 
         EditVersion++;

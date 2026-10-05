@@ -27,6 +27,11 @@ internal sealed class SubmissionConfiguration : IEntityTypeConfiguration<Submiss
         builder.HasOne<AppUser>().WithMany().HasForeignKey(s => s.ReviewedByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<AppUser>().WithMany().HasForeignKey(s => s.DecidedByUserId).OnDelete(DeleteBehavior.Restrict);
 
+        // At most one live submission per obligation; a rejected one is history and the bank files again.
+        builder.HasIndex(s => s.ObligationId)
+            .IsUnique()
+            .HasFilter($"[{nameof(Submission.Status)}] <> N'{nameof(SubmissionStatus.Rejected)}'")
+            .HasDatabaseName("UX_Submissions_LiveObligation");
         builder.HasIndex(s => new { s.InstitutionId, s.Status });
         builder.HasIndex(s => new { s.Status, s.LastSubmittedAt });
 
@@ -86,5 +91,21 @@ internal sealed class WorkflowEventConfiguration : IEntityTypeConfiguration<Work
         builder.Property(e => e.Comment).HasMaxLength(WorkflowEvent.CommentMaxLength);
         builder.HasOne<AppUser>().WithMany().HasForeignKey(e => e.ActorUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(e => new { e.SubmissionId, e.OccurredAt });
+    }
+}
+
+internal sealed class StoredFileConfiguration : IEntityTypeConfiguration<StoredFile>
+{
+    public void Configure(EntityTypeBuilder<StoredFile> builder)
+    {
+        builder.ToTable("StoredFiles", Schemas.Returns);
+        builder.HasDomainKey();
+        builder.Property(f => f.FileName).HasMaxLength(StoredFile.FileNameMaxLength);
+        builder.Property(f => f.ContentType).HasMaxLength(StoredFile.ContentTypeMaxLength).IsUnicode(false);
+        builder.Property(f => f.Sha256).HasMaxLength(StoredFile.Sha256Length).IsFixedLength().IsUnicode(false);
+        builder.Property(f => f.Content).HasMaxLength(StoredFile.MaxSizeBytes);
+        builder.HasOne<Submission>().WithMany().HasForeignKey(f => f.SubmissionId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<AppUser>().WithMany().HasForeignKey(f => f.UploadedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(f => new { f.SubmissionId, f.UploadedAt });
     }
 }

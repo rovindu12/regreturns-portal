@@ -43,6 +43,8 @@ public sealed class PortalEndpointMetadataTests(SqlServerFixture sql) : IDisposa
         actions.ShouldContain("BackchannelLogout.Logout");
         actions.ShouldContain("Bank.Index");
         actions.ShouldContain("Admin.Index");
+        actions.ShouldContain("Templates.Index");
+        actions.ShouldContain("Templates.Publish");
     }
 
     public void Dispose() => _factory.Dispose();

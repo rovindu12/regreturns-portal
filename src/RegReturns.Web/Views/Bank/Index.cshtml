@@ -1,0 +1,125 @@
+@model BankOverviewViewModel
+@{
+    ViewData["Title"] = "Bank returns";
+    var overview = Model.Overview;
+}
+
+<section class="mb-4">
+    <h1 class="h2">Bank returns</h1>
+    @if (overview is not null)
+    {
+        <p class="lead mb-0">@overview.InstitutionName (@overview.InstitutionCode): returns due in the last 13 months and what is still to do.</p>
+    }
+</section>
+
+<partial name="_Flash" />
+
+@if (overview is null)
+{
+    <div class="alert alert-warning" role="alert">@Model.Problem</div>
+    return;
+}
+
+@if (overview.Rows.Count == 0)
+{
+    <p>There are no filing obligations for your bank yet.</p>
+    return;
+}
+
+<div class="table-responsive">
+    <table class="table align-middle" aria-describedby="returns-caption">
+        <caption id="returns-caption" class="caption-top">
+            @ReturnDisplay.Count(overview.Rows.Count(r => r.IsToDo), "return") to work on. Open returns come first, by due date.
+        </caption>
+        <thead>
+            <tr>
+                <th scope="col">Return</th>
+                <th scope="col">Period</th>
+                <th scope="col">Due</th>
+                <th scope="col">Status</th>
+                <th scope="col">Findings</th>
+                <th scope="col"><span class="visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in overview.Rows)
+            {
+                <tr class="@(row.IsToDo ? null : "text-body-secondary")">
+                    <td>
+                        <span class="fw-semibold">@row.ReturnTypeCode</span>
+                        <span class="d-block small">@row.ReturnTypeName</span>
+                    </td>
+                    <td>@row.PeriodLabel</td>
+                    <td>
+                        @row.DueDate.ToString(ReturnDisplay.DateFormat, System.Globalization.CultureInfo.InvariantCulture)
+                        @if (row.IsOverdue)
+                        {
+                            <span class="badge text-bg-danger ms-1">Overdue</span>
+                        }
+                        else if (row.IsLate)
+                        {
+                            <span class="badge text-bg-warning ms-1">Filed late</span>
+                        }
+                    </td>
+                    <td>
+                        @if (row.SubmissionStatus is { } status)
+                        {
+                            <span class="badge @ReturnDisplay.BadgeClass(status)">@ReturnDisplay.Label(status)</span>
+                            @if (row.Revision > 1)
+                            {
+                                <span class="small ms-1">revision @row.Revision</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-light border">@ReturnDisplay.NotStartedLabel(row)</span>
+                        }
+                    </td>
+                    <td class="small">
+                        @if (row.SubmissionId is null)
+                        {
+                            <span aria-label="None">&ndash;</span>
+                        }
+                        else if (row.Errors == 0 && row.UnjustifiedWarnings == 0)
+                        {
+                            <span>None open</span>
+                        }
+                        else
+                        {
+                            @if (row.Errors > 0)
+                            {
+                                <span class="text-danger d-block">@ReturnDisplay.Count(row.Errors, "error")</span>
+                            }
+                            @if (row.UnjustifiedWarnings > 0)
+                            {
+                                <span class="text-warning-emphasis d-block">@ReturnDisplay.Count(row.UnjustifiedWarnings, "warning") to justify</span>
+                            }
+                        }
+                    </td>
+                    <td class="text-end text-nowrap">
+                        @if (row.SubmissionId is { } submissionId)
+                        {
+                            <a class="btn btn-sm btn-outline-primary" asp-action="Return" asp-route-submissionId="@submissionId">
+                                Open<span class="visually-hidden"> @row.ReturnTypeCode @row.PeriodLabel</span>
+                            </a>
+                        }
+                        else if (Model.CanPrepare && row.IsToDo)
+                        {
+                            <form class="d-inline" method="post" asp-action="Start" asp-route-obligationId="@row.ObligationId">
+                                <button type="submit" class="btn btn-sm btn-primary">
+                                    Start<span class="visually-hidden"> @row.ReturnTypeCode @row.PeriodLabel</span>
+                                </button>
+                            </form>
+                        }
+                        @if (Model.CanPrepare && row.IsToDo)
+                        {
+                            <a class="btn btn-sm btn-outline-secondary" asp-action="Upload" asp-route-obligationId="@row.ObligationId">
+                                Upload<span class="visually-hidden"> @row.ReturnTypeCode @row.PeriodLabel</span>
+                            </a>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

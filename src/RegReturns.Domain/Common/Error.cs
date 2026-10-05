@@ -15,4 +15,9 @@ public sealed record Error(string Code, string Message)
     /// <param name="message">The replacement message.</param>
     /// <returns>A new <see cref="Error"/> with the same code.</returns>
     public Error WithMessage(string message) => this with { Message = message };
+
+    /// <summary>Gets whether this is the same failure as another error, whatever either message says.</summary>
+    /// <param name="other">The error to compare with, usually one from an error catalogue.</param>
+    /// <returns><see langword="true"/> when the codes match.</returns>
+    public bool Is(Error? other) => other is not null && string.Equals(Code, other.Code, StringComparison.Ordinal);
 }

@@ -1,0 +1,80 @@
+@model UploadViewModel
+@{
+    var obligation = Model.Obligation;
+    ViewData["Title"] = $"Upload {obligation.ReturnTypeCode} {obligation.PeriodLabel}";
+    var maxSize = ReturnDisplay.FileSize(UploadViewModel.MaxFileBytes);
+}
+
+<nav aria-label="Breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">Bank returns</a></li>
+        @if (obligation.SubmissionId is { } submissionId)
+        {
+            <li class="breadcrumb-item"><a asp-action="Return" asp-route-submissionId="@submissionId">@obligation.ReturnTypeCode @obligation.PeriodLabel</a></li>
+        }
+        <li class="breadcrumb-item active" aria-current="page">Upload</li>
+    </ol>
+</nav>
+
+<section class="mb-4">
+    <h1 class="h2">Upload @obligation.ReturnTypeName <span class="text-body-secondary">(@obligation.ReturnTypeCode)</span></h1>
+    <p class="mb-0">
+        Period <strong>@obligation.PeriodLabel</strong>, due @obligation.DueDate.ToString(ReturnDisplay.DateFormat, System.Globalization.CultureInfo.InvariantCulture).
+        @if (obligation.SubmissionStatus is { } status)
+        {
+            <span class="badge @ReturnDisplay.BadgeClass(status) ms-1">@ReturnDisplay.Label(status)</span>
+        }
+    </p>
+</section>
+
+<partial name="_Flash" />
+
+<div class="row g-4">
+    <section aria-labelledby="how-heading" class="col-lg-6">
+        <h2 id="how-heading" class="h5">How it works</h2>
+        <ol>
+            <li class="mb-2">
+                Download the template, which lists every field of this return with any values already entered:
+                <span class="d-inline-flex gap-2 mt-1">
+                    <a class="btn btn-sm btn-outline-secondary" asp-action="Download" asp-route-obligationId="@obligation.ObligationId" asp-route-format="xlsx">Excel template</a>
+                    <a class="btn btn-sm btn-outline-secondary" asp-action="Download" asp-route-obligationId="@obligation.ObligationId" asp-route-format="csv">CSV template</a>
+                </span>
+            </li>
+            <li class="mb-2">
+                Fill in the <code>Value</code> column. Keep the <code>FieldCode</code> column as it is; the other columns are only there to help.
+                Rows you delete keep the value the return already has.
+            </li>
+            <li>Upload the file. The values are loaded into a draft and validated straight away.</li>
+        </ol>
+        <p class="small text-body-secondary mb-0">
+            Accepted: <code>.xlsx</code> workbooks without macros (first sheet only) and UTF-8 <code>.csv</code> files, up to @maxSize.
+            Files are checked by their content, not just their name, and are kept as evidence; the portal never opens or runs them.
+        </p>
+    </section>
+
+    <section aria-labelledby="upload-heading" class="col-lg-6">
+        <div class="card">
+            <div class="card-body">
+                <h2 id="upload-heading" class="h5">Upload a file</h2>
+                @if (Model.Error is not null)
+                {
+                    <div class="alert alert-danger" role="alert">The file was not loaded. @Model.Error</div>
+                }
+                <form method="post" enctype="multipart/form-data" asp-action="Upload" asp-route-obligationId="@obligation.ObligationId">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Return file</label>
+                        <input id="file" name="file" type="file" class="form-control" accept=".xlsx,.csv" required
+                               data-max-bytes="@UploadViewModel.MaxFileBytes" data-too-large="The file is larger than @maxSize."
+                               aria-describedby="file-hint" />
+                        <div id="file-hint" class="form-text">An .xlsx or .csv file of at most @maxSize.</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Upload and validate</button>
+                </form>
+            </div>
+        </div>
+    </section>
+</div>
+
+@section Scripts {
+    <script src="~/js/returns.js" asp-append-version="true"></script>
+}

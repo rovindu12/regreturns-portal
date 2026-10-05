@@ -64,7 +64,7 @@ public sealed class PortalAuthorizationTests : IClassFixture<PortalDatabaseFixtu
     }
 
     [Fact]
-    public async Task Maker_opens_the_bank_landing_page()
+    public async Task Maker_opens_the_bank_area()
     {
         using var client = Maker("maker-opens-bank");
 
@@ -73,7 +73,7 @@ public sealed class PortalAuthorizationTests : IClassFixture<PortalDatabaseFixtu
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
         var html = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         html.ShouldContain("Maker (Harbourline Bank PLC)");
-        html.ShouldContain("Bank maker");
+        html.ShouldContain("<h1 class=\"h2\">Bank returns</h1>");
     }
 
     [Fact]

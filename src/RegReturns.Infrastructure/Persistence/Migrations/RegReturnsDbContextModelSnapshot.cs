@@ -296,6 +296,58 @@ namespace RegReturns.Infrastructure.Persistence.Migrations
                     b.ToTable("Obligations", "returns");
                 });
 
+            modelBuilder.Entity("RegReturns.Domain.Submissions.StoredFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasMaxLength(5242880)
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<int>("SizeBytes")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SubmissionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("UploadedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UploadedByUserId");
+
+                    b.HasIndex("SubmissionId", "UploadedAt");
+
+                    b.ToTable("StoredFiles", "returns");
+                });
+
             modelBuilder.Entity("RegReturns.Domain.Submissions.Submission", b =>
                 {
                     b.Property<Guid>("Id")
@@ -376,7 +428,10 @@ namespace RegReturns.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("LastEditedByUserId");
 
-                    b.HasIndex("ObligationId");
+                    b.HasIndex("ObligationId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Submissions_LiveObligation")
+                        .HasFilter("[Status] <> N'Rejected'");
 
                     b.HasIndex("PreparedByUserId");
 
@@ -755,6 +810,21 @@ namespace RegReturns.Infrastructure.Persistence.Migrations
                     b.HasOne("RegReturns.Domain.Templates.ReturnType", null)
                         .WithMany()
                         .HasForeignKey("ReturnTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RegReturns.Domain.Submissions.StoredFile", b =>
+                {
+                    b.HasOne("RegReturns.Domain.Submissions.Submission", null)
+                        .WithMany()
+                        .HasForeignKey("SubmissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RegReturns.Domain.Identity.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UploadedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

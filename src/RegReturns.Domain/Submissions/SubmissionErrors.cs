@@ -65,6 +65,22 @@ public static class SubmissionErrors
     public static readonly Error UnknownField = new(
         "Submission.UnknownField", "The value refers to a field that is not in the return template.");
 
+    /// <summary>A value is longer than a value can be.</summary>
+    public static readonly Error ValueTooLong = new(
+        "Submission.ValueTooLong", $"A value must be at most {SubmissionValue.RawValueMaxLength} characters.");
+
+    /// <summary>The values changed since the editor loaded them.</summary>
+    public static readonly Error EditConflict = new(
+        "Submission.EditConflict",
+        "Someone changed this return after you opened it. Reload it to see their changes, then enter yours again.");
+
+    /// <summary>The obligation is already fulfilled, so no new draft can be started.</summary>
+    public static readonly Error ObligationClosed = new(
+        "Submission.ObligationClosed", "This return has already been approved; no new draft can be started.");
+
+    /// <summary>The submission or obligation was not found, or belongs to another bank.</summary>
+    public static readonly Error NotFound = new("Submission.NotFound", "The return was not found.");
+
     /// <summary>The template passed in is not the submission's template.</summary>
     public static readonly Error TemplateMismatch = new(
         "Submission.TemplateMismatch", "The template does not match the submission.");

@@ -1,0 +1,102 @@
+@model TemplateCatalogueViewModel
+@{
+    ViewData["Title"] = "Return templates";
+}
+
+<nav aria-label="Breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="@PortalAreas.Admin.Path">@PortalAreas.Admin.Title</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Return templates</li>
+    </ol>
+</nav>
+
+<section class="mb-4">
+    <h1 class="h2">Return templates</h1>
+    <p class="lead mb-0">
+        Each return has numbered template versions. Banks file against the published version that applies to the
+        reporting period. To change a template, start a draft, edit it and publish it.
+    </p>
+</section>
+
+<partial name="_Notice" model="Model.Notice" />
+
+@foreach (var returnType in Model.ReturnTypes)
+{
+    var typeCode = returnType.Code;
+    var latest = TemplateCatalogueViewModel.LatestPublished(returnType);
+    <section class="card mb-4" aria-labelledby="type-@typeCode-heading">
+        <div class="card-header">
+            <h2 id="type-@typeCode-heading" class="h5 mb-0">@returnType.Name (@typeCode)</h2>
+            <span class="small text-muted">
+                @TemplateDisplay.FrequencyLabel(returnType.Frequency)@(returnType.IsActive ? string.Empty : " · not currently filed")
+            </span>
+        </div>
+        <div class="card-body">
+            @if (returnType.Versions.Count == 0)
+            {
+                <p>No template versions yet.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <caption class="visually-hidden">Template versions of @typeCode, newest first</caption>
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col">Version</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Effective from</th>
+                                <th scope="col" class="text-end">Fields</th>
+                                <th scope="col" class="text-end">Rules</th>
+                                <th scope="col" class="text-end">Returns captured</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var version in returnType.Versions)
+                            {
+                                <tr>
+                                    <th scope="row">
+                                        <a asp-action="Version" asp-route-id="@version.Id">Version @version.Version<span class="visually-hidden"> of @typeCode</span></a>
+                                    </th>
+                                    <td><span class="badge @TemplateDisplay.StatusBadge(version.Status)">@TemplateDisplay.StatusLabel(version.Status)</span></td>
+                                    <td>@TemplateDisplay.Date(version.EffectiveFrom)</td>
+                                    <td class="text-end">@version.FieldCount</td>
+                                    <td class="text-end">@version.RuleCount</td>
+                                    <td class="text-end">@version.SubmissionCount</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (returnType.Draft is { } draft)
+            {
+                <p class="mb-0">
+                    Version @draft.Version is a draft.
+                    <a asp-action="Version" asp-route-id="@draft.Id">Continue editing draft version @draft.Version<span class="visually-hidden"> of @typeCode</span></a>
+                </p>
+            }
+            else
+            {
+                <form method="post" asp-action="StartDraft" class="row g-2 align-items-end">
+                    <input type="hidden" name="returnTypeId" value="@returnType.ReturnTypeId" />
+                    <div class="col-sm-auto">
+                        <label for="effective-from-@typeCode" class="form-label">Effective from</label>
+                        <input type="date" id="effective-from-@typeCode" name="effectiveFrom" class="form-control" required
+                               value="@TemplateDisplay.DateInput(Model.DefaultEffectiveFrom)" aria-describedby="start-draft-help-@typeCode" />
+                    </div>
+                    <div class="col-sm-auto">
+                        <button type="submit" class="btn btn-primary">Start new draft<span class="visually-hidden"> of @typeCode</span></button>
+                    </div>
+                    <div id="start-draft-help-@typeCode" class="form-text col-12 mt-1">
+                        @(latest is null
+                            ? "Starts an empty template."
+                            : $"Copies version {latest.Version}, the latest published version.")
+                        Once published, it applies to reporting periods starting on or after this date.
+                    </div>
+                </form>
+            }
+        </div>
+    </section>
+}
