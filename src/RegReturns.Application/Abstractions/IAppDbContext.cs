@@ -31,6 +31,9 @@ public interface IAppDbContext
     /// <summary>Gets the submissions, including values, findings and workflow events.</summary>
     DbSet<Submission> Submissions { get; }
 
+    /// <summary>Gets the uploaded return files (content included; project the columns you need).</summary>
+    DbSet<StoredFile> StoredFiles { get; }
+
     /// <summary>Gets the banks' machine-to-machine clients registered in WSO2.</summary>
     DbSet<ApiClient> ApiClients { get; }
 

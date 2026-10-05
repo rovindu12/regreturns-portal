@@ -3,6 +3,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Mvc;
 
 using RegReturns.Application;
+using RegReturns.Application.Abstractions;
 using RegReturns.Infrastructure;
 using RegReturns.Infrastructure.Identity.Authorization;
 using RegReturns.ServiceDefaults.Web;
@@ -20,6 +21,8 @@ try
     builder.AddServiceDefaults("regreturns-web");
 
     builder.Services.AddApplication();
+    builder.Services.AddHttpContextAccessor();
+    builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddAuditTrail(builder.Configuration);
     builder.Services.AddWso2Backchannel(builder.Configuration);

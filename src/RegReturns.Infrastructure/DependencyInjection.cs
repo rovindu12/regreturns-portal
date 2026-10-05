@@ -40,6 +40,10 @@ public static class DependencyInjection
             {
                 sql.CommandTimeout(db.CommandTimeoutSeconds);
                 sql.EnableRetryOnFailure(db.MaxRetryCount);
+
+                // Aggregates load several collections (a template's fields and rules); one query each avoids a
+                // cartesian product. The Application layer cannot ask per query, as it only references EF Core.
+                sql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
             });
         });
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<RegReturnsDbContext>());

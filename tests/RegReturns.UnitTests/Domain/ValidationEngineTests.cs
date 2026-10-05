@@ -226,7 +226,7 @@ public sealed class ValidationEngineTests
     }
 
     [Fact]
-    public void Findings_follow_field_order_then_rule_order_and_carry_the_rule()
+    public void Findings_follow_field_order_and_carry_the_rule()
     {
         var bRequired = ValidationRule.Required("B_REQ", "B", "B is required.");
         var aRange = ValidationRule.Range("A_RANGE", "A", Severity.Warning, 0m, null, "A cannot be negative.");
@@ -252,5 +252,18 @@ public sealed class ValidationEngineTests
         var template = Template(ValidationRule.CrossField("SUM", "TOTAL", Severity.Error, "[TOTAL]", ComparisonOperator.Equal, "[A] + [B]", 0m, message));
 
         ValidationEngine.Validate(template, Values(("A", "1"), ("B", "1"), ("TOTAL", "3"))).Single().Message.ShouldBe(message);
+    }
+
+    [Fact]
+    public void Findings_on_one_field_are_ordered_by_rule_type_then_code()
+    {
+        var template = Template(
+            ValidationRule.Range("Z_MAX", "A", Severity.Warning, null, 10m, "Above 10."),
+            ValidationRule.Variance("A_VAR", "A", Severity.Warning, 5m, VarianceBasis.PreviousPeriod, "Moved."),
+            ValidationRule.Range("B_MAX", "A", Severity.Warning, null, 20m, "Above 20."));
+
+        var findings = ValidationEngine.Validate(template, Values(("A", "50")), Prior(VarianceBasis.PreviousPeriod, 1m));
+
+        findings.Select(f => f.RuleCode).ShouldBe(["B_MAX", "Z_MAX", "A_VAR"]);
     }
 }

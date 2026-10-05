@@ -31,7 +31,7 @@ public static class ValidationEngine
     /// Figures from the last approved return for each variance basis, keyed by field code. Leave out a basis (or pass
     /// <see langword="null"/>) when there is no such return; its variance rules are then skipped.
     /// </param>
-    /// <returns>The failed rules as findings, ordered by field display order and then rule order.</returns>
+    /// <returns>The failed rules as findings, ordered by field display order, then rule type, then rule code.</returns>
     public static IReadOnlyList<FindingDraft> Validate(
         TemplateVersion template,
         IReadOnlyDictionary<string, string?> values,
@@ -45,12 +45,13 @@ public static class ValidationEngine
             f => f.Code, f => FieldValueParser.Parse(f, values.GetValueOrDefault(f.Code)), StringComparer.Ordinal);
         decimal? NumberOf(string code) => parsed.TryGetValue(code, out var value) ? value.Number : null;
 
+        // Rules have no stored order (the database returns them in any order), so sort on what they are.
         return template.Rules
-            .Select((rule, index) => (Rule: rule, Index: index))
-            .Where(r => r.Rule.IsActive)
-            .OrderBy(r => fields[r.Rule.TargetFieldCode].DisplayOrder)
-            .ThenBy(r => r.Index)
-            .Select(r => Evaluate(r.Rule, parsed[r.Rule.TargetFieldCode], NumberOf, priorValues))
+            .Where(r => r.IsActive)
+            .OrderBy(r => fields[r.TargetFieldCode].DisplayOrder)
+            .ThenBy(r => r.RuleType)
+            .ThenBy(r => r.Code, StringComparer.Ordinal)
+            .Select(r => Evaluate(r, parsed[r.TargetFieldCode], NumberOf, priorValues))
             .OfType<FindingDraft>()
             .ToList();
     }

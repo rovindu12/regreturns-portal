@@ -47,7 +47,7 @@ public sealed class SqlServerFixture : IAsyncLifetime
     public string NewDatabaseConnectionString() => DatabaseConnectionString($"RegReturns_{Guid.NewGuid():N}");
 
     public static RegReturnsDbContext CreateContext(string connectionString) =>
-        new(new DbContextOptionsBuilder<RegReturnsDbContext>().UseSqlServer(connectionString).Options);
+        new(new DbContextOptionsBuilder<RegReturnsDbContext>().UseSqlServer(connectionString, sql => sql.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery)).Options);
 
     private string DatabaseConnectionString(string database) =>
         new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(_container.GetConnectionString()) { InitialCatalog = database }

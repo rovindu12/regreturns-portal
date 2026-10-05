@@ -1,13 +1,15 @@
 using Microsoft.Extensions.DependencyInjection;
 
+using RegReturns.Application.Identity;
 using RegReturns.Application.Messaging;
+using RegReturns.Application.Returns;
 
 namespace RegReturns.Application;
 
 /// <summary>Registers application use cases.</summary>
 public static class DependencyInjection
 {
-    /// <summary>Registers every query and command handler in this assembly as a scoped service.</summary>
+    /// <summary>Registers every query and command handler in this assembly, and the services they share, as scoped.</summary>
     /// <param name="services">The service collection.</param>
     /// <returns>The same service collection.</returns>
     public static IServiceCollection AddApplication(this IServiceCollection services)
@@ -23,6 +25,9 @@ public static class DependencyInjection
         {
             services.AddScoped(service, implementation);
         }
+
+        services.AddScoped<ICurrentActor, CurrentActor>();
+        services.AddScoped<ReturnValidator>();
 
         return services;
     }

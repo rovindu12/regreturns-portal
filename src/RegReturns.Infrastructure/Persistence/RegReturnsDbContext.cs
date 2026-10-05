@@ -38,6 +38,9 @@ public sealed class RegReturnsDbContext(DbContextOptions<RegReturnsDbContext> op
     public DbSet<Submission> Submissions => Set<Submission>();
 
     /// <inheritdoc />
+    public DbSet<StoredFile> StoredFiles => Set<StoredFile>();
+
+    /// <inheritdoc />
     public DbSet<ApiClient> ApiClients => Set<ApiClient>();
 
     /// <summary>Gets the audit chain. Append only through <see cref="Auditing.AuditTrail"/>.</summary>
