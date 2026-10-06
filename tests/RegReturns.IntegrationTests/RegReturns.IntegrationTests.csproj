@@ -7,6 +7,7 @@
     <ProjectReference Include="..\..\src\RegReturns.Api\RegReturns.Api.csproj" Aliases="ApiHost" />
     <ProjectReference Include="..\..\src\RegReturns.Infrastructure\RegReturns.Infrastructure.csproj" />
     <ProjectReference Include="..\..\tools\RegReturns.IamBootstrap\RegReturns.IamBootstrap.csproj" Aliases="IamBootstrapTool" />
+    <ProjectReference Include="..\..\tools\RegReturns.Migrator\RegReturns.Migrator.csproj" Aliases="MigratorTool" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="xunit.v3" />

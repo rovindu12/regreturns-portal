@@ -918,6 +918,15 @@
           "System.CommandLine": "[2.0.12, )"
         }
       },
+      "regreturns-migrator": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Hosting": "[10.0.12, )",
+          "RegReturns.Infrastructure": "[0.1.0, )",
+          "RegReturns.ServiceDefaults": "[0.1.0, )",
+          "System.CommandLine": "[2.0.12, )"
+        }
+      },
       "regreturns.api": {
         "type": "Project",
         "dependencies": {
