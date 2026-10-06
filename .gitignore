@@ -484,3 +484,6 @@ $RECYCLE.BIN/
 # RegReturns: local secrets and generated development keys (.env is ignored above)
 .env.generated
 .certs/
+
+# RegReturns: migration reports hold return figures (docs/DATA-MIGRATION.md)
+/out/

@@ -29,8 +29,9 @@ as the domain and server right before the phase 11 deploy.
 | 4. Workflow, queues, audit interceptor, auditor verify screen | done |
 | 5. Web API: v1 endpoints, idempotency, paging, rate limits, Swagger | done |
 | 6. Dashboards and reports: compliance grid, overdue, findings trend, key ratios, Excel/PDF export | done |
-| 7. Migration tool: legacy CSV generator, dry-run migrator, mapping, error report, reconciliation | next |
-| 8-12 | not started |
+| 7. Migration tool: legacy CSV generator, dry-run migrator, mapping, error report, reconciliation | done |
+| 8. AI assistant: insight service, Anthropic provider, rule-based fallback, reviewer panel, audited calls | next |
+| 9-12 | not started |
 
 ## Commands
 
@@ -43,6 +44,10 @@ docker compose up -d                       # SQL Server, WSO2 (https://localhost
 scripts/dev-secrets.sh                     # copies .env (and .env.generated) into user-secrets for every project
 
 dotnet run --project tools/RegReturns.Migrator -- migrate-db --seed   # schema + demo data (idempotent)
+dotnet run --project tools/RegReturns.Migrator -- legacy --source samples/legacy --dry-run --report out/legacy
+                                                                      # legacy CSV migration (ADR 0029); drop --dry-run
+                                                                      # to commit; exit 0 reconciled, 1 failed, 2 mismatch
+dotnet run --project tools/RegReturns.Migrator -- legacy-samples --out samples/legacy  # regenerate the sample exports
 dotnet run --project tools/RegReturns.IamBootstrap -- apply           # WSO2 claims, API, apps, roles, bank clients,
                                                                       # demo users; writes .env.generated (idempotent)
 scripts/dev-secrets.sh                                                # again, to pick up the portal client secret
@@ -70,13 +75,14 @@ dotnet ef migrations add <Name> -p src/RegReturns.Infrastructure -s src/RegRetur
 src/RegReturns.Domain          Entities, value objects, workflow rules. No package dependencies.
 src/RegReturns.Application     Use-case handlers, IAppDbContext, telemetry names. References EF Core abstractions only.
 src/RegReturns.Infrastructure  EF Core context, configurations, migrations, seeding, DI; Dapper reporting read model and
-                               the compliance report renderer (ClosedXML, QuestPDF).
+                               the compliance report renderer (ClosedXML, QuestPDF); the legacy migration (`Legacy`).
 src/RegReturns.ServiceDefaults Serilog, OpenTelemetry, health endpoints, ProblemDetails, exception handler.
 src/RegReturns.Web             MVC portal (Razor + Bootstrap 5).
 src/RegReturns.Api             REST API v1 for bank systems: reference data, reads, draft delivery (ADR 0026, 0027).
-tools/RegReturns.Migrator      `migrate-db [--seed]`, `seed`; legacy migration from phase 7.
+tools/RegReturns.Migrator      `migrate-db [--seed]`, `seed`, `legacy` (CSV migration, ADR 0029), `legacy-samples`.
 tools/RegReturns.IamBootstrap  `apply`, `demo-users`: idempotent WSO2 setup over its REST APIs (ADR 0017, 0020).
 scripts/smoke-wso2.sh          End-to-end identity smoke test against a running WSO2 + API (`--browser`: + portal).
+samples/legacy                 Generated legacy (VRRS) exports with planted defects and their mapping (see its README).
 tests/RegReturns.UnitTests     Domain, seeding, redaction and architecture tests.
 tests/RegReturns.IntegrationTests  Testcontainers SQL Server, WebApplicationFactory host tests.
 ```
@@ -145,6 +151,17 @@ Reports (see `src/RegReturns.Application/Reporting` and `src/RegReturns.Infrastr
 - Every export goes through `ExportComplianceReport`, which records `AuditAction.ReportExported` (scope and format,
   never figures), logs 5401 and counts `regreturns.reports.exports`.
 
+Legacy migration (see `src/RegReturns.Infrastructure/Legacy`, ADR 0029 and docs/DATA-MIGRATION.md):
+- A JSON mapping (`LegacyMapping`) names the cleansing rules, each bank's legacy spellings and each file's columns;
+  cleansing is pure (`LegacyCleansing`) and refuses to guess (no decimal commas). The last row per return type, bank and
+  period wins; earlier rows are `Legacy.Superseded`. Row error codes are `Legacy.*`, run errors `Migration.*`.
+- Rows load through `Submission.Migrate` (approved, `Source=Migration`, the `system.migration` account, which cannot
+  sign in) after the same `ValidationEngine`; error findings reject the row, warnings keep a fixed justification. A
+  period the portal holds a return for is never replaced; one already migrated is skipped and reconciled again.
+- One transaction: load, read back, `Reconciliation.Compare`; commit only if not a dry run and reconciled. Every run
+  (with row errors) is kept in the `migration` schema, and the migrator's audited saves put returns and runs in the
+  hash chain (actor `regreturns-migrator`).
+
 ## Conventions
 
 - .NET 10, C# latest, nullable on, `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, SonarAnalyzer and
@@ -157,13 +174,14 @@ Reports (see `src/RegReturns.Application/Reporting` and `src/RegReturns.Infrastr
   programming errors. Error catalogues live next to the aggregate (`SubmissionErrors`, `TemplateErrors`, `IdentityErrors`).
 - Entities: private setters, factory methods, `Guid.CreateVersion7()` ids assigned in `Entity`.
 - No magic strings: field codes, rule codes and schema names are constants (`MlrTemplate.TotalHqla`, `Schemas.Returns`).
-- Logging: `[LoggerMessage]` source-generated methods with event ids grouped per area (1xxx persistence, 2xxx migrator,
-  30xx audit and identity, 31xx portal sign-in, 32xx API authentication, 33xx API idempotency and rate limits,
-  4xxx IamBootstrap, 50xx templates, 51xx returns and API deliveries, 52xx uploads and files, 53xx workflow steps,
-  54xx reports, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
+- Logging: `[LoggerMessage]` source-generated methods with event ids grouped per area (1xxx persistence, 20xx migrator,
+  21xx legacy migration, 30xx audit and identity, 31xx portal sign-in, 32xx API authentication, 33xx API idempotency
+  and rate limits, 4xxx IamBootstrap, 50xx templates, 51xx returns and API deliveries, 52xx uploads and files, 53xx
+  workflow steps, 54xx reports, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
 - Time: inject `TimeProvider`; store UTC `DateTimeOffset`; dates as `DateOnly`; parse numbers with `CultureInfo.InvariantCulture`.
 - Config: options classes with `ValidateDataAnnotations().ValidateOnStart()`. Secrets only in user-secrets or environment variables.
-  Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web and Api share it), `Oidc:ClientSecret` (Web).
+  Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web, Api and the migrator's `legacy` verb share it),
+  `Oidc:ClientSecret` (Web).
   WSO2 settings: `Wso2:Authority` (public issuer base), `Wso2:TrustedCaPath`, optional `Wso2:BackchannelAuthority`
   (e.g. `https://wso2:9443/` inside Docker), `Iam:EnforceMfa`.
   IamBootstrap reads `.env` itself (between appsettings/user-secrets and real environment variables) and writes
@@ -228,6 +246,14 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 - `wso2-db-init` marks each WSO2 database complete only after all its scripts ran (`REGRETURNS_WSO2_SCHEMA`); a
   database with WSO2 tables but no marker stops the job (see the troubleshooting guide).
 - EF Core cannot index complex-type columns; the unique obligation index is raw SQL in the `InitialCreate` migration.
+- Never name a namespace `...Migration`: it hides EF Core's `Migration` base class in the migrations folder (CS0118).
+  The legacy migration lives in `RegReturns.Infrastructure.Legacy`; only Domain and Application use `Migration`.
+- `samples/legacy/*.csv` are generated (`legacy-samples`) and kept byte for byte (`-text` in `.gitattributes`); a unit
+  test compares them with the generator, so regenerate rather than edit them. Seeded templates are in force from
+  `DemoScenario.FormsInForceSince` (1 January 2024) so the legacy periods have a template.
+- `system.migration` and the API client users have reserved user names, no WSO2 link and are refused by
+  `LinkSignedInUser`, so nobody can sign in as them. `system.migration` holds no roles: `Submission.Migrate` only
+  requires a regulator-side actor, and no other workflow step accepts it.
 - Dapper maps reporting rows through record constructors, which need the exact SQL types (`date` is `DateTime`,
   `COUNT(*)` is `int`, enums are strings); convert to `DateOnly` and enums in `ToRow`.
 - QuestPDF renders only after a licence is chosen: `ComplianceReportRenderer` sets the Community licence in its static

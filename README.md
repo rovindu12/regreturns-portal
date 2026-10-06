@@ -1,6 +1,6 @@
 # RegReturns – Regulatory Returns Portal
 
-> **Status:** under active development (phase 6 of 12 complete). Live demo link, screenshots and the full
+> **Status:** under active development (phase 7 of 12 complete). Live demo link, screenshots and the full
 > documentation set arrive in later phases.
 
 RegReturns lets licensed banks submit periodic regulatory returns to a central bank, validates them against
@@ -68,6 +68,20 @@ ratios such as the LCR, NPL ratio and capital adequacy ratio. Bank staff see the
 report downloads as Excel or PDF, and every download is recorded in the audit trail
 ([ADR 0028](docs/adr/0028-reporting-views-and-exports.md)).
 
+## Migrating legacy returns
+
+`regreturns-migrator legacy` moves filed returns from the old returns system's CSV exports into the portal. A JSON
+mapping cleans dates, amounts and bank names; every row is checked with the same rules as the portal; and the run
+commits only when the stored figures reconcile with the source, by bank, period and field. A dry run shows the
+result first. Try it on the generated sample exports, which have their defects documented in
+[samples/legacy](samples/legacy/README.md):
+
+```bash
+dotnet run --project tools/RegReturns.Migrator -- legacy --source samples/legacy --dry-run --report out/legacy
+```
+
+See the [data migration guide](docs/DATA-MIGRATION.md) and [ADR 0029](docs/adr/0029-legacy-data-migration.md).
+
 ## Tech stack
 
 .NET 10 · ASP.NET Core MVC and Web API · EF Core 10 · SQL Server 2025 · Serilog · OpenTelemetry · Seq ·
@@ -79,6 +93,7 @@ Docker deployment comes in a later phase.
 - [Implementation plan](docs/IMPLEMENTATION-PLAN.md)
 - [Architecture decision records](docs/adr)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Data migration guide](docs/DATA-MIGRATION.md)
 - [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 ## Licence
