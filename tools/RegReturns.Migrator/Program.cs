@@ -11,10 +11,12 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    var root = new RootCommand("RegReturns database tool: applies schema migrations and loads demo data.")
+    var root = new RootCommand("RegReturns database tool: applies schema migrations, loads demo data and migrates legacy returns.")
     {
         DatabaseCommands.MigrateDb(),
         DatabaseCommands.Seed(),
+        LegacyCommands.Legacy(),
+        LegacyCommands.Samples(),
     };
     return await root.Parse(args).InvokeAsync();
 }

@@ -24,6 +24,9 @@ internal sealed class CsvParser(string text, ReturnFileLimits limits)
     private int _position;
     private int _line = 1;
 
+    /// <summary>Gets the line the next record starts on, counting from 1.</summary>
+    public int Line => _line;
+
     /// <summary>Gets a value indicating whether every record has been read.</summary>
     public bool AtEnd => _position >= text.Length;
 

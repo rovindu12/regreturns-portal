@@ -15,4 +15,8 @@
   <ItemGroup>
     <None Update="appsettings*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="RegReturns.UnitTests" />
+    <InternalsVisibleTo Include="RegReturns.IntegrationTests" />
+  </ItemGroup>
 </Project>

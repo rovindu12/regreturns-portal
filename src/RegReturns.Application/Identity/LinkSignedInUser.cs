@@ -66,6 +66,10 @@ public sealed class LinkSignedInUserHandler(IAppDbContext db) : ICommandHandler<
     public static readonly Error ApiClientUser = new(
         "User.ApiClientUser", "The user name belongs to an API client, which cannot sign in to the portal.");
 
+    /// <summary>The user name belongs to a system account, such as the migration account.</summary>
+    public static readonly Error SystemAccount = new(
+        "User.SystemAccount", "The user name belongs to a system account, which cannot sign in to the portal.");
+
     /// <inheritdoc />
     public async Task<Result<SignedInUserLink>> HandleAsync(LinkSignedInUser command, CancellationToken cancellationToken)
     {
@@ -141,6 +145,11 @@ public sealed class LinkSignedInUserHandler(IAppDbContext db) : ICommandHandler<
         if (user.IsApiClientUser)
         {
             return ApiClientUser;
+        }
+
+        if (user.IsSystemAccount)
+        {
+            return SystemAccount;
         }
 
         // Demo resets re-create WSO2 users with new ids, so demo accounts follow the user name. A real account that is

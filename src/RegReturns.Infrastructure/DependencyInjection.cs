@@ -7,12 +7,14 @@ using Microsoft.Extensions.Options;
 using RegReturns.Application.Abstractions;
 using RegReturns.Application.Auditing;
 using RegReturns.Application.Idempotency;
+using RegReturns.Application.Migration;
 using RegReturns.Application.Reporting;
 using RegReturns.Application.Returns;
 using RegReturns.Infrastructure.Auditing;
 using RegReturns.Infrastructure.Files;
 using RegReturns.Infrastructure.Idempotency;
 using RegReturns.Infrastructure.Identity.Wso2;
+using RegReturns.Infrastructure.Legacy;
 using RegReturns.Infrastructure.Persistence;
 using RegReturns.Infrastructure.Reporting;
 
@@ -127,6 +129,20 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.TryAddSingleton<IReportingReadModel, ReportingReadModel>();
         services.TryAddSingleton<IComplianceReportRenderer, ComplianceReportRenderer>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the legacy migration (ADR 0029): the migrator and its CSV report writer. The host also adds the audit trail
+    /// and an <see cref="IAuditContext"/>, so every migrated return is recorded in the audit chain.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The same collection.</returns>
+    public static IServiceCollection AddLegacyMigration(this IServiceCollection services)
+    {
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddScoped<ILegacyMigrator, LegacyMigrator>();
+        services.TryAddSingleton<IMigrationReportWriter, MigrationReportWriter>();
         return services;
     }
 

@@ -38,10 +38,6 @@ public sealed class ReturnFileWriter : IReturnFileWriter
     internal const string TextNumberFormat = "@";
 
     private const char ExcelQuotePrefix = '\'';
-    private const string CsvLineBreak = "\r\n";
-    private const char CsvSeparator = ',';
-    private const string CsvQuote = "\"";
-    private const string CsvEscapedQuote = "\"\"";
 
     private static readonly (string Name, double Width)[] Columns =
     [
@@ -53,8 +49,6 @@ public sealed class ReturnFileWriter : IReturnFileWriter
         (ReturnFileFormats.ValueColumn, 22),
     ];
 
-    private static readonly SearchValues<char> CsvSpecials = SearchValues.Create(",\"\r\n");
-    private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
 
     /// <inheritdoc />
     public byte[] Write(ReturnFileFormat format, ReturnFileSheet sheet)
@@ -146,30 +140,12 @@ public sealed class ReturnFileWriter : IReturnFileWriter
     private static byte[] WriteCsv(ReturnFileSheet sheet)
     {
         var builder = new StringBuilder();
-        AppendCsvLine(builder, [.. Columns.Select(c => c.Name)]);
+        CsvText.AppendLine(builder, [.. Columns.Select(c => c.Name)]);
         foreach (var row in sheet.Rows)
         {
-            AppendCsvLine(builder, CellsOf(row));
+            CsvText.AppendLine(builder, CellsOf(row));
         }
 
-        return [.. Utf8Bom, .. Encoding.UTF8.GetBytes(builder.ToString())];
-    }
-
-    private static void AppendCsvLine(StringBuilder builder, string?[] cells)
-    {
-        for (var i = 0; i < cells.Length; i++)
-        {
-            if (i > 0)
-            {
-                builder.Append(CsvSeparator);
-            }
-
-            var text = CsvFormulaGuard.Protect(cells[i] ?? string.Empty);
-            builder.Append(text.AsSpan().ContainsAny(CsvSpecials)
-                ? CsvQuote + text.Replace(CsvQuote, CsvEscapedQuote, StringComparison.Ordinal) + CsvQuote
-                : text);
-        }
-
-        builder.Append(CsvLineBreak);
+        return CsvText.ToUtf8WithBom(builder.ToString());
     }
 }

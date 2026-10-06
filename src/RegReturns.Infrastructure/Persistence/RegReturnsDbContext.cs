@@ -5,6 +5,7 @@ using RegReturns.Domain.Auditing;
 using RegReturns.Domain.Common;
 using RegReturns.Domain.Identity;
 using RegReturns.Domain.Institutions;
+using RegReturns.Domain.Migration;
 using RegReturns.Domain.Obligations;
 using RegReturns.Domain.Submissions;
 using RegReturns.Domain.Templates;
@@ -69,6 +70,9 @@ public sealed class RegReturnsDbContext : DbContext, IAppDbContext
 
     /// <inheritdoc />
     public DbSet<ApiClient> ApiClients => Set<ApiClient>();
+
+    /// <summary>Gets the legacy migration runs (ADR 0029).</summary>
+    public DbSet<MigrationRun> MigrationRuns => Set<MigrationRun>();
 
     /// <summary>
     /// Gets the audit chain. Append only through <see cref="AuditTrail"/> or <see cref="AuditedSave"/>, which take

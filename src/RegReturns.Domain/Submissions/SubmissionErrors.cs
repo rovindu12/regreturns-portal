@@ -78,6 +78,15 @@ public static class SubmissionErrors
     public static readonly Error ObligationClosed = new(
         "Submission.ObligationClosed", "This return has already been approved; no new draft can be started.");
 
+    /// <summary>A migrated return would replace a return already filed in the portal for the same obligation.</summary>
+    public static readonly Error AlreadyFiled = new(
+        "Submission.AlreadyFiled", "A return has already been filed in the portal for this period; legacy figures cannot replace it.");
+
+    /// <summary>A migrated return's legacy dates are out of order or in the future.</summary>
+    public static readonly Error MigrationDates = new(
+        "Submission.MigrationDates",
+        "A migrated return must be submitted on or after its period end, approved on or after it was submitted, and not in the future.");
+
     /// <summary>The submission or obligation was not found, or belongs to another bank.</summary>
     public static readonly Error NotFound = new("Submission.NotFound", "The return was not found.");
 
