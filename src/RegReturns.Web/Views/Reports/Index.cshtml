@@ -1,0 +1,274 @@
+@using System.Globalization
+@using RegReturns.Application.Reporting
+@using RegReturns.Web.Models.Reports
+@using RegReturns.Web.Models.Returns
+@model ReportsViewModel
+@{
+    ViewData["Title"] = "Reports";
+    var dashboard = Model.Dashboard;
+}
+
+<section class="mb-4">
+    <h1 class="h2">Reports</h1>
+    <p class="lead mb-0">Filing compliance, overdue returns, validation findings and key ratios, judged on today's date (UTC).</p>
+</section>
+
+<partial name="_Flash" />
+
+@if (dashboard is null)
+{
+    <div class="alert alert-warning" role="alert">@Model.Problem</div>
+    return;
+}
+
+@{
+    var header = dashboard.Header;
+    var compliance = dashboard.Compliance;
+    var totals = compliance.Totals;
+    var findings = dashboard.Findings;
+    var scope = header.Institution is null ? "All banks" : header.Institution.Name;
+    var asOf = header.AsOf.ToString(ReturnDisplay.DateFormat, CultureInfo.InvariantCulture);
+}
+
+<nav aria-label="Return type" class="mb-3">
+    <ul class="nav nav-tabs">
+        @foreach (var type in header.ReturnTypes)
+        {
+            var current = type.Code == header.ReturnType.Code;
+            <li class="nav-item">
+                <a class="nav-link @(current ? "active" : null)" aria-current="@(current ? "page" : null)"
+                   asp-action="Index" asp-route-returnType="@type.Code" title="@type.Name">@type.Code</a>
+            </li>
+        }
+    </ul>
+</nav>
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <p class="mb-0">
+        <strong>@header.ReturnType.Name</strong>
+        <span class="text-body-secondary">· @scope · @header.PeriodRange · as of @asOf</span>
+    </p>
+    <div class="d-flex gap-2" role="group" aria-label="Download the compliance report">
+        <a class="btn btn-sm btn-outline-primary" asp-action="Export" asp-route-returnType="@header.ReturnType.Code" asp-route-format="xlsx">Download Excel</a>
+        <a class="btn btn-sm btn-outline-primary" asp-action="Export" asp-route-returnType="@header.ReturnType.Code" asp-route-format="pdf">Download PDF</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4" id="summary">
+    <div class="col-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <p class="card-subtitle text-body-secondary small mb-1">Filed on time</p>
+                <p class="h3 card-title mb-0">@ReportsViewModel.FormatRate(totals.OnTimeRate)</p>
+                <p class="small mb-0">@totals.OnTime of @totals.Due due</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <p class="card-subtitle text-body-secondary small mb-1">Filed late</p>
+                <p class="h3 card-title mb-0">@totals.Late</p>
+                <p class="small mb-0">in these periods</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <p class="card-subtitle text-body-secondary small mb-1">Not due yet</p>
+                <p class="h3 card-title mb-0">@totals.NotDue</p>
+                <p class="small mb-0">not filed, before the due date</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="card h-100 @(compliance.Overdue.Count > 0 ? "border-danger" : null)">
+            <div class="card-body">
+                <p class="card-subtitle text-body-secondary small mb-1">Overdue now</p>
+                <p class="h3 card-title mb-0">@compliance.Overdue.Count</p>
+                <p class="small mb-0"><a href="#overdue-heading">every return type</a></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="mb-5" aria-labelledby="compliance-heading">
+    <h2 id="compliance-heading" class="h4">Filing compliance</h2>
+    <ul class="list-inline small mb-2" aria-label="Legend">
+        @foreach (var state in ReportsViewModel.Legend)
+        {
+            <li class="list-inline-item me-3">
+                <span class="compliance-swatch @ReportsViewModel.CellClass(state)">@ReportLabels.ShortOf(state)</span>
+                @ReportsViewModel.LegendText(state)
+            </li>
+        }
+    </ul>
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered compliance-grid align-middle">
+            <caption>@header.ReturnType.Code filing by bank and period. Hover or focus a cell for its dates.</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Bank</th>
+                    @foreach (var period in header.Periods)
+                    {
+                        <th scope="col" class="text-center">@period.Label</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var bank in compliance.Rows)
+                {
+                    <tr>
+                        <th scope="row" title="@bank.InstitutionName">
+                            @bank.InstitutionCode <span class="d-none d-xl-inline fw-normal text-body-secondary">@bank.InstitutionName</span>
+                        </th>
+                        @foreach (var cell in bank.Cells)
+                        {
+                            <td class="text-center @ReportsViewModel.CellClass(cell.State)" title="@ReportsViewModel.CellTitle(bank, cell)">@ReportLabels.ShortOf(cell.State)</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="mb-5" aria-labelledby="overdue-heading">
+    <h2 id="overdue-heading" class="h4">Overdue returns</h2>
+    @if (compliance.Overdue.Count == 0)
+    {
+        <p class="text-body-secondary">No return is overdue.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <caption>Every return type and period past its due date with nothing on file, most overdue first.</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Bank</th>
+                        <th scope="col">Return</th>
+                        <th scope="col">Period</th>
+                        <th scope="col">Due</th>
+                        <th scope="col" class="text-end">Days overdue</th>
+                        <th scope="col">Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in compliance.Overdue)
+                    {
+                        <tr>
+                            <td>@item.InstitutionName (@item.InstitutionCode)</td>
+                            <td>@item.ReturnTypeCode</td>
+                            <td>@item.Period.Label</td>
+                            <td>@item.DueDate.ToString(ReturnDisplay.DateFormat, CultureInfo.InvariantCulture)</td>
+                            <td class="text-end"><span class="badge text-bg-danger">@item.DaysOverdue</span></td>
+                            <td>@(item.WasRejected ? "Rejected, not filed again" : "Never submitted")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<section class="mb-5" aria-labelledby="findings-heading">
+    <h2 id="findings-heading" class="h4">Validation findings</h2>
+    <p class="text-body-secondary">Findings on returns as submitted to the Bank of Valoria, by rule and period: @findings.Total in total.</p>
+    @if (findings.Rules.Count == 0)
+    {
+        <p>No submitted @header.ReturnType.Code return in these periods had a finding.</p>
+    }
+    else
+    {
+        <div class="chart-box mb-3">
+            <canvas id="findings-chart" role="img" data-chart="@Model.FindingChartJson"
+                    aria-label="Stacked bar chart of findings per period by rule; the same figures are in the table below."></canvas>
+        </div>
+        <details>
+            <summary>Findings by rule and period</summary>
+            <div class="table-responsive mt-2">
+                <table class="table table-sm table-striped align-middle">
+                    <caption>Findings per period; a rule with no finding in a period shows 0.</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Rule</th>
+                            <th scope="col">Severity</th>
+                            @foreach (var label in Model.PeriodLabels)
+                            {
+                                <th scope="col" class="text-end">@label</th>
+                            }
+                            <th scope="col" class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var rule in findings.Rules)
+                        {
+                            <tr>
+                                <th scope="row"><code>@rule.RuleCode</code></th>
+                                <td>@rule.Severity</td>
+                                @foreach (var count in rule.Findings)
+                                {
+                                    <td class="text-end">@count</td>
+                                }
+                                <td class="text-end fw-semibold">@rule.Total</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    }
+</section>
+
+<section class="mb-4" aria-labelledby="ratios-heading">
+    <h2 id="ratios-heading" class="h4">Key ratios</h2>
+    @if (dashboard.KeyRatios.Count == 0)
+    {
+        <p class="text-body-secondary">No key ratio is set up for @header.ReturnType.Code.</p>
+    }
+    @foreach (var ratio in dashboard.KeyRatios)
+    {
+        <h3 class="h5 mt-3">@ratio.Label <span class="text-body-secondary fw-normal">(@ratio.FieldCode, approved returns)</span></h3>
+        @if (ratio.Series.Count == 0)
+        {
+            <p class="text-body-secondary">No approved return in these periods.</p>
+            continue;
+        }
+
+        <div class="table-responsive">
+            <table class="table table-sm align-middle key-ratios">
+                <thead>
+                    <tr>
+                        <th scope="col">Bank</th>
+                        <th scope="col">@header.PeriodRange</th>
+                        <th scope="col" class="text-end">Low</th>
+                        <th scope="col" class="text-end">High</th>
+                        <th scope="col" class="text-end">Latest</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var series in ratio.Series)
+                    {
+                        <tr>
+                            <th scope="row" class="fw-normal">@series.InstitutionName (@series.InstitutionCode)</th>
+                            <td>
+                                <canvas class="sparkline" width="240" height="40" role="img"
+                                        data-chart="@Model.SparklineJson(series)" aria-label="@Model.SparklineLabel(ratio, series)"></canvas>
+                            </td>
+                            <td class="text-end">@ReportsViewModel.FormatValue(series.Low, ratio.Precision, ratio.Unit)</td>
+                            <td class="text-end">@ReportsViewModel.FormatValue(series.High, ratio.Precision, ratio.Unit)</td>
+                            <td class="text-end fw-semibold">@ReportsViewModel.FormatValue(series.Latest, ratio.Precision, ratio.Unit)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@section Scripts {
+    <script src="~/lib/chart.js/chart.umd.min.js"></script>
+    <script src="~/js/reports.js" asp-append-version="true"></script>
+}

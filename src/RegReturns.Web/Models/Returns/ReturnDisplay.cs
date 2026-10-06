@@ -1,5 +1,6 @@
 using System.Globalization;
 
+using RegReturns.Application.Reporting;
 using RegReturns.Application.Returns;
 using RegReturns.Domain.Obligations;
 using RegReturns.Domain.Submissions;
@@ -19,16 +20,7 @@ public static class ReturnDisplay
     /// <summary>Gets the label of a workflow status.</summary>
     /// <param name="status">The status.</param>
     /// <returns>The label.</returns>
-    public static string Label(SubmissionStatus status) => status switch
-    {
-        SubmissionStatus.Draft => "Draft",
-        SubmissionStatus.Submitted => "Submitted",
-        SubmissionStatus.UnderReview => "Under review",
-        SubmissionStatus.ReturnedForCorrection => "Returned for correction",
-        SubmissionStatus.Approved => "Approved",
-        SubmissionStatus.Rejected => "Rejected",
-        _ => status.ToString(),
-    };
+    public static string Label(SubmissionStatus status) => ReportLabels.Of(status);
 
     /// <summary>Gets the label of an obligation's filing status.</summary>
     /// <param name="status">The status.</param>

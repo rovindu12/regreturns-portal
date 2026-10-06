@@ -13,6 +13,8 @@
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
     <PackageReference Include="Microsoft.AspNetCore.Authorization" />
     <PackageReference Include="ClosedXML" />
+    <PackageReference Include="QuestPDF" />
+    <PackageReference Include="Dapper" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="RegReturns.UnitTests" />

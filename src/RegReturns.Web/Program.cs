@@ -25,6 +25,7 @@ try
     builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddAuditTrail(builder.Configuration);
+    builder.Services.AddReporting(builder.Configuration);
     builder.Services.AddWso2Backchannel(builder.Configuration);
     builder.Services.AddRegReturnsAuthorization(builder.Configuration);
     builder.Services.AddPortalAuthentication(builder.Configuration);

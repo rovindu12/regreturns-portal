@@ -29,3 +29,4 @@
 | [0025](0025-workflow-steps-and-supervision-visibility.md) | Workflow steps through one command; supervisors see returns once submitted |
 | [0026](0026-api-delivers-drafts-through-a-client-user.md) | Bank systems deliver returns through the API as makers; people submit them |
 | [0027](0027-web-api-v1-conventions.md) | Web API v1 conventions: versions, OpenAPI, errors, paging, idempotency and rate limits |
+| [0028](0028-reporting-views-and-exports.md) | Reporting views read with Dapper, and audited Excel and PDF exports |

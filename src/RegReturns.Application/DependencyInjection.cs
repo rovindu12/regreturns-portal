@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 using RegReturns.Application.Identity;
 using RegReturns.Application.Messaging;
+using RegReturns.Application.Reporting;
 using RegReturns.Application.Returns;
 
 namespace RegReturns.Application;
@@ -28,6 +29,7 @@ public static class DependencyInjection
 
         services.AddScoped<ICurrentActor, CurrentActor>();
         services.AddScoped<ReturnValidator>();
+        services.AddScoped<ReportBuilder>();
 
         return services;
     }

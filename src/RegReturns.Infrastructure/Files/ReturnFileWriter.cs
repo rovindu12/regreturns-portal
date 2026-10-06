@@ -125,7 +125,13 @@ public sealed class ReturnFileWriter : IReturnFileWriter
         return stream.ToArray();
     }
 
-    private static void SetText(IXLCell cell, string? text)
+    /// <summary>
+    /// Stores text in a cell as text, never as a formula, keeping a leading apostrophe. Every workbook RegReturns writes
+    /// puts strings in cells through this.
+    /// </summary>
+    /// <param name="cell">The cell.</param>
+    /// <param name="text">The text; <see langword="null"/> leaves the cell empty.</param>
+    internal static void SetText(IXLCell cell, string? text)
     {
         if (text is null)
         {

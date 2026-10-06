@@ -29,4 +29,7 @@ public enum AuditAction
 
     /// <summary>Someone verified the hash chain; the details carry the outcome.</summary>
     ChainVerified = 9,
+
+    /// <summary>Someone exported a report; the details say which report, scope and format, never its figures.</summary>
+    ReportExported = 10,
 }

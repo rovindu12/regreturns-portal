@@ -28,8 +28,9 @@ as the domain and server right before the phase 11 deploy.
 | 3. Templates, submission, validation engine | done |
 | 4. Workflow, queues, audit interceptor, auditor verify screen | done |
 | 5. Web API: v1 endpoints, idempotency, paging, rate limits, Swagger | done |
-| 6. Dashboards and reports | next |
-| 7-12 | not started |
+| 6. Dashboards and reports: compliance grid, overdue, findings trend, key ratios, Excel/PDF export | done |
+| 7. Migration tool: legacy CSV generator, dry-run migrator, mapping, error report, reconciliation | next |
+| 8-12 | not started |
 
 ## Commands
 
@@ -68,7 +69,8 @@ dotnet ef migrations add <Name> -p src/RegReturns.Infrastructure -s src/RegRetur
 ```
 src/RegReturns.Domain          Entities, value objects, workflow rules. No package dependencies.
 src/RegReturns.Application     Use-case handlers, IAppDbContext, telemetry names. References EF Core abstractions only.
-src/RegReturns.Infrastructure  EF Core context, configurations, migrations, seeding, DI.
+src/RegReturns.Infrastructure  EF Core context, configurations, migrations, seeding, DI; Dapper reporting read model and
+                               the compliance report renderer (ClosedXML, QuestPDF).
 src/RegReturns.ServiceDefaults Serilog, OpenTelemetry, health endpoints, ProblemDetails, exception handler.
 src/RegReturns.Web             MVC portal (Razor + Bootstrap 5).
 src/RegReturns.Api             REST API v1 for bank systems: reference data, reads, draft delivery (ADR 0026, 0027).
@@ -129,6 +131,20 @@ API (see `src/RegReturns.Api`, ADR 0026 and 0027):
   `Idempotent-Replayed: true`; 403, 409, 429 and 5xx answers release the key instead of being stored.
   Rate limit (`Api:RateLimit`): fixed window per client id (per IP without a token), controllers only.
 
+Reports (see `src/RegReturns.Application/Reporting` and `src/RegReturns.Infrastructure/Reporting`, ADR 0028):
+- Aggregates come from SQL views in the `reporting` schema (`ObligationCompliance`, `SubmittedFindings`,
+  `ApprovedValues`), created in the `AddReportingViews` migration and read with Dapper by `ReportingReadModel`. They
+  are not in the EF model: a migration that renames a column they use must recreate the view.
+- `Compliance.StateOf` is the one rule for a cell (open and past due is overdue, open otherwise not due yet, else late
+  or on time by first submission); the window is the last `Reports:MonthsShown`/`QuartersShown` completed periods.
+  `ReportBuilder` scopes every query: bank staff see their bank, regulator staff every active bank but never a
+  draft's status. Shaping is pure in `ReportShaping`; labels for pages and files are in `ReportLabels`.
+- Key ratios are configuration (`Reports:KeyRatios`, return type and field); labels come from the latest published
+  template. Charts: vendored Chart.js in `wwwroot/lib/chart.js`, drawn by `wwwroot/js/reports.js` from `data-chart`
+  JSON, with the same figures as text on the page.
+- Every export goes through `ExportComplianceReport`, which records `AuditAction.ReportExported` (scope and format,
+  never figures), logs 5401 and counts `regreturns.reports.exports`.
+
 ## Conventions
 
 - .NET 10, C# latest, nullable on, `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, SonarAnalyzer and
@@ -144,7 +160,7 @@ API (see `src/RegReturns.Api`, ADR 0026 and 0027):
 - Logging: `[LoggerMessage]` source-generated methods with event ids grouped per area (1xxx persistence, 2xxx migrator,
   30xx audit and identity, 31xx portal sign-in, 32xx API authentication, 33xx API idempotency and rate limits,
   4xxx IamBootstrap, 50xx templates, 51xx returns and API deliveries, 52xx uploads and files, 53xx workflow steps,
-  9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
+  54xx reports, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
 - Time: inject `TimeProvider`; store UTC `DateTimeOffset`; dates as `DateOnly`; parse numbers with `CultureInfo.InvariantCulture`.
 - Config: options classes with `ValidateDataAnnotations().ValidateOnStart()`. Secrets only in user-secrets or environment variables.
   Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web and Api share it), `Oidc:ClientSecret` (Web).
@@ -212,6 +228,10 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 - `wso2-db-init` marks each WSO2 database complete only after all its scripts ran (`REGRETURNS_WSO2_SCHEMA`); a
   database with WSO2 tables but no marker stops the job (see the troubleshooting guide).
 - EF Core cannot index complex-type columns; the unique obligation index is raw SQL in the `InitialCreate` migration.
+- Dapper maps reporting rows through record constructors, which need the exact SQL types (`date` is `DateTime`,
+  `COUNT(*)` is `int`, enums are strings); convert to `DateOnly` and enums in `ToRow`.
+- QuestPDF renders only after a licence is chosen: `ComplianceReportRenderer` sets the Community licence in its static
+  constructor (ADR 0028). Render PDFs only through it.
 - The Api's `Program` is referenced from integration tests through the `ApiHost` extern alias (both hosts define `Program`).
 - `[Produces]` is a result filter that overwrites the content type of every object result, so problem details would go
   out as `application/json`. `ControllerBase.ValidationProblem()` does not run `InvalidModelStateResponseFactory`, so

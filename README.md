@@ -1,6 +1,6 @@
 # RegReturns – Regulatory Returns Portal
 
-> **Status:** under active development (phase 5 of 12 complete). Live demo link, screenshots and the full
+> **Status:** under active development (phase 6 of 12 complete). Live demo link, screenshots and the full
 > documentation set arrive in later phases.
 
 RegReturns lets licensed banks submit periodic regulatory returns to a central bank, validates them against
@@ -60,10 +60,19 @@ also deliver a return with `POST /v1/submissions` and an `Idempotency-Key`; the 
 checker submits in the portal ([ADR 0026](docs/adr/0026-api-delivers-drafts-through-a-client-user.md),
 [ADR 0027](docs/adr/0027-web-api-v1-conventions.md)).
 
+## Reports
+
+The **Reports** area (every role) shows, for one return type at a time, a bank × period compliance grid (on time,
+late, overdue, not due yet), every overdue return, the trend of validation findings by rule, and sparklines of key
+ratios such as the LCR, NPL ratio and capital adequacy ratio. Bank staff see their own bank only. The compliance
+report downloads as Excel or PDF, and every download is recorded in the audit trail
+([ADR 0028](docs/adr/0028-reporting-views-and-exports.md)).
+
 ## Tech stack
 
 .NET 10 · ASP.NET Core MVC and Web API · EF Core 10 · SQL Server 2025 · Serilog · OpenTelemetry · Seq ·
-xUnit v3 · Testcontainers · GitHub Actions · WSO2 Identity Server 7.3. Chart.js and Docker deployment come in later phases.
+Dapper · ClosedXML · QuestPDF · Chart.js · xUnit v3 · Testcontainers · GitHub Actions · WSO2 Identity Server 7.3.
+Docker deployment comes in a later phase.
 
 ## Documentation
 

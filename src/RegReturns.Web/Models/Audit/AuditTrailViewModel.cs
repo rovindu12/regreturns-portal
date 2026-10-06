@@ -103,6 +103,7 @@ public static class AuditDisplay
         AuditAction.Deleted => "Deleted",
         AuditAction.StateChanged => "Status changed",
         AuditAction.ChainVerified => "Chain verified",
+        AuditAction.ReportExported => "Report exported",
         _ => action.ToString(),
     };
 
@@ -117,6 +118,7 @@ public static class AuditDisplay
         AuditAction.Deleted => "text-bg-dark",
         AuditAction.StateChanged => "text-bg-info",
         AuditAction.ChainVerified => "text-bg-secondary",
+        AuditAction.ReportExported => "text-bg-warning",
         _ => "text-bg-light border",
     };
 
