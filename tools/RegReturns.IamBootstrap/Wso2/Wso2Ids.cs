@@ -1,6 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
+using RegReturns.Application.Identity;
+
 namespace RegReturns.IamBootstrap.Wso2;
 
 /// <summary>Identifier helpers for WSO2's claim management API.</summary>
@@ -29,8 +31,18 @@ internal static class Wso2Ids
     /// <summary>Local claim: the immutable user id, used as <c>sub</c>.</summary>
     public const string UserIdClaim = "http://wso2.org/claims/userid";
 
+    /// <summary>
+    /// The identity claims in which WSO2's TOTP authenticator keeps a user's secret (encrypted) and the secret being
+    /// enrolled. Emptying them makes the TOTP step treat the user as not enrolled.
+    /// </summary>
+    public static readonly IReadOnlyList<string> TotpSecretClaims =
+    [
+        "http://wso2.org/claims/identity/secretkey",
+        "http://wso2.org/claims/identity/verifySecretkey",
+    ];
+
     /// <summary>The SCIM 2 custom user schema, the only SCIM schema 7.3 lets us extend.</summary>
-    public const string ScimCustomUserSchema = "urn:scim:schemas:extension:custom:User";
+    public const string ScimCustomUserSchema = TotpEnrolmentClaim.ScimSchema;
 
     /// <summary>
     /// Returns the id WSO2 uses for a claim dialect or claim URI: base64url of the UTF-8 URI without padding.

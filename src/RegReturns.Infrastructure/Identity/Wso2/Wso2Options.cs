@@ -42,6 +42,9 @@ public sealed class Wso2Options
     /// <summary>Gets the JSON Web Key Set address.</summary>
     public Uri JwksAddress => new(AuthorityBase(), "oauth2/jwks");
 
+    /// <summary>Gets the SCIM 2 users endpoint, called server to server only (ADR 0032).</summary>
+    public Uri ScimUsersEndpoint => new(AuthorityBase(), "scim2/Users");
+
     /// <summary>Gets the base address used for server-to-server calls.</summary>
     public Uri EffectiveBackchannelAuthority => BackchannelAuthority ?? RequireAuthority();
 

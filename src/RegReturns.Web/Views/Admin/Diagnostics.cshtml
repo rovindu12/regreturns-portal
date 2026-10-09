@@ -1,0 +1,137 @@
+@model RegReturns.Web.Models.Admin.DiagnosticsViewModel
+@using System.Globalization
+@using RegReturns.Web.Models.Admin
+@{
+    ViewData["Title"] = "Diagnostics";
+    var host = Model.Host;
+    var database = Model.Data.Database;
+}
+
+<nav aria-label="Breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="@PortalAreas.Admin.Path">@PortalAreas.Admin.Title</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Diagnostics</li>
+    </ol>
+</nav>
+
+<section class="mb-4">
+    <h1 class="h2">Diagnostics</h1>
+    <p class="lead mb-0">
+        What this portal instance is running and how its dependencies answer, checked just now
+        (@host.CheckedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) UTC). Secrets are only
+        reported as set or not set. The troubleshooting guide explains what to do about each check.
+    </p>
+</section>
+
+<section aria-labelledby="health-heading" class="mb-4">
+    <h2 id="health-heading" class="h5">Health checks</h2>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <caption class="small">The same checks as <code>/health/live</code> and <code>/health/ready</code>.</caption>
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Check</th>
+                    <th scope="col">Tags</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="text-end">Time (ms)</th>
+                    <th scope="col">Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var check in host.Health)
+                {
+                    <tr data-check="@check.Name">
+                        <th scope="row"><code>@check.Name</code></th>
+                        <td class="small">@check.Tags</td>
+                        <td><span class="badge @DiagnosticsViewModel.Badge(check.Status)">@check.Status</span></td>
+                        <td class="text-end">@check.DurationMs.ToString("0", CultureInfo.InvariantCulture)</td>
+                        <td class="small">
+                            @check.Description
+                            @if (check.Error is not null)
+                            {
+                                <span class="d-block text-danger">@check.Error</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<div class="row g-4 mb-4">
+    <section aria-labelledby="build-heading" class="col-lg-6">
+        <h2 id="build-heading" class="h5">Build and runtime</h2>
+        <dl class="row small mb-0">
+            <dt class="col-sm-4">Version</dt>
+            <dd class="col-sm-8"><code>@host.Version</code></dd>
+            <dt class="col-sm-4">Environment</dt>
+            <dd class="col-sm-8">@host.Environment</dd>
+            <dt class="col-sm-4">Started</dt>
+            <dd class="col-sm-8">@host.StartedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) UTC (up @DiagnosticsViewModel.Duration(host.Uptime))</dd>
+            <dt class="col-sm-4">Runtime</dt>
+            <dd class="col-sm-8">@host.Runtime</dd>
+            <dt class="col-sm-4">Processors</dt>
+            <dd class="col-sm-8">@host.Processors</dd>
+            <dt class="col-sm-4">Memory</dt>
+            <dd class="col-sm-8">@host.WorkingSetMb MB working set, @host.GcHeapMb MB managed heap (@host.GcMode GC)</dd>
+        </dl>
+    </section>
+
+    <section aria-labelledby="database-heading" class="col-lg-6">
+        <h2 id="database-heading" class="h5">Database</h2>
+        <dl class="row small mb-0">
+            <dt class="col-sm-4">Database</dt>
+            <dd class="col-sm-8"><code>@database.Database</code></dd>
+            <dt class="col-sm-4">SQL Server</dt>
+            <dd class="col-sm-8">@database.ServerVersion</dd>
+            <dt class="col-sm-4">Connection</dt>
+            <dd class="col-sm-8" data-encryption>@(database.Encryption ?? "not visible to this login") · @database.ClientEncryption</dd>
+            <dt class="col-sm-4">Migrations</dt>
+            <dd class="col-sm-8">
+                @database.AppliedMigrations applied, latest <code>@(database.LatestMigration ?? "none")</code>
+                @if (database.PendingMigrations.Count > 0)
+                {
+                    <span class="d-block text-danger">Pending: @string.Join(", ", database.PendingMigrations). Run the migrator (<code>migrate-db</code>).</span>
+                }
+            </dd>
+            <dt class="col-sm-4">Audit chain</dt>
+            <dd class="col-sm-8">
+                @if (Model.Data.AuditHead is { } head)
+                {
+                    <span>entry @head.Sequence at @head.OccurredAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) UTC</span>
+                }
+                else
+                {
+                    <span>no entries</span>
+                }
+            </dd>
+            <dt class="col-sm-4">People</dt>
+            <dd class="col-sm-8">@Model.Data.ActiveUsers active, @Model.Data.DisabledUsers disabled</dd>
+        </dl>
+    </section>
+</div>
+
+<section aria-labelledby="settings-heading" class="mb-4">
+    <h2 id="settings-heading" class="h5">Settings</h2>
+    <div class="table-responsive">
+        <table class="table table-sm">
+            <caption class="small">Settings that change how the portal behaves. Keys use the configuration's <code>:</code> form; in environment variables write <code>__</code>.</caption>
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Key</th>
+                    <th scope="col">Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var setting in host.Settings)
+                {
+                    <tr>
+                        <th scope="row" class="fw-normal"><code>@setting.Name</code></th>
+                        <td>@setting.Value</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>

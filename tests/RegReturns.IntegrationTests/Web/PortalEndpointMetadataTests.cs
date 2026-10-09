@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.StaticAssets;
 using Microsoft.Extensions.DependencyInjection;
 
 using RegReturns.Application.Authorization;
@@ -69,6 +70,8 @@ public sealed class PortalEndpointMetadataTests(SqlServerFixture sql) : IDisposa
     [InlineData("Admin", "Users")]
     [InlineData("Admin", "DisableUser")]
     [InlineData("Admin", "EnableUser")]
+    [InlineData("Admin", "OpenTotpEnrolment")]
+    [InlineData("Admin", "Diagnostics")]
     public void Demo_reset_and_user_access_need_an_administrator_with_two_step_sign_in(string controller, string action)
     {
         var endpoint = EndpointOf(controller, action);
@@ -87,7 +90,40 @@ public sealed class PortalEndpointMetadataTests(SqlServerFixture sql) : IDisposa
         EndpointOf(controller, action).Metadata.GetMetadata<IAllowAnonymous>().ShouldNotBeNull();
     }
 
+    [Fact]
+    public void Only_public_pages_sign_in_pages_the_back_channel_logout_and_health_allow_anonymous_access()
+    {
+        var anonymous = _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .OfType<RouteEndpoint>()
+            .Where(endpoint => !IsLinkGenerationOnly(endpoint) && !IsStaticAssetDevelopmentFallback(endpoint) && !IsStaticFile(endpoint))
+            .Where(endpoint => endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null)
+            .Select(endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() is { } action
+                ? $"{action.ControllerName}.{action.ActionName}"
+                : endpoint.RoutePattern.RawText)
+            .Order(StringComparer.Ordinal)
+            .ToList();
+
+        anonymous.ShouldBe(
+        [
+            "/health/live",
+            "/health/ready",
+            "Account.AccessDenied",
+            "Account.SignIn",
+            "Account.SignInFailed",
+            "Account.SignedOut",
+            "BackchannelLogout.Logout",
+            "Demo.Guide",
+            "Demo.Index",
+            "Home.Error",
+            "Home.Index",
+            "Status.Index",
+        ]);
+    }
+
     public void Dispose() => _factory.Dispose();
+
+    // Files under wwwroot, mapped by MapStaticAssets: one endpoint per file, all public by design.
+    private static bool IsStaticFile(RouteEndpoint endpoint) => endpoint.Metadata.GetMetadata<StaticAssetDescriptor>() is not null;
 
     private Endpoint EndpointOf(string controller, string action) =>
         _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints

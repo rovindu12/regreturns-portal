@@ -22,10 +22,10 @@ SQL Server 2017 and 2019 as tested, and we run 2025 (ADR 0013).
   table; a database with the marker is skipped, so the job is safe to re-run, and a database with WSO2 tables but no
   marker (an interrupted run) stops the job with instructions instead of being taken for a complete schema.
 - The user store is `database_unique_id` (user ids are UUIDs, which become the OIDC `sub`).
-- The JDBC URL uses `encrypt=true;trustServerCertificate=true` inside the Docker network for now, and the .NET
-  connection strings use `TrustServerCertificate=True`. SQL Server's port is published on 127.0.0.1 only. Giving SQL
-  Server a certificate from the development CA and validating it everywhere (JDBC, `sqlcmd`, SqlClient) is part of
-  the security-hardening phase (plan §10, phase 10).
+- ~~The JDBC URL uses `encrypt=true;trustServerCertificate=true` inside the Docker network for now, and the .NET
+  connection strings use `TrustServerCertificate=True`.~~ Superseded by ADR 0033 (2026-10-09): SQL Server forces
+  encryption with a certificate from the development CA, and every client (JDBC, `sqlcmd`, SqlClient) uses TDS 8
+  strict encryption with that certificate pinned. SQL Server's port is published on 127.0.0.1 only.
 
 ## Consequences
 

@@ -94,6 +94,7 @@ internal static partial class BootstrapCommands
         builder.Services.AddScoped<IBootstrapStep, ApiClientsStep>();
         builder.Services.AddScoped<IBootstrapStep, ProvisionerStep>();
         builder.Services.AddScoped<IBootstrapStep, SelfServiceStep>();
+        builder.Services.AddScoped<IBootstrapStep, AccountLockStep>();
         builder.Services.AddScoped<IBootstrapStep, DemoUsersStep>();
         builder.Services.AddScoped<IBootstrapStep, DemoTotpStep>();
 

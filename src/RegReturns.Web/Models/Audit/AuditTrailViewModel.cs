@@ -106,6 +106,7 @@ public static class AuditDisplay
         AuditAction.ReportExported => "Report exported",
         AuditAction.InsightGenerated => "Insight generated",
         AuditAction.DemoReset => "Demo reset",
+        AuditAction.TotpEnrolmentOpened => "Authenticator reset",
         _ => action.ToString(),
     };
 
@@ -123,6 +124,7 @@ public static class AuditDisplay
         AuditAction.ReportExported => "text-bg-warning",
         AuditAction.InsightGenerated => "text-bg-secondary",
         AuditAction.DemoReset => "text-bg-warning",
+        AuditAction.TotpEnrolmentOpened => "text-bg-danger",
         _ => "text-bg-light border",
     };
 

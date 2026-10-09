@@ -10,9 +10,10 @@ internal static class SensitiveData
 
     private static readonly FrozenSet<string> SensitiveNames = new[]
     {
-        "password", "secret", "clientsecret", "token", "accesstoken", "refreshtoken", "idtoken",
-        "authorization", "cookie", "setcookie", "apikey", "email", "emailaddress", "phone", "phonenumber",
-        "otp", "totp", "totpsecret", "connectionstring",
+        "password", "secret", "clientsecret", "token", "accesstoken", "refreshtoken", "idtoken", "idtokenhint",
+        "logouttoken", "code", "authorizationcode", "clientassertion", "credential", "credentials", "privatekey",
+        "hmackey", "authorization", "cookie", "setcookie", "apikey", "email", "emailaddress", "phone", "phonenumber",
+        "otp", "totp", "totpsecret", "passcode", "connectionstring",
     }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> SensitiveAttributeNames = new[]

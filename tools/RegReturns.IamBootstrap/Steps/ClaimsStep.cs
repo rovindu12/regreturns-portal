@@ -1,14 +1,16 @@
 using System.Net;
 using System.Text.Json.Nodes;
 
+using RegReturns.Application.Identity;
 using RegReturns.IamBootstrap.Wso2;
 
 namespace RegReturns.IamBootstrap.Steps;
 
 /// <summary>
 /// Ensures the <c>institution_id</c> attribute end to end (local claim, OIDC claim, SCIM custom-schema attribute and
-/// the <c>institution</c> OIDC scope, in that order, each depending on the one before) and a SCIM attribute for the
-/// full name that WSO2 releases as the OIDC <c>name</c> claim.
+/// the <c>institution</c> OIDC scope, in that order, each depending on the one before), a SCIM attribute for the
+/// full name that WSO2 releases as the OIDC <c>name</c> claim, and the TOTP enrolment window (local claim and SCIM
+/// attribute, never released in tokens; ADR 0032).
 /// </summary>
 /// <param name="wso2">The WSO2 admin client.</param>
 internal sealed class ClaimsStep(Wso2AdminClient wso2) : IBootstrapStep
@@ -16,13 +18,23 @@ internal sealed class ClaimsStep(Wso2AdminClient wso2) : IBootstrapStep
     private const string ClaimDialects = "api/server/v1/claim-dialects";
     private const string Scopes = "api/server/v1/oidc/scopes";
 
+    private static readonly LocalClaim Institution = new(
+        IamNames.InstitutionLocalClaim, IamNames.InstitutionStoreAttribute, "Institution",
+        "Code of the bank a RegReturns user works for. Empty for regulator staff. Set by administrators only.",
+        SupportedByDefault: true);
+
+    private static readonly LocalClaim TotpEnrolment = new(
+        TotpEnrolmentClaim.LocalClaim, TotpEnrolmentClaim.StoreAttribute, "TOTP enrolment until",
+        "End of the window (Unix milliseconds) in which the user sets up a new authenticator at sign-in. Set by the RegReturns portal for an administrator.",
+        SupportedByDefault: false);
+
     /// <inheritdoc />
     public string Name => "claims";
 
     /// <inheritdoc />
     public async Task RunAsync(BootstrapState state, CancellationToken cancellationToken)
     {
-        state.Record("local claim", IamNames.InstitutionLocalClaim, await EnsureLocalClaimAsync(cancellationToken));
+        state.Record("local claim", IamNames.InstitutionLocalClaim, await EnsureLocalClaimAsync(Institution, cancellationToken));
         state.Record("OIDC claim", IamNames.InstitutionOidcClaim, await EnsureExternalClaimAsync(
             Wso2Ids.OidcDialectUri, IamNames.InstitutionOidcClaim, IamNames.InstitutionLocalClaim, cancellationToken));
         await EnsureDialectAsync(Wso2Ids.ScimCustomUserSchema, cancellationToken);
@@ -35,27 +47,32 @@ internal sealed class ClaimsStep(Wso2AdminClient wso2) : IBootstrapStep
         state.Record("SCIM attribute", fullName, await EnsureExternalClaimAsync(
             Wso2Ids.ScimCustomUserSchema, fullName, Wso2Ids.FullNameClaim, cancellationToken));
         state.Record("OIDC scope", IamNames.InstitutionScope, await EnsureScopeAsync(cancellationToken));
+
+        state.Record("local claim", TotpEnrolmentClaim.LocalClaim, await EnsureLocalClaimAsync(TotpEnrolment, cancellationToken));
+        var enrolment = $"{Wso2Ids.ScimCustomUserSchema}:{TotpEnrolmentClaim.ScimAttribute}";
+        state.Record("SCIM attribute", enrolment, await EnsureExternalClaimAsync(
+            Wso2Ids.ScimCustomUserSchema, enrolment, TotpEnrolmentClaim.LocalClaim, cancellationToken));
     }
 
-    private async Task<Outcome> EnsureLocalClaimAsync(CancellationToken ct)
+    private async Task<Outcome> EnsureLocalClaimAsync(LocalClaim claim, CancellationToken ct)
     {
         var desired = new JsonObject
         {
-            ["claimURI"] = IamNames.InstitutionLocalClaim,
-            ["displayName"] = "Institution",
-            ["description"] = "Code of the bank a RegReturns user works for. Empty for regulator staff. Set by administrators only.",
-            ["supportedByDefault"] = true,
+            ["claimURI"] = claim.Uri,
+            ["displayName"] = claim.DisplayName,
+            ["description"] = claim.Description,
+            ["supportedByDefault"] = claim.SupportedByDefault,
             ["readOnly"] = true,
             ["required"] = false,
             ["attributeMapping"] = new JsonArray(new JsonObject
             {
-                ["mappedAttribute"] = IamNames.InstitutionStoreAttribute,
+                ["mappedAttribute"] = claim.StoreAttribute,
                 ["userstore"] = "PRIMARY",
             }),
         };
 
         var path = $"{ClaimDialects}/{Wso2Ids.LocalDialect}/claims";
-        var id = Wso2Ids.ForUri(IamNames.InstitutionLocalClaim);
+        var id = Wso2Ids.ForUri(claim.Uri);
         var existing = await wso2.GetOrDefaultAsync($"{path}/{id}", ct);
         if (existing is null)
         {
@@ -63,7 +80,7 @@ internal sealed class ClaimsStep(Wso2AdminClient wso2) : IBootstrapStep
             return Outcome.Created;
         }
 
-        if (Matches(existing, desired))
+        if (Matches(existing, desired, claim.StoreAttribute))
         {
             return Outcome.Unchanged;
         }
@@ -147,7 +164,7 @@ internal sealed class ClaimsStep(Wso2AdminClient wso2) : IBootstrapStep
         return Outcome.Updated;
     }
 
-    private static bool Matches(JsonNode existing, JsonObject desired)
+    private static bool Matches(JsonNode existing, JsonObject desired, string storeAttribute)
     {
         foreach (var (key, value) in desired)
         {
@@ -155,7 +172,7 @@ internal sealed class ClaimsStep(Wso2AdminClient wso2) : IBootstrapStep
             {
                 var mapping = existing["attributeMapping"]?.AsArray()
                     .Any(m => string.Equals(m?["userstore"]?.GetValue<string>(), "PRIMARY", StringComparison.OrdinalIgnoreCase) &&
-                              m?["mappedAttribute"]?.GetValue<string>() == IamNames.InstitutionStoreAttribute) ?? false;
+                              m?["mappedAttribute"]?.GetValue<string>() == storeAttribute) ?? false;
                 if (!mapping)
                 {
                     return false;
@@ -169,4 +186,7 @@ internal sealed class ClaimsStep(Wso2AdminClient wso2) : IBootstrapStep
 
         return true;
     }
+
+    // A RegReturns local claim: read-only for users (only administrators and RegReturns set it), in the primary store.
+    private sealed record LocalClaim(string Uri, string StoreAttribute, string DisplayName, string Description, bool SupportedByDefault);
 }

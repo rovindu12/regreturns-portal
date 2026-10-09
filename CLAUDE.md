@@ -32,8 +32,9 @@ as the domain and server right before the phase 11 deploy.
 | 7. Migration tool: legacy CSV generator, dry-run migrator, mapping, error report, reconciliation | done |
 | 8. AI assistant: insight service, Anthropic provider, rule-based fallback, reviewer panel, audited calls | done |
 | 9. Demo portal: landing page, try-the-demo, guided scenario, status page, demo reset | done |
-| 10. Security hardening | next |
-| 11-12 | not started |
+| 10. Security hardening: headers and CSP, anti-forgery audit, SQL TLS, account lock, authenticator reset, diagnostics, edge, CodeQL | done |
+| 11. Docker, CI/CD, VPS deploy | next |
+| 12. Docs and polish | not started |
 
 ## Commands
 
@@ -41,7 +42,7 @@ as the domain and server right before the phase 11 deploy.
 # Prerequisites: .NET 10 SDK, Docker, openssl, jq. Run everything from the repository root.
 scripts/init-env.sh                        # creates .env with random secrets (mode 600, git-ignored); on an existing
                                            # .env only adds missing keys and fails on example values, never rotates
-scripts/dev-certs.sh                       # dev CA + WSO2 keystores in .certs/ (ADR 0015)
+scripts/dev-certs.sh                       # dev CA, WSO2 keystores and SQL Server's certificate in .certs/ (ADR 0015, 0033)
 docker compose up -d                       # SQL Server, WSO2 (https://localhost:9443/console), Seq (http://localhost:8081)
 scripts/dev-secrets.sh                     # copies .env (and .env.generated) into user-secrets for every project
                                            # (an optional ANTHROPIC_API_KEY becomes the portal's Ai:Anthropic:ApiKey)
@@ -59,6 +60,7 @@ dotnet run --project src/RegReturns.Web                               # https://
 dotnet run --project src/RegReturns.Api                               # https://localhost:7201 (/swagger, /openapi/v1.json)
 scripts/smoke-wso2.sh --browser                                       # identity smoke test (needs Web + Api running;
                                                                       # --browser needs Node with Playwright)
+scripts/check-caddy.sh                                                # edge config against stub upstreams (Docker; CI)
 scripts/demo-scenario.sh [--reset]                                    # plays the guided tour in Chromium against a
                                                                       # running demo (changes data; --reset first)
 scripts/render-diagrams.sh                                            # docs/diagrams/*.mmd -> wwwroot/img/*.svg (needs
@@ -90,6 +92,8 @@ src/RegReturns.Api             REST API v1 for bank systems: reference data, rea
 tools/RegReturns.Migrator      `migrate-db [--seed]`, `seed`, `legacy` (CSV migration, ADR 0029), `legacy-samples`.
 tools/RegReturns.IamBootstrap  `apply`, `demo-users`: idempotent WSO2 setup over its REST APIs (ADR 0017, 0020).
 scripts/smoke-wso2.sh          End-to-end identity smoke test against a running WSO2 + API (`--browser`: + portal).
+deploy/caddy/Caddyfile         Edge proxy (phase 11): TLS, HSTS, WSO2 sign-in paths public, admin paths allowlisted.
+deploy/sqlserver/mssql.conf    Forces TLS with the certificate the `sqlserver-tls` compose job installs (ADR 0033).
 scripts/demo-scenario.sh       Browser run of the guided demo tour; `scripts/smoke/*.cjs` hold the Playwright parts.
 scripts/render-diagrams.sh     Renders the Mermaid sources in docs/diagrams to the committed SVGs.
 samples/legacy                 Generated legacy (VRRS) exports with planted defects and their mapping (see its README).
@@ -201,6 +205,24 @@ Public demo (see `src/RegReturns.Application/Demo`, `src/RegReturns.Infrastructu
 - Sandboxed administration (`UserAdministration`): disable or re-enable a person's access; demo, system and client
   accounts and one's own account are refused. Log events 56xx (reset) and 3011-3012 (access changes).
 
+Security (see ADR 0032, 0033 and docs/SECURITY.md):
+- Both hosts send their headers through `UseSecurityHeaders` (ServiceDefaults) on every answer. The portal's CSP has a
+  per-response nonce (`HttpContext.CspNonce()`), which `CspNonceTagHelper` puts on every `<script>`; views have no
+  inline scripts, `<style>`, `style=` attributes, `on*=` handlers or `javascript:` URLs (`PortalContentSecurityPolicyTests`
+  scans them). Scripts set styles through the CSS object model (`element.style`), which the policy allows. The API's
+  policy is `default-src 'none'`; only `/swagger` has its own.
+- Every portal POST needs the anti-forgery token (global filter); `PortalAntiforgeryTests` posts to all of them, and
+  only back-channel logout may opt out. Never add `[ValidateAntiForgeryToken]` to an action: it adds nothing, and
+  CodeQL, which does not see ASP.NET Core's global filters, then reports every other form (a test refuses it). A new `[AllowAnonymous]` endpoint must be added to the list in
+  `PortalEndpointMetadataTests`.
+- SQL Server forces TLS: connection strings use `Encrypt=Strict;ServerCertificate=<.certs/sqlserver/mssql.crt>`
+  (never `TrustServerCertificate`), JDBC `encrypt=strict;serverCertificate=...`, and `sqlcmd -Ns -J <cert>`.
+- Authenticator reset (`OpenTotpEnrolment`): the portal sets WSO2's `totp_enrolment_until` claim over SCIM with the
+  provisioner client (`IIdentityDirectory`, `Wso2IdentityDirectory`), through the back channel; the adaptive script
+  enrols the user at their next sign-in and closes the window. Audited as `TotpEnrolmentOpened`.
+- `/admin/diagnostics` shows settings as "set"/"not set" for secrets and origins for endpoints; a new setting shown
+  there must never print a secret (`AdminDiagnosticsTests` checks the configured ones).
+
 ## Conventions
 
 - .NET 10, C# latest, nullable on, `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, SonarAnalyzer and
@@ -220,14 +242,16 @@ Public demo (see `src/RegReturns.Application/Demo`, `src/RegReturns.Infrastructu
 - Time: inject `TimeProvider`; store UTC `DateTimeOffset`; dates as `DateOnly`; parse numbers with `CultureInfo.InvariantCulture`.
 - Config: options classes with `ValidateDataAnnotations().ValidateOnStart()`. Secrets only in user-secrets or environment variables.
   Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web, Api and the migrator's `legacy` verb share it),
-  `Oidc:ClientSecret` (Web), `Ai:Anthropic:ApiKey` (Web, optional: without it fixed rules write insights).
+  `Oidc:ClientSecret` (Web), `Iam:Provisioner:ClientId` and `Iam:Provisioner:ClientSecret` (Web, for authenticator
+  resets), `Ai:Anthropic:ApiKey` (Web, optional: without it fixed rules write insights).
   WSO2 settings: `Wso2:Authority` (public issuer base), `Wso2:TrustedCaPath`, optional `Wso2:BackchannelAuthority`
   (e.g. `https://wso2:9443/` inside Docker), `Iam:EnforceMfa`.
   IamBootstrap reads `.env` itself (between appsettings/user-secrets and real environment variables) and writes
   generated client secrets and the TOTP secret of every MFA demo user (`TOTP_SECRET_<USER>`) to `.env.generated`
   (mode 600, git-ignored).
 - Scripts never put a secret on a command line (other local users can read the process list): curl gets credentials
-  through `-K <(...)` or `-H @<(...)`, jq through `$ENV`, keytool through `:env`, sqlcmd through `SQLCMDPASSWORD`.
+  through `-K <(...)` or `-H @<(...)`, jq through `$ENV`, keytool through `:env`, sqlcmd through `SQLCMDPASSWORD`
+  (with `-Ns -J <certificate>`: SQL Server refuses unencrypted connections).
 - Web: controllers take use-case handlers per action with `[FromServices]` and never touch `IAppDbContext`
   (architecture test). Use cases resolve the caller with `ICurrentActor` (from the user record, never from claims)
   and scope bank data to the caller's institution; another bank's ids answer 404. Post-redirect-get with
@@ -323,5 +347,16 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 - WSO2 honours `login_hint`: the sign-in page then shows the account and keeps the user name in a hidden field, so
   browser scripts wait for the password field. WSO2's TOTP page enables Continue only on key events: type the digits
   into `pincode-1..6` with `press`, not `fill`.
+- WSO2's JDBC driver connects before WSO2 loads its truststore ("trustAnchors parameter must be non-empty"), so its
+  URLs pin SQL Server's certificate with `serverCertificate=` instead of trusting the CA. After `scripts/dev-certs.sh
+  --force`, run `docker compose up -d --force-recreate sqlserver-tls sqlserver wso2` so the new certificate is installed
+  and loaded.
+- `SqlServerFixture` gives the Testcontainers SQL Server a self-signed certificate per run and the same `mssql.conf`,
+  and pins it in its connection strings: tests run with forced, validated TLS like the real stack.
+- The edge refuses `/scim2` and WSO2's management APIs from the internet; the portal and IamBootstrap reach them
+  through the back channel (`Wso2:BackchannelAuthority`). Never route server-to-server WSO2 calls through Caddy.
+- WSO2 locks an account for `IamBootstrap:AccountLockMinutes` after `FailedSignInsBeforeLock` failures in a row (the
+  message is the generic "login failed"). A script or test that signs in with wrong passwords on purpose must use a
+  throwaway user, not a demo user.
 - Always pass an absolute `--results-directory` to `dotnet test`: the default location differs between SDK feature
   bands (under `bin/` on 10.0.1xx, the repo root on newer bands), which broke the CI coverage gate once.

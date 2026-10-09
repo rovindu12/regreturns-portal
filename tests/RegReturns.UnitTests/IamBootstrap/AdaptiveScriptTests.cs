@@ -101,6 +101,43 @@ public sealed class AdaptiveScriptTests
     }
 
     [Fact]
+    public void An_open_enrolment_window_is_read_from_the_users_claim_and_compared_with_now()
+    {
+        var script = PortalAppStep.AdaptiveScript(enforceMfa: true, []);
+
+        script.ShouldContain($"var enrolmentUntilClaim = '{TotpEnrolmentClaim.LocalClaim}';");
+        script.ShouldContain("var enrolmentUntil = Number(user.localClaims[enrolmentUntilClaim] || 0);");
+        script.ShouldContain("if (enrolmentUntil > Date.now()) {");
+    }
+
+    [Fact]
+    public void In_the_window_the_old_secret_is_forgotten_and_the_totp_step_enrols_a_new_one()
+    {
+        var script = PortalAppStep.AdaptiveScript(enforceMfa: true, []);
+
+        script.ShouldContain("\"http://wso2.org/claims/identity/secretkey\"");
+        script.ShouldContain("user.localClaims[totpSecretClaims[i]] = '';");
+        script.ShouldContain("executeStep(2, { authenticatorParams: { local: { totp: { enrolUserInAuthenticationFlow: 'true' } } } }, {");
+    }
+
+    [Fact]
+    public void The_window_closes_once_the_new_authenticator_is_proved()
+    {
+        var script = PortalAppStep.AdaptiveScript(enforceMfa: true, []);
+
+        script.ShouldContain($"context.currentKnownSubject.localClaims[enrolmentUntilClaim] = '{TotpEnrolmentClaim.Closed}';");
+    }
+
+    [Fact]
+    public void Only_users_who_need_totp_reach_the_enrolment()
+    {
+        var script = PortalAppStep.AdaptiveScript(enforceMfa: true, []);
+
+        script.IndexOf("if (!needsTotp) {", StringComparison.Ordinal)
+            .ShouldBeLessThan(script.IndexOf("enrolUserInAuthenticationFlow", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Script_is_the_same_in_every_culture()
     {
         var invariant = PortalAppStep.AdaptiveScript(enforceMfa: true, ["approver.mfa"]);

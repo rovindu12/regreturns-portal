@@ -54,7 +54,6 @@ public sealed partial class AccountController(ILogger<AccountController> logger)
     /// <param name="cancellationToken">Cancels the request.</param>
     /// <returns>The sign-out result for the cookie and OpenID Connect schemes.</returns>
     [HttpPost(PortalPaths.SignOutAction)]
-    [ValidateAntiForgeryToken]
     [Authorize(Policy = PortalPolicies.SignedIn)]
     public async Task<IActionResult> SignOutAsync(
         [FromServices] IAuditTrail auditTrail, [FromServices] ISessionDenyList denyList, CancellationToken cancellationToken)

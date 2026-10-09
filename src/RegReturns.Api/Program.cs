@@ -21,10 +21,16 @@ try
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddApiAuthentication(builder.Configuration);
     builder.Services.AddRegReturnsApi(builder.Configuration);
+    builder.Services.AddHsts(options =>
+    {
+        options.MaxAge = TimeSpan.FromDays(365);
+        options.IncludeSubDomains = true;
+    });
 
     var app = builder.Build();
 
     app.UseServiceDefaults();
+    app.UseApiSecurityHeaders();
     app.UseExceptionHandler();
     app.UseStatusCodePages();
     if (!app.Environment.IsDevelopment())

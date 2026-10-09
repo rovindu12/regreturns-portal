@@ -21,25 +21,26 @@ CaseInsensitiveUsername = false
 UseCaseSensitiveUsernameForCacheKeys = false
 StoreUserAttributeValueAsUnicode = true
 
-# Database TLS: encrypted, but the SQL Server container's self-signed certificate is not validated yet.
-# Giving SQL Server a CA-issued certificate is tracked for the security hardening phase.
+# Database TLS (ADR 0033): TDS 8 strict encryption, and only SQL Server's own certificate from scripts/dev-certs.sh is
+# accepted (serverCertificate, mounted by docker-compose.yml). WSO2's truststore is not loaded yet when the user
+# store first connects, so the JDBC driver cannot rely on it.
 [database.identity_db]
 type = "mssql"
-url = "jdbc:sqlserver://$env{WSO2_DB_HOST}:1433;databaseName=WSO2_IDENTITY_DB;encrypt=true;trustServerCertificate=true;SendStringParametersAsUnicode=false;loginTimeout=10;socketTimeout=60000"
+url = "jdbc:sqlserver://$env{WSO2_DB_HOST}:1433;databaseName=WSO2_IDENTITY_DB;encrypt=strict;serverCertificate=/home/wso2carbon/regreturns-sql/mssql.crt;SendStringParametersAsUnicode=false;loginTimeout=10;socketTimeout=60000"
 username = "$env{WSO2_DB_USERNAME}"
 password = "$env{WSO2_DB_PASSWORD}"
 driver = "com.microsoft.sqlserver.jdbc.SQLServerDriver"
 
 [database.shared_db]
 type = "mssql"
-url = "jdbc:sqlserver://$env{WSO2_DB_HOST}:1433;databaseName=WSO2_SHARED_DB;encrypt=true;trustServerCertificate=true;SendStringParametersAsUnicode=false;loginTimeout=10;socketTimeout=60000"
+url = "jdbc:sqlserver://$env{WSO2_DB_HOST}:1433;databaseName=WSO2_SHARED_DB;encrypt=strict;serverCertificate=/home/wso2carbon/regreturns-sql/mssql.crt;SendStringParametersAsUnicode=false;loginTimeout=10;socketTimeout=60000"
 username = "$env{WSO2_DB_USERNAME}"
 password = "$env{WSO2_DB_PASSWORD}"
 driver = "com.microsoft.sqlserver.jdbc.SQLServerDriver"
 
 [datasource.AgentIdentity]
 id = "AgentIdentity"
-url = "jdbc:sqlserver://$env{WSO2_DB_HOST}:1433;databaseName=WSO2_AGENT_DB;encrypt=true;trustServerCertificate=true;SendStringParametersAsUnicode=false;loginTimeout=10;socketTimeout=60000"
+url = "jdbc:sqlserver://$env{WSO2_DB_HOST}:1433;databaseName=WSO2_AGENT_DB;encrypt=strict;serverCertificate=/home/wso2carbon/regreturns-sql/mssql.crt;SendStringParametersAsUnicode=false;loginTimeout=10;socketTimeout=60000"
 username = "$env{WSO2_DB_USERNAME}"
 password = "$env{WSO2_DB_PASSWORD}"
 driver = "com.microsoft.sqlserver.jdbc.SQLServerDriver"

@@ -33,3 +33,5 @@
 | [0029](0029-legacy-data-migration.md) | Legacy data migration: mapping file, one reconciled transaction, approved returns through a system account |
 | [0030](0030-advisory-return-insights.md) | Advisory return insights: figures-only payload, Claude with a rule-based fallback, every generation audited |
 | [0031](0031-public-demo-and-demo-reset.md) | Public demo pages, and a demo reset that replaces the workload but keeps the directory and the audit chain |
+| [0032](0032-administrator-opened-totp-enrolment.md) | Administrators open a TOTP enrolment window; the person enrols at their next sign-in |
+| [0033](0033-security-hardening.md) | Security hardening: browser policies, account lock, strict TLS to SQL Server, a deny-by-default edge and diagnostics |

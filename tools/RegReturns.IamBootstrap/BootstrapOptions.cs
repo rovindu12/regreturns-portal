@@ -52,6 +52,14 @@ internal sealed class BootstrapOptions
     /// </summary>
     public bool LockDownSelfService { get; set; } = true;
 
+    /// <summary>Gets or sets how many failed sign-ins in a row lock a WSO2 account (ADR 0033).</summary>
+    [Range(3, 20)]
+    public int FailedSignInsBeforeLock { get; set; } = 5;
+
+    /// <summary>Gets or sets how long a locked WSO2 account stays locked, in minutes.</summary>
+    [Range(1, 1440)]
+    public int AccountLockMinutes { get; set; } = 5;
+
     /// <summary>Gets or sets the file the generated client secrets are written to (git-ignored).</summary>
     [Required]
     public string EnvFilePath { get; set; } = ".env.generated";

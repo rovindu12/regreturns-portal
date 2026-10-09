@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -39,6 +40,9 @@ public static class WebDefaultsExtensions
         ArgumentNullException.ThrowIfNull(builder);
         builder.AddObservability(serviceName);
 
+        // Don't advertise the server software (ADR 0033).
+        builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
+
         builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
         {
             context.ProblemDetails.Instance ??= context.HttpContext.Request.Path;
@@ -69,6 +73,9 @@ public static class WebDefaultsExtensions
         {
             options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0} ms";
             options.GetLevel = RequestLogLevel;
+
+            // The path only: query strings can carry codes, tokens and search terms.
+            options.IncludeQueryInRequestPath = false;
             options.EnrichDiagnosticContext = (diagnostics, context) =>
             {
                 diagnostics.Set("RequestHost", context.Request.Host.Value ?? string.Empty);

@@ -1,9 +1,30 @@
 # Local development dependencies. Run the apps with `dotnet run` against these services.
-# Before the first `docker compose up`: scripts/init-env.sh (secrets) and scripts/dev-certs.sh (WSO2 keystores).
+# Before the first `docker compose up`: scripts/init-env.sh (secrets) and scripts/dev-certs.sh (certificates).
 # Phase 11 adds the app containers and Caddy.
 name: regreturns
 
 services:
+  sqlserver-tls:
+    # One-off job (ADR 0033): installs SQL Server's certificate and key from scripts/dev-certs.sh into the data volume,
+    # owned by the mssql user (10001) with the key readable by it alone, and the mssql.conf that forces TLS with them.
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    user: root
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        set -e;
+        install -d -o 10001 -g 10001 -m 0750 /var/opt/mssql/tls;
+        install -o 10001 -g 10001 -m 0444 /src/certs/mssql.crt /var/opt/mssql/tls/mssql.crt;
+        install -o 10001 -g 10001 -m 0400 /src/certs/mssql.key /var/opt/mssql/tls/mssql.key;
+        install -o 10001 -g 10001 -m 0644 /src/mssql.conf /var/opt/mssql/mssql.conf;
+        echo "SQL Server certificate installed"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+      - ./.certs/sqlserver:/src/certs:ro
+      - ./deploy/sqlserver/mssql.conf:/src/mssql.conf:ro
+    network_mode: none
+    restart: "no"
+
   sqlserver:
     # Keep in step with SqlServerFixture.Image in the integration tests.
     image: mcr.microsoft.com/mssql/server:2025-latest
@@ -16,12 +37,16 @@ services:
     volumes:
       - sqlserver-data:/var/opt/mssql
     healthcheck:
-      # The password goes through SQLCMDPASSWORD, not -P, so it stays out of the process list.
-      test: ["CMD-SHELL", "SQLCMDPASSWORD=\"$${MSSQL_SA_PASSWORD}\" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -Q 'SELECT 1' -b -o /dev/null"]
+      # The password goes through SQLCMDPASSWORD, not -P, so it stays out of the process list. -Ns -J: strict TLS
+      # against the installed certificate, so a server without it never reports healthy.
+      test: ["CMD-SHELL", "SQLCMDPASSWORD=\"$${MSSQL_SA_PASSWORD}\" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -Ns -J /var/opt/mssql/tls/mssql.crt -Q 'SELECT 1' -b -o /dev/null"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 20s
+    depends_on:
+      sqlserver-tls:
+        condition: service_completed_successfully
 
   wso2-db-init:
     # One-off job: creates WSO2's databases and SQL login on the shared server, loads WSO2's schema once.
@@ -31,6 +56,9 @@ services:
       WSO2_DB_HOST: sqlserver
       WSO2_DB_USERNAME: ${WSO2_DB_USERNAME:?Set WSO2_DB_USERNAME in .env}
       WSO2_DB_PASSWORD: ${WSO2_DB_PASSWORD:?Set WSO2_DB_PASSWORD in .env}
+    volumes:
+      # sqlcmd pins SQL Server's certificate (-J).
+      - ./.certs/sqlserver/mssql.crt:/tls/mssql.crt:ro
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -56,6 +84,8 @@ services:
     volumes:
       # Keystores from scripts/dev-certs.sh; the WSO2 entrypoint copies this volume over its home at start.
       - ./.certs/wso2:/home/wso2carbon/wso2-config-volume/repository/resources/security:ro
+      # SQL Server's certificate, the only one the JDBC driver accepts (serverCertificate in deployment.toml).
+      - ./.certs/sqlserver/mssql.crt:/home/wso2carbon/regreturns-sql/mssql.crt:ro
     extra_hosts:
       # Lets WSO2 reach the portal on the host for back-channel logout.
       - "host.docker.internal:host-gateway"
