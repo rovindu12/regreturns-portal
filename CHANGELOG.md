@@ -156,6 +156,29 @@ and the project uses [Semantic Versioning](https://semver.org/).
   pins exactly the certificates they verified.
 - The seed builds for any reset date: a test seeds on the first of every month for ten years.
 
+- Phase 10: security hardening (ADR 0033, `docs/SECURITY.md` with the threat model and an OWASP ASVS 5.0 level 2
+  self-assessment). Security headers on every answer of both hosts: a Content Security Policy with a fresh script
+  nonce per response and no inline code (a tag helper adds the nonce, a unit test scans the views), `nosniff`,
+  `frame-ancestors 'none'`, `Referrer-Policy`, `Permissions-Policy`, COOP and CORP, HSTS for a year, no `Server`
+  header, and `no-store` for signed-in answers. The API allows nothing; Swagger UI has its own policy.
+- Tests that every portal form refuses a post without its anti-forgery token, and that the anonymous endpoints are
+  exactly the public pages, sign-in pages, back-channel logout and health checks.
+- SQL Server forces TLS with a certificate from the development CA (`scripts/dev-certs.sh`, a one-off
+  `sqlserver-tls` compose job); the apps, the migrator, WSO2's JDBC driver, `sqlcmd` and the Testcontainers fixture
+  all use TDS 8 strict encryption with the certificate pinned.
+- Administrators can reset a person's authenticator from `/admin/users`: the portal opens a time-limited enrolment
+  window in WSO2 over SCIM (provisioner client, back channel), the sign-in script lets the person enrol a new
+  authenticator at their next sign-in, and every window is an audit event (`TotpEnrolmentOpened`; log events 3013 to
+  3015; ADR 0032).
+- WSO2 locks an account for five minutes after five failed sign-ins (IamBootstrap `account-lock` step).
+- `/admin/diagnostics` for administrators: health checks with timings and errors, build and runtime, database
+  version, connection encryption and migrations, the audit chain head and the effective settings, never secrets.
+- Edge proxy configuration `deploy/caddy/Caddyfile` (used from phase 11): only WSO2's sign-in paths are public, the
+  console and management APIs and Seq need an allowlisted address, tokens are redacted from access logs.
+  `scripts/check-caddy.sh` runs it against stub upstreams with 49 checks, in CI.
+- CodeQL analysis of C# and the workflows on every push, pull request and weekly.
+- `scripts/demo-scenario.sh` fails on any Content Security Policy violation reported by the browser.
+
 ### Changed
 
 - SQL Server 2025 replaces 2022 for local Docker Compose and the integration tests (ADR 0013).
@@ -166,3 +189,7 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - Collections load with split queries by default.
 - Seeded templates are in force from 1 January 2024, so migrated history has a template (ADR 0029).
 - `AppUser.Create` refuses reserved user names (`system.migration`, the API client users' prefix).
+- Local connection strings use `Encrypt=Strict` with SQL Server's certificate pinned instead of
+  `TrustServerCertificate=True` (ADR 0033 supersedes that part of ADR 0014); `sqlcmd` needs `-Ns -J <certificate>`.
+- Log redaction also masks OAuth parameters (`code`, `id_token_hint`, `logout_token`, `client_assertion`), keys and
+  credentials; request logs state explicitly that they carry no query string.

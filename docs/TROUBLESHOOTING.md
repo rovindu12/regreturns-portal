@@ -50,7 +50,7 @@ Return it to `Warning` afterwards: SQL command logs are verbose.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | App exits at start with `ConnectionStrings:RegReturns is not set` | No connection string configured | Set it with `dotnet user-secrets` or the `ConnectionStrings__RegReturns` environment variable |
-| `/health/ready` reports `database: Unhealthy` | SQL Server down, wrong password, or firewall | `docker compose ps`, check `MSSQL_SA_PASSWORD` in `.env`, try `sqlcmd` from the host |
+| `/health/ready` reports `database: Unhealthy` | SQL Server down, wrong password, or firewall | `docker compose ps`, check `MSSQL_SA_PASSWORD` in `.env`, try `sqlcmd -S localhost -U sa -Ns -J .certs/sqlserver/mssql.crt` from the host (password in `SQLCMDPASSWORD`) |
 | `Invalid object name 'returns.Submissions'` | Migrations not applied | `dotnet run --project tools/RegReturns.Migrator -- migrate-db` |
 | Home page shows zeros | Database not seeded | `dotnet run --project tools/RegReturns.Migrator -- seed` (idempotent) |
 | Migrator exits with code 1 | See the `Database command failed` log event (event id 2002) for the exception | Fix the cause and re-run; migrations are transactional |
@@ -66,7 +66,7 @@ SQL Server volume, the keystores and WSO2's database hold those secrets. To rota
 
 | Key | How to rotate |
 |---|---|
-| `MSSQL_SA_PASSWORD` | Run `ALTER LOGIN sa WITH PASSWORD = N'<new>'` with `sqlcmd` as `sa` (old password), put the new one in `.env`, then `docker compose up -d sqlserver` and `scripts/dev-secrets.sh` |
+| `MSSQL_SA_PASSWORD` | Run `ALTER LOGIN sa WITH PASSWORD = N'<new>'` with `sqlcmd -Ns -J .certs/sqlserver/mssql.crt` as `sa` (old password), put the new one in `.env`, then `docker compose up -d sqlserver` and `scripts/dev-secrets.sh` |
 | `WSO2_ADMIN_PASSWORD` | Change the password in the WSO2 Console first, then in `.env` |
 | `WSO2_DB_PASSWORD` | Change it in `.env`, run `docker compose run --rm wso2-db-init` (it resets the login's password), then `docker compose up -d wso2` |
 | `WSO2_KEYSTORE_PASSWORD` | Change it in `.env`, run `scripts/dev-certs.sh --force`, then `docker compose up -d wso2` |
@@ -382,3 +382,34 @@ audit trail on *Demo reset* to see them with what each removed and seeded.
 | Disabling a person says demo accounts cannot be changed | Demo accounts are shared by every visitor | Expected |
 | A disabled person still signs in to WSO2 | The portal only stops them acting in the portal (`User.NotLinked`) | Disable the account in WSO2 too (through IamBootstrap or SCIM, never the Console) |
 | `scripts/demo-scenario.sh` finds no MDA return for last month | The demo was not reset since the month changed, or someone already filed it | Reset the demo, then run the script again |
+
+## 14. Security: headers, TLS, authenticator resets and diagnostics
+
+Start at **Administration → Diagnostics** (`/admin/diagnostics`, system administrators with TOTP): every health check
+with its duration and error, the build, the database's migrations and connection encryption, the audit chain head and
+the settings that matter, with secrets shown only as *set* or *not set* (ADR 0033).
+
+Authenticator resets ([ADR 0032](adr/0032-administrator-opened-totp-enrolment.md)) log:
+
+```
+EventId.Id = 3013                                  -- enrolment window opened (WSO2 user id, until, audit entry)
+EventId.Id = 3014                                  -- reset refused (error code) (warning)
+EventId.Id = 3015                                  -- WSO2 could not be used; nothing changed (error, with the cause)
+```
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| A script, chart or style does not work and the browser console shows `Refused to execute inline script` or `Refused to apply inline style` | The page has inline code, which the Content Security Policy blocks | Move the script to `wwwroot/js` (loaded in the `Scripts` section) and the style to `site.css`; set styles from script with `element.style`. `PortalContentSecurityPolicyTests` names the view |
+| A script from `wwwroot/js` is blocked | The `<script>` was written without the tag helper (for example in a string), so it lacks the nonce | Render it as a normal `<script src>` element in a view |
+| `scripts/demo-scenario.sh` fails with `CSP violations` | A page of the tour broke the policy | The message names the page and the blocked resource |
+| Swagger UI cannot get a token (`connect-src` violation) | `Wso2:Authority` of the API differs from the origin Swagger UI calls | Set the API's `Wso2:Authority` to WSO2's public origin |
+| The app cannot connect: `The certificate chain was issued by an authority that is not trusted` or `does not match the certificate provided by the ServerCertificate option` | The connection string does not pin the current SQL Server certificate | Run `scripts/dev-secrets.sh` (it writes `ServerCertificate=.certs/sqlserver/mssql.crt`); after `dev-certs.sh --force`, run `docker compose up -d --force-recreate sqlserver-tls sqlserver wso2` |
+| `sqlcmd` says `SSL Provider: certificate verify failed` or the login fails before authentication | SQL Server forces TLS and `sqlcmd` does not know the certificate | Add `-Ns -J .certs/sqlserver/mssql.crt` (inside the containers: `/var/opt/mssql/tls/mssql.crt`) |
+| `sqlserver` never becomes healthy after an upgrade | The `sqlserver-tls` job did not run, so the certificate in `mssql.conf` is missing | `scripts/dev-certs.sh`, then `docker compose up -d` (the job runs before SQL Server starts); `docker compose logs sqlserver-tls` |
+| WSO2 stops at start with a JDBC `trustAnchors parameter must be non-empty` or certificate error | The JDBC URL does not pin the certificate, or `.certs/sqlserver/mssql.crt` is not mounted | Keep `serverCertificate=` in `deploy/wso2/deployment.toml` and the mount in `docker-compose.yml` |
+| Diagnostics shows *certificate NOT validated* | A connection string still has `TrustServerCertificate=True` | Replace it with `Encrypt=Strict;ServerCertificate=<path>` |
+| *Reset an authenticator* says WSO2 could not be reached | The provisioner client is not configured (`Iam:Provisioner:*`), WSO2 is down, or the back channel is wrong | 3015 has the cause; run `scripts/dev-secrets.sh` after IamBootstrap `apply`; check `Wso2:BackchannelAuthority` |
+| *Reset an authenticator* says the account holds no portal role | The account exists in WSO2 but has none of the portal's application roles | Expected for WSO2's own administrators; give the person a role through IamBootstrap first |
+| The person is not asked to set up an authenticator | They signed in after the window closed, or they do not need TOTP (not an approver or administrator) | Open a new window; check the role |
+| A person cannot sign in although the password is right | WSO2 locked the account after five failed sign-ins (it shows the same "login failed" message) | Wait `IamBootstrap:AccountLockMinutes` (5); SCIM shows `accountLocked` and `lockedReason` |
+| `scripts/check-caddy.sh` fails | A change to `deploy/caddy/Caddyfile` | Each `FAIL` line names the request and what came back |

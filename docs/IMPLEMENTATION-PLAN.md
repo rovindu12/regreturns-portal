@@ -389,6 +389,11 @@ Each phase ends with a zero-warning build, all tests green, a conventional commi
 
 Working notes:
 - This cloud workspace can install the .NET 10 SDK from Microsoft's package feed and pull the SQL Server and `wso2/wso2is:7.3.0` images (checked today), and it has 4 CPUs and 15 GB RAM. So I can build and test, and run WSO2 and Testcontainers here, before every push.
+- Phase 10 as built (ADR 0032, 0033, `docs/SECURITY.md`): everything in the row above, plus WSO2 account locking after
+  five failed sign-ins (WSO2 7.3 ships with it off). SQL Server uses TDS 8 strict encryption with the certificate
+  pinned by every client rather than CA trust, because WSO2's JDBC driver connects before WSO2 loads its truststore.
+  The authenticator reset opens a time-limited window that the sign-in script acts on, since WSO2 encrypts TOTP
+  secrets with its own key and an administrator cannot set one. The ASVS assessment uses version 5.0.
 - Seed anomalies planned: Lotus Union LCR drops ~45% in one month (variance warning); Crestmont misreports Total HQLA ≠ sum of levels (error, corrected in a later revision); Northgate files QCAR late twice; Meridian has one missing MDA month (overdue); Harbourline shows a sudden NPL ratio jump (AI insight showcase).
 
 ---

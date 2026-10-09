@@ -1,6 +1,6 @@
 # RegReturns – Regulatory Returns Portal
 
-> **Status:** under active development (phase 9 of 12 complete). Live demo link, screenshots and the full
+> **Status:** under active development (phase 10 of 12 complete). Live demo link, screenshots and the full
 > documentation set arrive in later phases.
 
 RegReturns lets licensed banks submit periodic regulatory returns to a central bank, validates them against
@@ -35,7 +35,7 @@ Needs the .NET 10 SDK, Docker, openssl and jq.
 
 ```bash
 scripts/init-env.sh             # .env with random secrets (never copy .env.example: its values are public)
-scripts/dev-certs.sh            # development CA and WSO2 keystores
+scripts/dev-certs.sh            # development CA, WSO2 keystores and SQL Server's certificate
 docker compose up -d            # SQL Server, WSO2 Identity Server, Seq
 scripts/dev-secrets.sh          # secrets into dotnet user-secrets
 dotnet run --project tools/RegReturns.Migrator -- migrate-db --seed
@@ -99,10 +99,22 @@ codes, the regulator's template text and figures are sent, never the bank's name
 and every generation is recorded in the audit trail with digests of what was sent and written
 ([guide](docs/AI-ASSISTANT.md), [ADR 0030](docs/adr/0030-advisory-return-insights.md)).
 
+## Security
+
+Every answer carries a strict Content Security Policy (a fresh script nonce per response, no inline code) and the
+usual browser protections; every form is protected against cross-site request forgery; SQL Server only accepts
+encrypted connections and every client checks its certificate; WSO2 locks an account after five failed sign-ins;
+approvals and administration need a one-time code, and administrators can let a person enrol a new authenticator
+without ever seeing a secret. The edge exposes only WSO2's sign-in pages; its console needs an allowlisted address.
+The threat model, an OWASP ASVS self-assessment and how each control is tested are in
+[docs/SECURITY.md](docs/SECURITY.md) ([ADR 0032](docs/adr/0032-administrator-opened-totp-enrolment.md),
+[ADR 0033](docs/adr/0033-security-hardening.md)).
+
 ## Tech stack
 
 .NET 10 · ASP.NET Core MVC and Web API · EF Core 10 · SQL Server 2025 · Serilog · OpenTelemetry · Seq ·
-Dapper · ClosedXML · QuestPDF · Chart.js · Anthropic SDK · Cronos · QRCoder · Mermaid · xUnit v3 · Testcontainers · GitHub Actions · WSO2 Identity Server 7.3.
+Dapper · ClosedXML · QuestPDF · Chart.js · Anthropic SDK · Cronos · QRCoder · Mermaid · xUnit v3 · Testcontainers · GitHub Actions ·
+CodeQL · Caddy · WSO2 Identity Server 7.3.
 Docker deployment comes in a later phase.
 
 ## Documentation
@@ -113,6 +125,7 @@ Docker deployment comes in a later phase.
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Data migration guide](docs/DATA-MIGRATION.md)
 - [Advisory insights](docs/AI-ASSISTANT.md)
+- [Security: threat model and controls](docs/SECURITY.md)
 - [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 ## Licence

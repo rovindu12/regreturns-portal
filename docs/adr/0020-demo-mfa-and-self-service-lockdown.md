@@ -40,8 +40,9 @@ spike at the start of phase 2.
 - Each run that has to enrol creates and deletes a password-grant app for a few seconds. An interrupted run leaves it
   behind; every later run looks for it and deletes it, even when it has nothing to enrol.
 - A user who must pass TOTP but has no active secret cannot finish signing in, because WSO2 no longer offers
-  enrolment. Demo users are re-enrolled by `IamBootstrap demo-users`; for real users, enrolment by an administrator
-  is part of the admin pages (phase 10).
+  enrolment. Demo users are re-enrolled by `IamBootstrap demo-users`; for real users, an administrator opens a
+  time-limited enrolment window for one person from the admin pages, which the sign-in script acts on while
+  enrolment stays off for everyone else (ADR 0032).
 - Turning the lockdown off (`IamBootstrap:LockDownSelfService=false`) is for installations with real users who should
   manage their own accounts.
 - The TOTP code check depends on this machine's clock and WSO2's agreeing within 30 seconds.
