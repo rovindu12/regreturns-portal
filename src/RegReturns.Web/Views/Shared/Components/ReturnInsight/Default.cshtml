@@ -1,0 +1,155 @@
+@using RegReturns.Application.Insights
+@using RegReturns.Domain.Templates
+@using RegReturns.Web.Models.Returns
+@using RegReturns.Web.Models.Supervision
+@model ReturnInsightViewModel
+@{
+    var insight = Model.Latest;
+}
+<section id="insight" aria-labelledby="insight-heading" class="card mb-4">
+    <div class="card-body">
+        <div class="d-flex flex-wrap gap-2 align-items-baseline">
+            <h2 id="insight-heading" class="h4 mb-0">Advisory insight</h2>
+            @if (insight is not null)
+            {
+                <span class="badge @(Model.IsAiWritten ? "text-bg-info" : "text-bg-secondary")">
+                    @(Model.IsAiWritten ? "AI-generated, advisory" : "Rule-based, advisory")
+                </span>
+            }
+        </div>
+        <p class="small text-body-secondary mt-1">@Model.ProviderNote</p>
+
+        @if (insight is null)
+        {
+            <p>
+                No insight for revision @Model.Panel.Revision yet. Generate one for a summary of the largest movements, the
+                failed rules and questions to put to the bank.
+            </p>
+        }
+        else
+        {
+            var content = insight.Content;
+            @if (insight.FallbackReason is { } reason)
+            {
+                <div class="alert alert-warning py-2" role="status">
+                    @InsightErrors.Describe(reason) Fixed rules wrote this insight instead.
+                </div>
+            }
+
+            <p class="lead mb-3" data-insight="headline">@content.Headline</p>
+
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <h3 class="h6">What stands out</h3>
+                    <ul data-insight="observations">
+                        @foreach (var observation in content.Observations)
+                        {
+                            <li>@observation</li>
+                        }
+                    </ul>
+                </div>
+                <div class="col-lg-6">
+                    <h3 class="h6">Questions for the bank</h3>
+                    @if (content.Questions.Count == 0)
+                    {
+                        <p class="text-body-secondary">None.</p>
+                    }
+                    else
+                    {
+                        <ul data-insight="questions">
+                            @foreach (var question in content.Questions)
+                            {
+                                <li>@question</li>
+                            }
+                        </ul>
+                    }
+                </div>
+            </div>
+
+            <h3 class="h6 mt-2">Largest movements</h3>
+            @if (content.Movers.Count == 0)
+            {
+                <p class="text-body-secondary">
+                    No figure moved by @InsightFacts.MoverThresholdPercent.ToString("0", System.Globalization.CultureInfo.InvariantCulture)%
+                    or more against the approved figures it can be compared with.
+                </p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle">
+                        <caption class="visually-hidden">Figures that moved most against an earlier approved return</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Field</th>
+                                <th scope="col" class="text-end">Now</th>
+                                <th scope="col" class="text-end">Before</th>
+                                <th scope="col" class="text-end">Change</th>
+                                <th scope="col">Compared with</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var mover in content.Movers)
+                            {
+                                <tr>
+                                    <th scope="row"><a href="#field-@mover.FieldCode">@mover.Label</a></th>
+                                    <td class="text-end text-nowrap">@ReturnInsightViewModel.Figure(mover.Current, mover.Unit)</td>
+                                    <td class="text-end text-nowrap">@ReturnInsightViewModel.Figure(mover.Prior, mover.Unit)</td>
+                                    <td class="text-end text-nowrap fw-semibold">@ReturnInsightViewModel.Change(mover.ChangePercent)</td>
+                                    <td>@ReturnInsightViewModel.Basis(mover.Basis)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (content.Breaches.Count > 0)
+            {
+                <h3 class="h6">Failed rules</h3>
+                <ul class="list-unstyled">
+                    @foreach (var breach in content.Breaches)
+                    {
+                        var isError = breach.Severity == Severity.Error;
+                        <li class="mb-1">
+                            <span class="badge @(isError ? "text-bg-danger" : "text-bg-warning")">@(isError ? "Error" : "Warning")</span>
+                            <a href="#field-@breach.FieldCode">@breach.FieldLabel</a>:
+                            @breach.Rule
+                            <span class="small text-body-secondary font-monospace">@breach.RuleCode</span>
+                            @if (!isError)
+                            {
+                                <span class="badge @(breach.JustifiedByBank ? "text-bg-light border" : "text-bg-secondary")">
+                                    @(breach.JustifiedByBank ? "justified" : "not justified")
+                                </span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+
+            <p class="small text-body-secondary mb-2">
+                Generated @ReturnDisplay.Utc(insight.CreatedAt) for revision @insight.Revision by @Model.WrittenBy
+                in @ReturnInsightViewModel.Duration(insight.DurationMs); recorded as audit entry @insight.AuditSequence.
+                Movements and failed rules are computed by the portal; only the headline, observations and questions are written.
+            </p>
+
+            <details class="mb-3">
+                <summary class="small">What was shared</summary>
+                <p class="small mt-2 mb-1">@Model.SharedNote</p>
+                <p class="small mb-1 text-break">
+                    Payload SHA-256 <code>@insight.InputSha256</code><br />
+                    Insight SHA-256 <code>@insight.OutputSha256</code>
+                </p>
+                <pre class="insight-payload bg-body-tertiary border rounded p-2 mb-0" data-insight="payload"><code>@Model.PayloadForDisplay</code></pre>
+            </details>
+        }
+
+        <p class="small text-body-secondary">
+            Advisory only: an insight is not a supervisory finding, can be wrong, and never changes the return or its workflow.
+            Check every point against the figures above before relying on it.
+        </p>
+        <form method="post" asp-controller="Supervision" asp-action="GenerateInsight" asp-route-submissionId="@Model.SubmissionId">
+            <button type="submit" class="btn btn-outline-primary">@Model.ButtonLabel</button>
+        </form>
+    </div>
+</section>
