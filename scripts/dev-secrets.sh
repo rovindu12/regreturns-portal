@@ -23,11 +23,12 @@ sa_password="$(env_get "${ENV_FILE}" MSSQL_SA_PASSWORD)"
 connection="Server=localhost,1433;Database=RegReturns;User Id=sa;Password=${sa_password};TrustServerCertificate=True"
 audit_key="$(env_get "${ENV_FILE}" AUDIT_HMAC_KEY)"
 portal_secret="$(env_get "${GENERATED_FILE}" Oidc__ClientSecret)"
+anthropic_key="$(env_get "${ENV_FILE}" ANTHROPIC_API_KEY)"
 
 # set_secrets <project> <jq filter>: merges the JSON object into the project's user-secrets. jq reads the values
 # from its environment ($ENV), not from --arg, so they never appear in the process list.
 set_secrets() {
-  RR_CS="${connection}" RR_AUDIT="${audit_key}" RR_PORTAL="${portal_secret}" jq -n "$2" |
+  RR_CS="${connection}" RR_AUDIT="${audit_key}" RR_PORTAL="${portal_secret}" RR_AI="${anthropic_key}" jq -n "$2" |
     dotnet user-secrets set --project "${ROOT}/$1" > /dev/null
   echo "Updated user-secrets for $1"
 }
@@ -37,7 +38,12 @@ set_secrets tools/RegReturns.IamBootstrap '{"ConnectionStrings:RegReturns": $ENV
 set_secrets src/RegReturns.Api '{"ConnectionStrings:RegReturns": $ENV.RR_CS, "Audit:HmacKey": $ENV.RR_AUDIT}'
 set_secrets src/RegReturns.Web \
   '{"ConnectionStrings:RegReturns": $ENV.RR_CS, "Audit:HmacKey": $ENV.RR_AUDIT}
-   + (if $ENV.RR_PORTAL == "" then {} else {"Oidc:ClientSecret": $ENV.RR_PORTAL} end)'
+   + (if $ENV.RR_PORTAL == "" then {} else {"Oidc:ClientSecret": $ENV.RR_PORTAL} end)
+   + (if $ENV.RR_AI == "" then {} else {"Ai:Anthropic:ApiKey": $ENV.RR_AI} end)'
+# An API key removed from .env is removed from user-secrets too, so insights go back to the rule-based writer.
+if [ -z "${anthropic_key}" ]; then
+  dotnet user-secrets remove "Ai:Anthropic:ApiKey" --project "${ROOT}/src/RegReturns.Web" > /dev/null 2>&1 || true
+fi
 
 if [ -z "${portal_secret}" ]; then
   echo "No portal client secret yet: run IamBootstrap (apply), then this script again."

@@ -4,6 +4,7 @@ using RegReturns.Application.Abstractions;
 using RegReturns.Domain.Auditing;
 using RegReturns.Domain.Common;
 using RegReturns.Domain.Identity;
+using RegReturns.Domain.Insights;
 using RegReturns.Domain.Institutions;
 using RegReturns.Domain.Migration;
 using RegReturns.Domain.Obligations;
@@ -70,6 +71,9 @@ public sealed class RegReturnsDbContext : DbContext, IAppDbContext
 
     /// <inheritdoc />
     public DbSet<ApiClient> ApiClients => Set<ApiClient>();
+
+    /// <inheritdoc />
+    public DbSet<ReturnInsight> ReturnInsights => Set<ReturnInsight>();
 
     /// <summary>Gets the legacy migration runs (ADR 0029).</summary>
     public DbSet<MigrationRun> MigrationRuns => Set<MigrationRun>();

@@ -6,7 +6,6 @@ using Microsoft.Extensions.Logging;
 using RegReturns.Application.Abstractions;
 using RegReturns.Application.Diagnostics;
 using RegReturns.Domain.Common;
-using RegReturns.Domain.Periods;
 using RegReturns.Domain.Submissions;
 using RegReturns.Domain.Templates;
 using RegReturns.Domain.Validation;
@@ -62,18 +61,7 @@ public sealed class ReturnValidator(IAppDbContext db, ILogger<ReturnValidator> l
             .Where(o => o.Id == submission.ObligationId)
             .Select(o => o.Period)
             .SingleAsync(cancellationToken);
-        var prior = new Dictionary<VarianceBasis, IReadOnlyDictionary<string, decimal>>();
-        foreach (var (basis, priorPeriod) in new[]
-        {
-            (VarianceBasis.PreviousPeriod, period.Previous()),
-            (VarianceBasis.SamePeriodLastYear, period.SamePeriodLastYear()),
-        })
-        {
-            if (await ApprovedFiguresAsync(submission, priorPeriod, cancellationToken) is { } figures)
-            {
-                prior[basis] = figures;
-            }
-        }
+        var prior = await PriorFigures.ForAsync(db, submission, period, cancellationToken);
 
         var values = submission.Values.ToDictionary(v => v.FieldCode, v => v.RawValue, StringComparer.Ordinal);
         var findings = ValidationEngine.Validate(template, values, prior);
@@ -111,22 +99,5 @@ public sealed class ReturnValidator(IAppDbContext db, ILogger<ReturnValidator> l
         }
 
         ReturnsLog.Validated(logger, submission.Id, submission.Revision, outcome.Errors, outcome.Warnings, outcome.UnjustifiedWarnings);
-    }
-
-    private async Task<IReadOnlyDictionary<string, decimal>?> ApprovedFiguresAsync(
-        Submission submission, ReportingPeriod period, CancellationToken cancellationToken)
-    {
-        var figures = await db.Submissions.AsNoTracking()
-            .Where(s => s.InstitutionId == submission.InstitutionId
-                && s.ReturnTypeId == submission.ReturnTypeId
-                && s.Status == SubmissionStatus.Approved
-                && db.Obligations.Any(o => o.Id == s.ObligationId
-                    && o.Period.Frequency == period.Frequency
-                    && o.Period.Year == period.Year
-                    && o.Period.Number == period.Number))
-            .OrderByDescending(s => s.DecidedAt)
-            .Select(s => s.Values.Where(v => v.NumericValue != null).Select(v => new { v.FieldCode, v.NumericValue }).ToList())
-            .FirstOrDefaultAsync(cancellationToken);
-        return figures?.ToDictionary(v => v.FieldCode, v => v.NumericValue!.Value, StringComparer.Ordinal);
     }
 }

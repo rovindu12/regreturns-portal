@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 using RegReturns.Domain.Auditing;
 using RegReturns.Domain.Identity;
+using RegReturns.Domain.Insights;
 using RegReturns.Domain.Institutions;
 using RegReturns.Domain.Obligations;
 using RegReturns.Domain.Submissions;
@@ -37,6 +38,9 @@ public interface IAppDbContext
 
     /// <summary>Gets the banks' machine-to-machine clients registered in WSO2.</summary>
     DbSet<ApiClient> ApiClients { get; }
+
+    /// <summary>Gets the advisory insights generated for returns (ADR 0030).</summary>
+    DbSet<ReturnInsight> ReturnInsights { get; }
 
     /// <summary>
     /// Gets the audit trail, read-only and untracked. Entries are appended only by the audit chain writers: the

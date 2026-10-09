@@ -15,6 +15,7 @@
     <PackageReference Include="ClosedXML" />
     <PackageReference Include="QuestPDF" />
     <PackageReference Include="Dapper" />
+    <PackageReference Include="Anthropic" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="RegReturns.UnitTests" />

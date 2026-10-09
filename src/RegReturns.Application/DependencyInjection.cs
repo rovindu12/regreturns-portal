@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using RegReturns.Application.Identity;
+using RegReturns.Application.Insights;
 using RegReturns.Application.Messaging;
 using RegReturns.Application.Reporting;
 using RegReturns.Application.Returns;
@@ -30,6 +32,9 @@ public static class DependencyInjection
         services.AddScoped<ICurrentActor, CurrentActor>();
         services.AddScoped<ReturnValidator>();
         services.AddScoped<ReportBuilder>();
+
+        // Insights are rule-based unless the host adds an AI provider (AddInsights in Infrastructure).
+        services.TryAddSingleton<IInsightNarrator, RuleBasedNarrator>();
 
         return services;
     }

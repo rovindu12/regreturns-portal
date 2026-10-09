@@ -7,9 +7,12 @@ using Microsoft.Extensions.Options;
 using RegReturns.Application.Abstractions;
 using RegReturns.Application.Auditing;
 using RegReturns.Application.Idempotency;
+using RegReturns.Application.Insights;
 using RegReturns.Application.Migration;
 using RegReturns.Application.Reporting;
 using RegReturns.Application.Returns;
+using RegReturns.Domain.Insights;
+using RegReturns.Infrastructure.Ai;
 using RegReturns.Infrastructure.Auditing;
 using RegReturns.Infrastructure.Files;
 using RegReturns.Infrastructure.Idempotency;
@@ -129,6 +132,32 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.TryAddSingleton<IReportingReadModel, ReportingReadModel>();
         services.TryAddSingleton<IComplianceReportRenderer, ComplianceReportRenderer>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds advisory insights (ADR 0030), configured by <c>Ai</c>: the Anthropic narrator and its named
+    /// <see cref="HttpClient"/> when <c>Ai:Provider</c> is <c>Anthropic</c> (the default), the rule-based writer
+    /// otherwise. Without <c>Ai:Anthropic:ApiKey</c> every insight is rule-based and nothing is sent.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">Application configuration.</param>
+    /// <returns>The same service collection.</returns>
+    public static IServiceCollection AddInsights(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<AiOptions>()
+            .Bind(configuration.GetSection(AiOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.TryAddSingleton(TimeProvider.System);
+
+        // The narrator's deadline (Ai:Anthropic:TimeoutSeconds) bounds every call, so HttpClient's own 100 s limit is off.
+        services.AddHttpClient(AnthropicInsightNarrator.HttpClientName, client => client.Timeout = Timeout.InfiniteTimeSpan);
+        services.TryAddSingleton<AnthropicInsightNarrator>();
+        services.AddSingleton<IInsightNarrator>(sp =>
+            sp.GetRequiredService<IOptions<AiOptions>>().Value.Provider == InsightProvider.Anthropic
+                ? sp.GetRequiredService<AnthropicInsightNarrator>()
+                : new RuleBasedNarrator());
         return services;
     }
 
