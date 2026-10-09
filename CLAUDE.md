@@ -30,8 +30,9 @@ as the domain and server right before the phase 11 deploy.
 | 5. Web API: v1 endpoints, idempotency, paging, rate limits, Swagger | done |
 | 6. Dashboards and reports: compliance grid, overdue, findings trend, key ratios, Excel/PDF export | done |
 | 7. Migration tool: legacy CSV generator, dry-run migrator, mapping, error report, reconciliation | done |
-| 8. AI assistant: insight service, Anthropic provider, rule-based fallback, reviewer panel, audited calls | next |
-| 9-12 | not started |
+| 8. AI assistant: insight service, Anthropic provider, rule-based fallback, reviewer panel, audited calls | done |
+| 9. Demo portal: landing page, try-the-demo, guided scenario, status page, demo reset | next |
+| 10-12 | not started |
 
 ## Commands
 
@@ -42,6 +43,7 @@ scripts/init-env.sh                        # creates .env with random secrets (m
 scripts/dev-certs.sh                       # dev CA + WSO2 keystores in .certs/ (ADR 0015)
 docker compose up -d                       # SQL Server, WSO2 (https://localhost:9443/console), Seq (http://localhost:8081)
 scripts/dev-secrets.sh                     # copies .env (and .env.generated) into user-secrets for every project
+                                           # (an optional ANTHROPIC_API_KEY becomes the portal's Ai:Anthropic:ApiKey)
 
 dotnet run --project tools/RegReturns.Migrator -- migrate-db --seed   # schema + demo data (idempotent)
 dotnet run --project tools/RegReturns.Migrator -- legacy --source samples/legacy --dry-run --report out/legacy
@@ -75,7 +77,8 @@ dotnet ef migrations add <Name> -p src/RegReturns.Infrastructure -s src/RegRetur
 src/RegReturns.Domain          Entities, value objects, workflow rules. No package dependencies.
 src/RegReturns.Application     Use-case handlers, IAppDbContext, telemetry names. References EF Core abstractions only.
 src/RegReturns.Infrastructure  EF Core context, configurations, migrations, seeding, DI; Dapper reporting read model and
-                               the compliance report renderer (ClosedXML, QuestPDF); the legacy migration (`Legacy`).
+                               the compliance report renderer (ClosedXML, QuestPDF); the legacy migration (`Legacy`); the
+                               Anthropic insight narrator (`Ai`, the only code that references the Anthropic SDK).
 src/RegReturns.ServiceDefaults Serilog, OpenTelemetry, health endpoints, ProblemDetails, exception handler.
 src/RegReturns.Web             MVC portal (Razor + Bootstrap 5).
 src/RegReturns.Api             REST API v1 for bank systems: reference data, reads, draft delivery (ADR 0026, 0027).
@@ -162,6 +165,21 @@ Legacy migration (see `src/RegReturns.Infrastructure/Legacy`, ADR 0029 and docs/
   (with row errors) is kept in the `migration` schema, and the migrator's audited saves put returns and runs in the
   hash chain (actor `regreturns-migrator`).
 
+Advisory insights (see `src/RegReturns.Application/Insights`, `src/RegReturns.Infrastructure/Ai`, ADR 0030 and
+docs/AI-ASSISTANT.md):
+- Supervision reviewers and approvers press *Generate insight* (`POST .../insight`); the review page renders the
+  panel through the `ReturnInsight` view component and never calls a provider itself.
+- `InsightPayloadBuilder` (pure) is the only source of the payload: numeric fields (amount, whole number, percentage)
+  with current and approved prior figures (`PriorFigures`, shared with `ReturnValidator`), changes, and findings with
+  template text. Never add bank-authored text, names, comments or ids. `InsightPayloadGuard` allows only template text,
+  codes, enumeration names and period labels; fix the builder when it fails, never widen the guard.
+- Movers and breaches (`InsightFacts`) are computed in code; an `IInsightNarrator` writes only the headline,
+  observations and questions. `AnthropicInsightNarrator` maps every failure to an `InsightErrors` error and the handler
+  falls back to `RuleBasedNarrator`, recording the `InsightFallbackReason`. Model text is plain text; Razor encodes it.
+- The `InsightGenerated` audit event (with both SHA-256 digests) is recorded before the `ReturnInsight` row is saved,
+  and also when the caller cancels after the payload was sent. `ReturnInsight` is `[NotAudited]` and keeps the event's
+  sequence. Insights are reused per revision and payload digest, except fallbacks other than "no API key".
+
 ## Conventions
 
 - .NET 10, C# latest, nullable on, `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, SonarAnalyzer and
@@ -177,11 +195,11 @@ Legacy migration (see `src/RegReturns.Infrastructure/Legacy`, ADR 0029 and docs/
 - Logging: `[LoggerMessage]` source-generated methods with event ids grouped per area (1xxx persistence, 20xx migrator,
   21xx legacy migration, 30xx audit and identity, 31xx portal sign-in, 32xx API authentication, 33xx API idempotency
   and rate limits, 4xxx IamBootstrap, 50xx templates, 51xx returns and API deliveries, 52xx uploads and files, 53xx
-  workflow steps, 54xx reports, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
+  workflow steps, 54xx reports, 550x insights, 551x AI provider, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
 - Time: inject `TimeProvider`; store UTC `DateTimeOffset`; dates as `DateOnly`; parse numbers with `CultureInfo.InvariantCulture`.
 - Config: options classes with `ValidateDataAnnotations().ValidateOnStart()`. Secrets only in user-secrets or environment variables.
   Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web, Api and the migrator's `legacy` verb share it),
-  `Oidc:ClientSecret` (Web).
+  `Oidc:ClientSecret` (Web), `Ai:Anthropic:ApiKey` (Web, optional: without it fixed rules write insights).
   WSO2 settings: `Wso2:Authority` (public issuer base), `Wso2:TrustedCaPath`, optional `Wso2:BackchannelAuthority`
   (e.g. `https://wso2:9443/` inside Docker), `Iam:EnforceMfa`.
   IamBootstrap reads `.env` itself (between appsettings/user-secrets and real environment variables) and writes
@@ -267,5 +285,13 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 - Docker must be running for integration tests; in a fresh cloud container start it with `sudo dockerd &`.
 - The SQL Server image is pinned twice: the `sqlserver` service in `docker-compose.yml` and `SqlServerFixture.Image`.
   Dependabot only bumps the compose file, so update the fixture in the same PR (ADR 0013).
+- Tests never call the real Anthropic API: unit tests give `AnthropicInsightNarrator` a stub `IHttpClientFactory`, host
+  tests replace the named client's handler (`AddHttpClient(AnthropicInsightNarrator.HttpClientName)
+  .ConfigurePrimaryHttpMessageHandler(...)`) and set `Ai:Anthropic:ApiKey` through `PortalHost.Create(settings: ...)`.
+  Set `Ai:Anthropic:MaxRetries` to 0 there, or a 5xx is retried with back-off.
+- Anthropic SDK: `AnthropicClient.BaseUrl` is init-only, and enum-like values (model, stop reason) are read with
+  `.Raw()`, not `ToString()`. The named `HttpClient` has no timeout of its own; the narrator's deadline covers retries.
+- `returns.ReturnInsights` references `iam.Users` with a restrict delete: deleting a user (the phase 9 demo reset)
+  must delete their insights first.
 - Always pass an absolute `--results-directory` to `dotnet test`: the default location differs between SDK feature
   bands (under `bin/` on 10.0.1xx, the repo root on newer bands), which broke the CI coverage gate once.

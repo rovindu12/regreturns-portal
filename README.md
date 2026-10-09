@@ -1,6 +1,6 @@
 # RegReturns – Regulatory Returns Portal
 
-> **Status:** under active development (phase 7 of 12 complete). Live demo link, screenshots and the full
+> **Status:** under active development (phase 8 of 12 complete). Live demo link, screenshots and the full
 > documentation set arrive in later phases.
 
 RegReturns lets licensed banks submit periodic regulatory returns to a central bank, validates them against
@@ -82,10 +82,19 @@ dotnet run --project tools/RegReturns.Migrator -- legacy --source samples/legacy
 
 See the [data migration guide](docs/DATA-MIGRATION.md) and [ADR 0029](docs/adr/0029-legacy-data-migration.md).
 
+## Advisory insights
+
+On the review page, a supervisor can ask for an advisory note on a return: the largest movements against earlier
+approved returns, the rules it failed, likely causes and questions for the bank. Claude writes it through the
+Anthropic API when `ANTHROPIC_API_KEY` is set in `.env`; otherwise, or when a call fails, fixed rules write it. Only
+codes, the regulator's template text and figures are sent, never the bank's name, people or anything a bank typed,
+and every generation is recorded in the audit trail with digests of what was sent and written
+([guide](docs/AI-ASSISTANT.md), [ADR 0030](docs/adr/0030-advisory-return-insights.md)).
+
 ## Tech stack
 
 .NET 10 · ASP.NET Core MVC and Web API · EF Core 10 · SQL Server 2025 · Serilog · OpenTelemetry · Seq ·
-Dapper · ClosedXML · QuestPDF · Chart.js · xUnit v3 · Testcontainers · GitHub Actions · WSO2 Identity Server 7.3.
+Dapper · ClosedXML · QuestPDF · Chart.js · Anthropic SDK · xUnit v3 · Testcontainers · GitHub Actions · WSO2 Identity Server 7.3.
 Docker deployment comes in a later phase.
 
 ## Documentation
@@ -94,6 +103,7 @@ Docker deployment comes in a later phase.
 - [Architecture decision records](docs/adr)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Data migration guide](docs/DATA-MIGRATION.md)
+- [Advisory insights](docs/AI-ASSISTANT.md)
 - [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 ## Licence

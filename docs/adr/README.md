@@ -31,3 +31,4 @@
 | [0027](0027-web-api-v1-conventions.md) | Web API v1 conventions: versions, OpenAPI, errors, paging, idempotency and rate limits |
 | [0028](0028-reporting-views-and-exports.md) | Reporting views read with Dapper, and audited Excel and PDF exports |
 | [0029](0029-legacy-data-migration.md) | Legacy data migration: mapping file, one reconciled transaction, approved returns through a system account |
+| [0030](0030-advisory-return-insights.md) | Advisory return insights: figures-only payload, Claude with a rule-based fallback, every generation audited |

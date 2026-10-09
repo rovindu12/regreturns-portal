@@ -119,6 +119,23 @@ and the project uses [Semantic Versioning](https://semver.org/).
   with a README of every defect and the expected result.
 - Log events 2101 to 2106, a data migration guide (`docs/DATA-MIGRATION.md`) and a troubleshooting section.
 
+- Phase 8: advisory insights on the supervision review page (ADR 0030). A reviewer or approver presses
+  *Generate insight*; Claude writes a headline, observations and questions through the official Anthropic SDK
+  (`claude-opus-5-5`, effort medium, structured JSON output), and fixed rules write the same structure without an API
+  key, after a timeout, rate limit, provider error or refusal, or for an unusable answer.
+- The payload holds only numeric fields, their approved figures for the previous period and the same period last
+  year, the changes, and the failed rules' template text; never the bank, people, justifications, comments or text
+  field values. A guard allows only template text, codes, enumeration values and period labels, and no e-mail
+  addresses, before anything is sent.
+- Largest movements and failed rules are computed in code; the panel shows who wrote the insight, why fixed rules
+  stood in, what was shared and its SHA-256, and labels every insight as advisory. Model text is stored as plain text
+  and HTML-encoded.
+- Every generation is an `InsightGenerated` audit event, recorded before the insight is stored, with both digests;
+  insights are kept in `returns.ReturnInsights` and reused while nothing changes.
+- `Ai` settings validated at start-up, an optional `ANTHROPIC_API_KEY` in `.env` copied to user-secrets, log events
+  5501 to 5506 and 5511 to 5515, the metrics `regreturns.insights.generated`, `regreturns.insights.duration` and
+  `regreturns.ai.tokens`, a guide (`docs/AI-ASSISTANT.md`) and a troubleshooting section.
+
 ### Changed
 
 - SQL Server 2025 replaces 2022 for local Docker Compose and the integration tests (ADR 0013).
