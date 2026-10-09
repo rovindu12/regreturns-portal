@@ -7,7 +7,9 @@ using Microsoft.Extensions.Options;
 using RegReturns.Application.Abstractions;
 using RegReturns.Application.Auditing;
 using RegReturns.Application.Demo;
+using RegReturns.Application.Diagnostics;
 using RegReturns.Application.Idempotency;
+using RegReturns.Application.Identity;
 using RegReturns.Application.Insights;
 using RegReturns.Application.Migration;
 using RegReturns.Application.Reporting;
@@ -60,6 +62,7 @@ public static class DependencyInjection
             });
         });
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<RegReturnsDbContext>());
+        services.Replace(ServiceDescriptor.Scoped<IDatabaseDiagnostics, DatabaseDiagnosticsReader>());
         services.AddScoped<IDatabaseInitializer, DatabaseInitializer>();
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IReturnFileReader, ReturnFileReader>();
@@ -236,6 +239,30 @@ public static class DependencyInjection
             });
 
         services.AddHealthChecks().AddCheck<Wso2HealthCheck>("wso2", tags: [ReadyTag]);
+        return services;
+    }
+
+    /// <summary>
+    /// Adds WSO2 as the identity directory (ADR 0032): SCIM 2 calls with the provisioner client
+    /// (<c>Iam:Provisioner</c>) over the back channel, and the length of TOTP enrolment windows
+    /// (<c>Iam:TotpEnrolment</c>). Requires <see cref="AddWso2Backchannel"/>. Without provisioner credentials the
+    /// directory answers every call with an error, so administrators see that WSO2 cannot be changed.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">Application configuration.</param>
+    /// <returns>The same service collection.</returns>
+    public static IServiceCollection AddIdentityDirectory(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<Wso2ProvisionerOptions>()
+            .Bind(configuration.GetSection(Wso2ProvisionerOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.AddOptions<TotpEnrolmentOptions>()
+            .Bind(configuration.GetSection(TotpEnrolmentOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        services.TryAddSingleton(TimeProvider.System);
+        services.Replace(ServiceDescriptor.Singleton<IIdentityDirectory, Wso2IdentityDirectory>());
         return services;
     }
 }

@@ -8,6 +8,7 @@ using RegReturns.Infrastructure;
 using RegReturns.Infrastructure.Identity.Authorization;
 using RegReturns.ServiceDefaults.Web;
 using RegReturns.Web.Identity;
+using RegReturns.Web.Security;
 using RegReturns.Web.Status;
 
 using Serilog;
@@ -30,7 +31,9 @@ try
     builder.Services.AddInsights(builder.Configuration);
     builder.Services.AddDemo(builder.Configuration);
     builder.Services.AddSingleton<PortalStatus>();
+    builder.Services.AddScoped<PortalDiagnostics>();
     builder.Services.AddWso2Backchannel(builder.Configuration);
+    builder.Services.AddIdentityDirectory(builder.Configuration);
     builder.Services.AddRegReturnsAuthorization(builder.Configuration);
     builder.Services.AddPortalAuthentication(builder.Configuration);
     builder.Services.AddAntiforgery(options =>
@@ -39,10 +42,16 @@ try
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
     });
     builder.Services.AddControllersWithViews(options => options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
+    builder.Services.AddHsts(options =>
+    {
+        options.MaxAge = TimeSpan.FromDays(365);
+        options.IncludeSubDomains = true;
+    });
 
     var app = builder.Build();
 
     app.UseServiceDefaults();
+    app.UsePortalSecurityHeaders();
     if (!app.Environment.IsDevelopment())
     {
         app.UseExceptionHandler("/Home/Error");

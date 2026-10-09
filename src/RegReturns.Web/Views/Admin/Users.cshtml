@@ -16,7 +16,8 @@
     <h1 class="h2">Users and API clients</h1>
     <p class="lead mb-0">
         WSO2 Identity Server holds every account, its password and its roles; the portal keeps a copy that is brought up
-        to date at each sign-in. Here you can disable or re-enable a person's access to the portal.
+        to date at each sign-in. Here you can disable or re-enable a person's access to the portal and reset a person's
+        authenticator app for two-step verification.
     </p>
 </section>
 
@@ -77,6 +78,26 @@
             </tbody>
         </table>
     </div>
+</section>
+
+<section aria-labelledby="authenticator-heading" class="mb-4">
+    <h2 id="authenticator-heading" class="h5">Reset an authenticator</h2>
+    <p class="small text-body-secondary">
+        For someone who must use two-step verification and has never signed in (they are not listed above yet), or who
+        has lost their phone: at their next sign-in within @Model.EnrolmentWindowHours hours, WSO2 shows them a QR code to
+        scan with an authenticator app. Their current authenticator keeps working until then. Demo, system and API client
+        accounts, accounts without a portal role and your own account cannot be reset.
+    </p>
+    <form method="post" asp-action="OpenTotpEnrolment" class="row g-2 align-items-end">
+        <div class="col-sm-6 col-md-4">
+            <label for="enrol-user-name" class="form-label">User name</label>
+            <input id="enrol-user-name" name="userName" class="form-control" required maxlength="64"
+                   autocomplete="off" autocapitalize="none" spellcheck="false" />
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-outline-danger">Reset authenticator</button>
+        </div>
+    </form>
 </section>
 
 <section aria-labelledby="clients-heading" class="mb-4">

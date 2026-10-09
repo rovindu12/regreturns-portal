@@ -119,13 +119,26 @@ async function main() {
     page.setDefaultTimeout(timeout);
     const period = latestMonth();
 
-    heading('Visitor reads the demo page');
+    // Chromium reports every blocked script, style or connection on the console: the tour must cause none.
+    const violations = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error' && /Content Security Policy/i.test(message.text())) {
+        violations.push(`${new URL(page.url()).pathname}: ${message.text().slice(0, 200)}`);
+      }
+    });
+
+    heading('Visitor reads the public pages and the demo page');
+    for (const path of ['/', '/status', '/demo/guide']) {
+      const response = await page.goto(`${portalBase}${path}`);
+      if (!response.ok()) throw new Error(`${path} answered ${response.status()}`);
+    }
     const credentials = await readDemoPage(page);
     say(`the page publishes the shared password and the authenticator keys of ${Object.keys(credentials.keys).join(', ')}`);
 
     if (process.env.RESET_FIRST === 'true') {
       heading('admin.demo resets the demo');
       await signIn(page, 'admin.demo', credentials);
+      await page.goto(`${portalBase}/admin/users`);
       await page.goto(`${portalBase}/admin`);
       await page.getByRole('button', { name: 'Reset demo' }).click();
       say(await expectSuccess(page, 'reset'));
@@ -174,6 +187,9 @@ async function main() {
     say(await expectSuccess(page, 'insight'));
     await page.locator('[data-insight="headline"]').waitFor();
     say('the advisory insight is on the page, with the payload that was shared');
+    await page.goto(`${portalBase}/reports`);
+    await page.locator('canvas').first().waitFor();
+    say('the reports dashboard draws its charts');
     await signOut(page);
 
     heading('approver.mfa approves it after the TOTP step');
@@ -192,6 +208,10 @@ async function main() {
     if (!verdict.includes('intact')) throw new Error(`verify chain: ${verdict}`);
     say(verdict.split('.')[0]);
     await signOut(page);
+
+    heading('No page broke its Content Security Policy');
+    if (violations.length > 0) throw new Error(`CSP violations:\n      ${violations.join('\n      ')}`);
+    say('the browser reported no CSP violation on any page of the tour');
   } finally {
     await browser.close();
   }

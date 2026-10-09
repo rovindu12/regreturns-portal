@@ -21,6 +21,33 @@ public sealed class SensitiveDataRedactionTests
         e.Properties["Email"].ToString().ShouldContain(SensitiveData.Mask);
     }
 
+    [Theory]
+    [InlineData("client_secret")]
+    [InlineData("id_token_hint")]
+    [InlineData("logout_token")]
+    [InlineData("code")]
+    [InlineData("client-assertion")]
+    [InlineData("PrivateKey")]
+    [InlineData("HmacKey")]
+    [InlineData("Credentials")]
+    [InlineData("TotpSecret")]
+    [InlineData("ConnectionString")]
+    public void OAuth_parameters_keys_and_credentials_are_masked(string name)
+    {
+        SensitiveData.IsSensitiveName(name).ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("ErrorCode")]
+    [InlineData("StatusCode")]
+    [InlineData("SubjectId")]
+    [InlineData("AuditSequence")]
+    [InlineData("ClientId")]
+    public void Codes_ids_and_counters_stay_readable(string name)
+    {
+        SensitiveData.IsSensitiveName(name).ShouldBeFalse();
+    }
+
     [Fact]
     public void Destructured_objects_mask_sensitive_and_attributed_properties()
     {

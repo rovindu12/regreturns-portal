@@ -44,4 +44,10 @@ public enum AuditAction
     /// details name the trigger, the rows removed and seeded, and the duration.
     /// </summary>
     DemoReset = 12,
+
+    /// <summary>
+    /// An administrator let a person set up a new authenticator at their next sign-in (ADR 0032). The entity is the
+    /// WSO2 account; the details name the user name and when the window closes.
+    /// </summary>
+    TotpEnrolmentOpened = 13,
 }

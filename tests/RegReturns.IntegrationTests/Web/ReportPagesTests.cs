@@ -95,7 +95,7 @@ public sealed class ReportPagesTests : IClassFixture<PortalDatabaseFixture>, IDi
         page.ShouldContain($"<code>{MlrTemplate.RuleLcrMinimum}</code>");
         page.ShouldContain("Liquidity coverage ratio <span class=\"text-body-secondary fw-normal\">(LCR, approved returns)</span>");
         page.ShouldContain("data-chart=\"{\"kind\":\"findings\"");
-        page.ShouldContain("<script src=\"/lib/chart.js/chart.umd.min.js\"></script>");
+        page.ShouldContain("<script src=\"/lib/chart.js/chart.umd.min.js\" nonce=");
     }
 
     [Fact]
