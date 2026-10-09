@@ -54,14 +54,14 @@ public sealed class WebHostTests(SqlServerFixture sql) : IDisposable
     }
 
     [Fact]
-    public async Task Home_page_shows_the_demo_banner_and_seeded_figures()
+    public async Task Home_page_shows_the_seeded_figures_and_no_demo_banner_outside_demo_mode()
     {
         using var client = _factory.CreateClient();
 
         var html = await client.GetStringAsync("/", TestContext.Current.CancellationToken);
 
-        html.ShouldContain("Demo environment");
         html.ShouldContain("Licensed banks");
+        html.ShouldNotContain("Demo environment");
     }
 
     public void Dispose() => _factory.Dispose();

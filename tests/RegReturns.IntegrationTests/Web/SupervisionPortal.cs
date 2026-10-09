@@ -28,6 +28,9 @@ internal sealed class SupervisionPortal(WebApplicationFactory<Program> factory, 
     public Task<HttpClient> ApproverAsync(bool withTotp = true) =>
         SignInAsync(DemoUsers.Approver, [Role.SupervisorApprover], bankCode: null, withTotp);
 
+    /// <summary>Gets a client signed in as the demo system administrator, with the TOTP step the admin area needs.</summary>
+    public Task<HttpClient> AdminAsync() => SignInAsync(DemoUsers.Admin, [Role.SystemAdmin], bankCode: null, withTotp: true);
+
     /// <summary>Gets a client signed in as the auditor.</summary>
     public Task<HttpClient> AuditorAsync() => SignInAsync(DemoUsers.Auditor, [Role.Auditor], bankCode: null, withTotp: false);
 

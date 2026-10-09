@@ -23,6 +23,9 @@ internal static class PortalHost
                 .UseEnvironment("Testing")
                 .UseSetting("Serilog:MinimumLevel:Default", "Warning")
                 .UseSetting("ConnectionStrings:RegReturns", connectionString)
+
+                // Never let the nightly demo reset fire in a test run that crosses 03:00 UTC.
+                .UseSetting("Demo:ResetSchedule", string.Empty)
                 .UseTestAuth();
             foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
             {

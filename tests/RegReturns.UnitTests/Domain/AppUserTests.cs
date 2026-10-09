@@ -55,6 +55,43 @@ public sealed class AppUserTests
     }
 
     [Fact]
+    public void Demo_accounts_cannot_be_enabled_either()
+    {
+        var user = AppUser.Create("auditor", "Auditor", "a@x.example", null, [Role.Auditor], isDemoAccount: true).Value;
+
+        user.Enable().Error.ShouldBe(IdentityErrors.DemoAccountProtected);
+    }
+
+    [Fact]
+    public void A_person_can_be_disabled_and_enabled_again()
+    {
+        var user = AppUser.Create("reviewer2", "Reviewer", "r@x.example", null, [Role.SupervisorReviewer]).Value;
+
+        user.Disable().IsSuccess.ShouldBeTrue();
+        user.Status.ShouldBe(UserStatus.Disabled);
+        user.Enable().IsSuccess.ShouldBeTrue();
+        user.Status.ShouldBe(UserStatus.Active);
+    }
+
+    [Fact]
+    public void The_migration_account_cannot_be_disabled()
+    {
+        var user = AppUser.ForMigration();
+
+        user.Disable().Error.ShouldBe(IdentityErrors.SystemAccountProtected);
+        user.Status.ShouldBe(UserStatus.Active);
+    }
+
+    [Fact]
+    public void An_api_client_user_cannot_be_disabled_here()
+    {
+        var bank = Institution.Create("HLB", "Harbourline Bank PLC", LicenceCategory.Commercial);
+        var user = AppUser.ForApiClient(ApiClient.Create(bank, "regreturns-bank-hlb", "Harbourline core banking"));
+
+        user.Disable().Error.ShouldBe(IdentityErrors.SystemAccountProtected);
+    }
+
+    [Fact]
     public void Actor_carries_roles_and_institution()
     {
         var user = AppUser.Create("checker", "Checker", "c@x.example", BankId, [Role.BankChecker]).Value;

@@ -43,6 +43,54 @@ public sealed class DemoDataBuilderTests
     }
 
     [Fact]
+    public void A_reset_files_new_returns_for_the_institutions_and_users_it_keeps()
+    {
+        var later = new DemoDataBuilder(AnchorDate.AddMonths(2), new DemoDirectory(_data.Institutions, _data.Users)).Build();
+
+        later.Institutions.ShouldBe(_data.Institutions);
+        later.Users.ShouldBe(_data.Users);
+        later.Submissions.Select(s => s.InstitutionId).Distinct().ShouldBeSubsetOf(_data.Institutions.Select(i => i.Id));
+        later.Submissions.Select(s => s.Id).Intersect(_data.Submissions.Select(s => s.Id)).ShouldBeEmpty();
+        later.Obligations.Where(o => o.Period.Frequency == RegReturns.Domain.Periods.ReturnFrequency.Monthly)
+            .Max(o => o.Period)!.Label.ShouldBe("2026-11");
+    }
+
+    [Fact]
+    public void A_reset_creates_what_the_directory_is_missing()
+    {
+        var kept = _data.Users.Where(u => u.UserName != "auditor").ToList();
+
+        var later = new DemoDataBuilder(AnchorDate, new DemoDirectory(_data.Institutions, kept)).Build();
+
+        later.Users.Count.ShouldBe(_data.Users.Count);
+        later.Users.Single(u => u.UserName == "auditor").ShouldNotBeSameAs(_data.Users.Single(u => u.UserName == "auditor"));
+    }
+
+    // The nightly reset (ADR 0031) rebuilds the data for whatever day it runs: every month's figures must pass the
+    // error rules and trip only the warnings the scenario justifies, and nothing may be dated after the reset. Ten
+    // years of resets, on the first of the month just after the default 03:00 schedule.
+    public static TheoryData<DateTimeOffset> ResetDates()
+    {
+        var dates = new TheoryData<DateTimeOffset>();
+        for (var month = new DateTimeOffset(2026, 10, 1, 3, 0, 0, TimeSpan.Zero); month.Year < 2037; month = month.AddMonths(1))
+        {
+            dates.Add(month);
+        }
+
+        return dates;
+    }
+
+    [Theory]
+    [MemberData(nameof(ResetDates))]
+    public void Builds_for_any_reset_date(DateTimeOffset anchor)
+    {
+        var data = new DemoDataBuilder(anchor).Build();
+
+        data.Submissions.ShouldNotBeEmpty();
+        data.Submissions.SelectMany(s => s.Events).ShouldAllBe(e => e.OccurredAt <= anchor);
+    }
+
+    [Fact]
     public void Is_deterministic_for_the_same_anchor_date()
     {
         var again = new DemoDataBuilder(AnchorDate).Build();
