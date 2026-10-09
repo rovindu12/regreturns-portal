@@ -97,14 +97,14 @@ public sealed class IamBootstrapSmokeTests
             overrides[key] = value;
         }
 
-        overrides["ConnectionStrings:RegReturns"] = ConnectionString(dotEnv);
+        overrides["ConnectionStrings:RegReturns"] = ConnectionString(dotEnv, root);
         overrides["Wso2:TrustedCaPath"] = Path.Combine(root, DevCertificate);
         overrides["IamBootstrap:EnvFilePath"] = envFile;
         return overrides;
     }
 
     /// <summary>The connection string from the environment, or the one <c>scripts/dev-secrets.sh</c> builds from <c>.env</c>.</summary>
-    private static string ConnectionString(Dictionary<string, string> dotEnv)
+    private static string ConnectionString(Dictionary<string, string> dotEnv, string root)
     {
         var fromEnvironment = Environment.GetEnvironmentVariable(ConnectionStringVariable);
         if (!string.IsNullOrEmpty(fromEnvironment))
@@ -120,7 +120,8 @@ public sealed class IamBootstrapSmokeTests
             InitialCatalog = "RegReturns",
             UserID = "sa",
             Password = password,
-            TrustServerCertificate = true,
+            Encrypt = SqlConnectionEncryptOption.Strict,
+            ServerCertificate = Path.Combine(root, ".certs", "sqlserver", "mssql.crt"),
         }.ConnectionString;
     }
 

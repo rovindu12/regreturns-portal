@@ -18,9 +18,12 @@ env_get() { [ -f "$1" ] && grep -E "^$2=" "$1" | tail -n 1 | cut -d= -f2- || tru
 
 sa_password="$(env_get "${ENV_FILE}" MSSQL_SA_PASSWORD)"
 [ -n "${sa_password}" ] || { echo "MSSQL_SA_PASSWORD is empty in .env" >&2; exit 1; }
-# TrustServerCertificate: the SQL Server container's certificate is self-signed until the hardening phase gives it
-# one from the development CA (plan §10, phase 10). The port is published on 127.0.0.1 only.
-connection="Server=localhost,1433;Database=RegReturns;User Id=sa;Password=${sa_password};TrustServerCertificate=True"
+# TDS 8 strict encryption with SQL Server's certificate pinned (ADR 0033): the client accepts only the certificate
+# scripts/dev-certs.sh issued, by absolute path, so it works from every project folder. The port is published on
+# 127.0.0.1 only.
+server_cert="${ROOT}/.certs/sqlserver/mssql.crt"
+[ -f "${server_cert}" ] || { echo "${server_cert} is missing: run scripts/dev-certs.sh" >&2; exit 1; }
+connection="Server=localhost,1433;Database=RegReturns;User Id=sa;Password=${sa_password};Encrypt=Strict;ServerCertificate=${server_cert}"
 audit_key="$(env_get "${ENV_FILE}" AUDIT_HMAC_KEY)"
 portal_secret="$(env_get "${GENERATED_FILE}" Oidc__ClientSecret)"
 anthropic_key="$(env_get "${ENV_FILE}" ANTHROPIC_API_KEY)"
@@ -30,13 +33,16 @@ demo_password="$(env_get "${ENV_FILE}" DEMO_USER_PASSWORD)"
 demo_api_id="$(env_get "${GENERATED_FILE}" DEMO_API_CLIENT_ID)"
 demo_api_secret="$(env_get "${GENERATED_FILE}" DEMO_API_CLIENT_SECRET)"
 totp_lines="$( [ -f "${GENERATED_FILE}" ] && grep -E '^TOTP_SECRET_[A-Z0-9_]+=' "${GENERATED_FILE}" || true)"
+# The provisioner client IamBootstrap created: the portal resets authenticators over SCIM with it (ADR 0032).
+provisioner_id="$(env_get "${GENERATED_FILE}" PROVISIONER_CLIENT_ID)"
+provisioner_secret="$(env_get "${GENERATED_FILE}" PROVISIONER_CLIENT_SECRET)"
 
 # set_secrets <project> <jq filter>: merges the JSON object into the project's user-secrets. jq reads the values
 # from its environment ($ENV), not from --arg, so they never appear in the process list.
 set_secrets() {
   RR_CS="${connection}" RR_AUDIT="${audit_key}" RR_PORTAL="${portal_secret}" RR_AI="${anthropic_key}" \
     RR_DEMO_PASSWORD="${demo_password}" RR_DEMO_API_ID="${demo_api_id}" RR_DEMO_API_SECRET="${demo_api_secret}" \
-    RR_TOTP="${totp_lines}" jq -n "$2" |
+    RR_TOTP="${totp_lines}" RR_PROV_ID="${provisioner_id}" RR_PROV_SECRET="${provisioner_secret}" jq -n "$2" |
     dotnet user-secrets set --project "${ROOT}/$1" > /dev/null
   echo "Updated user-secrets for $1"
 }
@@ -51,6 +57,8 @@ set_secrets src/RegReturns.Web \
    + (if $ENV.RR_DEMO_PASSWORD == "" then {} else {"Demo:UserPassword": $ENV.RR_DEMO_PASSWORD} end)
    + (if $ENV.RR_DEMO_API_ID == "" then {} else {"Demo:ApiClientId": $ENV.RR_DEMO_API_ID} end)
    + (if $ENV.RR_DEMO_API_SECRET == "" then {} else {"Demo:ApiClientSecret": $ENV.RR_DEMO_API_SECRET} end)
+   + (if $ENV.RR_PROV_ID == "" then {} else {"Iam:Provisioner:ClientId": $ENV.RR_PROV_ID} end)
+   + (if $ENV.RR_PROV_SECRET == "" then {} else {"Iam:Provisioner:ClientSecret": $ENV.RR_PROV_SECRET} end)
    + ($ENV.RR_TOTP | split("\n") | map(select(length > 0) | capture("^TOTP_SECRET_(?<user>[A-Z0-9_]+)=(?<secret>.*)$"))
       | map({key: ("Demo:TotpSecrets:" + .user), value: .secret}) | from_entries)'
 # An API key removed from .env is removed from user-secrets too, so insights go back to the rule-based writer.

@@ -11,8 +11,10 @@ SCRIPTS=/wso2/dbscripts
 WSO2_VERSION="${WSO2_VERSION:-7.3.0}"
 
 # sqlcmd reads the password from SQLCMDPASSWORD so it never appears in the process list.
-# -C: the SQL Server container uses a self-signed certificate (see deployment.toml).
-sql() { SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" /opt/mssql-tools18/bin/sqlcmd -S "$DB_HOST" -U sa -C -b -l 30 "$@"; }
+# -Ns -J: strict TLS, accepting only SQL Server's certificate from scripts/dev-certs.sh, mounted at /tls (ADR 0033).
+SERVER_CERT="${SQL_SERVER_CERT:-/tls/mssql.crt}"
+[ -r "$SERVER_CERT" ] || { echo "SQL Server's certificate is missing at ${SERVER_CERT}: run scripts/dev-certs.sh" >&2; exit 1; }
+sql() { SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" /opt/mssql-tools18/bin/sqlcmd -S "$DB_HOST" -U sa -Ns -J "$SERVER_CERT" -b -l 30 "$@"; }
 
 echo "Waiting for SQL Server at ${DB_HOST}..."
 for attempt in $(seq 1 60); do

@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# Creates the local development CA and the keystores WSO2 Identity Server uses (ADR 0015).
+# Creates the local development CA, SQL Server's certificate (ADR 0033) and the keystores WSO2 Identity Server uses
+# (ADR 0015).
 #
 #   .certs/regreturns-dev-ca.crt          CA certificate: the only root the apps trust for WSO2 (Wso2:TrustedCaPath)
 #   .certs/regreturns-dev-ca.key          CA private key (stays on this machine)
+#   .certs/sqlserver/mssql.crt            SQL Server's TLS certificate for sqlserver, localhost and 127.0.0.1, issued by
+#                                         the CA; the apps pin it (ServerCertificate), sqlcmd checks it with -J
+#   .certs/sqlserver/mssql.key            its private key (mode 600; the sqlserver-tls job installs it for SQL Server)
 #   .certs/wso2/regreturns-tls.p12        HTTPS certificate for localhost, iam.localhost and wso2, issued by the CA
 #   .certs/wso2/regreturns-primary.p12    token-signing key, replacing WSO2's publicly known default key
 #   .certs/wso2/regreturns-truststore.p12 WSO2's truststore: its public roots plus the CA and signing certificate,
@@ -10,7 +14,8 @@
 #
 # Re-running keeps the existing CA (so browsers that trust it keep working) and only creates what is missing. The
 # keystores are built in a staging folder and moved into place together, so an interrupted run leaves nothing half
-# made. Pass --force to replace the WSO2 keystores (WSO2 then needs a restart, and tokens it signed stop validating).
+# made. Pass --force to replace the WSO2 keystores and SQL Server's certificate (WSO2 and SQL Server then need a
+# restart, tokens WSO2 signed stop validating, and scripts/dev-secrets.sh has nothing to change: it names the file).
 # Requires openssl and Docker; reads the keystore password from .env and never passes it on a command line.
 set -euo pipefail
 
@@ -40,6 +45,27 @@ if [ ! -f regreturns-dev-ca.key ] || [ ! -f regreturns-dev-ca.crt ]; then
   chmod 0600 regreturns-dev-ca.key.new
   mv regreturns-dev-ca.key.new regreturns-dev-ca.key
   mv regreturns-dev-ca.crt.new regreturns-dev-ca.crt
+fi
+
+# SQL Server's certificate. Issued even when the WSO2 keystores exist, so an older checkout gains it on the next run.
+SQL_DIR="${OUT}/sqlserver"
+if [ ! -f "${SQL_DIR}/mssql.crt" ] || [ ! -f "${SQL_DIR}/mssql.key" ] || [ "${FORCE}" = "--force" ]; then
+  SQL_SANS="DNS:sqlserver,DNS:localhost,IP:127.0.0.1"
+  echo "Issuing the SQL Server certificate (${SQL_SANS})"
+  mkdir -p "${SQL_DIR}"
+  SQL_STAGE="$(mktemp -d "${OUT}/.stage-sql.XXXXXX")"
+  trap 'rm -rf "${SQL_STAGE}"' EXIT
+  openssl req -newkey rsa:2048 -nodes -keyout "${SQL_STAGE}/mssql.key" -out "${SQL_STAGE}/mssql.csr" \
+    -subj "/O=RegReturns (development)/CN=sqlserver" 2> /dev/null
+  openssl x509 -req -in "${SQL_STAGE}/mssql.csr" -CA regreturns-dev-ca.crt -CAkey regreturns-dev-ca.key -CAcreateserial \
+    -out "${SQL_STAGE}/mssql.crt" -days 825 -sha256 \
+    -extfile <(printf "subjectAltName=%s\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nbasicConstraints=CA:FALSE\n" "${SQL_SANS}") 2> /dev/null
+  chmod 0600 "${SQL_STAGE}/mssql.key"
+  chmod 0644 "${SQL_STAGE}/mssql.crt"
+  mv -f "${SQL_STAGE}/mssql.key" "${SQL_DIR}/mssql.key"
+  mv -f "${SQL_STAGE}/mssql.crt" "${SQL_DIR}/mssql.crt"
+  rm -rf "${SQL_STAGE}"
+  trap - EXIT
 fi
 
 OUTPUTS=(regreturns-tls.p12 regreturns-primary.p12 regreturns-truststore.p12 regreturns-signing.crt regreturns-dev-ca.crt)
