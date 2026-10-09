@@ -42,7 +42,9 @@ something fails without shell access to the server. The threat model these choic
 - **Anti-forgery on every form.** The portal already has `AutoValidateAntiforgeryToken` as a global filter. An
   integration test now posts to every POST endpoint without a token, as a user every policy admits, and expects 400;
   only WSO2's back-channel logout (server to server, with a signed logout token) is exempt, and a second test fails
-  if any other endpoint opts out. Another test lists the anonymous endpoints exactly (public pages, sign-in pages,
+  if any other endpoint opts out. No action carries its own `[ValidateAntiForgeryToken]` (a third test): CodeQL's
+  CSRF query does not recognise ASP.NET Core's global filters, and one such attribute anywhere makes it report every
+  other form as unprotected. Another test lists the anonymous endpoints exactly (public pages, sign-in pages,
   back-channel logout, health), so a new `[AllowAnonymous]` is a visible decision.
 
 ### Failed sign-ins lock the account

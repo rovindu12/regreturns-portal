@@ -212,7 +212,8 @@ Security (see ADR 0032, 0033 and docs/SECURITY.md):
   scans them). Scripts set styles through the CSS object model (`element.style`), which the policy allows. The API's
   policy is `default-src 'none'`; only `/swagger` has its own.
 - Every portal POST needs the anti-forgery token (global filter); `PortalAntiforgeryTests` posts to all of them, and
-  only back-channel logout may opt out. A new `[AllowAnonymous]` endpoint must be added to the list in
+  only back-channel logout may opt out. Never add `[ValidateAntiForgeryToken]` to an action: it adds nothing, and
+  CodeQL, which does not see ASP.NET Core's global filters, then reports every other form (a test refuses it). A new `[AllowAnonymous]` endpoint must be added to the list in
   `PortalEndpointMetadataTests`.
 - SQL Server forces TLS: connection strings use `Encrypt=Strict;ServerCertificate=<.certs/sqlserver/mssql.crt>`
   (never `TrustServerCertificate`), JDBC `encrypt=strict;serverCertificate=...`, and `sqlcmd -Ns -J <cert>`.

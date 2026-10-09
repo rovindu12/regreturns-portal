@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 using RegReturns.Application.Identity;
 using RegReturns.Domain.Identity;
@@ -59,6 +60,19 @@ public sealed partial class PortalAntiforgeryTests(SqlServerFixture sql) : IDisp
                 || endpoint.Metadata.GetMetadata<IgnoreAntiforgeryTokenAttribute>() is not null)
             .Select(endpoint => endpoint.Metadata.GetMetadata<ControllerActionDescriptor>() is { } action ? $"{action.ControllerName}.{action.ActionName}" : endpoint.DisplayName)
             .ShouldBe(Exempt);
+    }
+
+    [Fact]
+    public void The_check_comes_from_one_global_filter_not_from_attributes_on_actions()
+    {
+        // A per-action [ValidateAntiForgeryToken] adds nothing here, and makes CodeQL (cs/web/missing-token-validation),
+        // which does not see ASP.NET Core's global filters, report every other form as unprotected.
+        _factory.Services.GetRequiredService<IOptions<MvcOptions>>().Value.Filters
+            .ShouldContain(filter => filter is AutoValidateAntiforgeryTokenAttribute);
+        _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .Where(endpoint => endpoint.Metadata.GetMetadata<ValidateAntiForgeryTokenAttribute>() is not null)
+            .Select(endpoint => endpoint.DisplayName)
+            .ShouldBeEmpty();
     }
 
     public void Dispose() => _factory.Dispose();
