@@ -46,7 +46,7 @@ x-app-certificates: &app-certificates
 services:
   caddy:
     # Keep in step with CADDY_IMAGE in scripts/check-caddy.sh.
-    image: caddy:2.10.2-alpine
+    image: caddy:2.11.7-alpine
     <<: *hardening
     cap_add: [NET_BIND_SERVICE]
     read_only: true
