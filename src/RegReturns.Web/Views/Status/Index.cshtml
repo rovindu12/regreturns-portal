@@ -1,0 +1,73 @@
+@model StatusViewModel
+@{
+    ViewData["Title"] = "Service status";
+    var demo = Model.Demo;
+}
+
+<section class="mb-4">
+    <h1 class="h2">Service status</h1>
+    <div class="alert @StatusViewModel.Alert(Model.Report.Overall) d-flex align-items-center gap-2 mb-0"
+         role="status" data-status="@Model.Report.Overall">
+        <span class="badge @StatusViewModel.Badge(Model.Report.Overall)">@StatusViewModel.Label(Model.Report.Overall)</span>
+        <strong>@Model.Headline</strong>
+    </div>
+</section>
+
+<section aria-labelledby="components-heading" class="mb-4">
+    <h2 id="components-heading" class="h5">Components</h2>
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <caption class="small">
+                Checked @Model.Report.CheckedAt.UtcDateTime.ToString("HH:mm:ss") UTC; the checks run at most every
+                @RegReturns.Web.Status.PortalStatus.CacheFor.TotalSeconds seconds.
+            </caption>
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Component</th>
+                    <th scope="col">Used for</th>
+                    <th scope="col">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var component in Model.Report.Components)
+                {
+                    <tr data-component="@component.Name">
+                        <th scope="row">@component.Name</th>
+                        <td>@component.Purpose</td>
+                        <td><span class="badge @StatusViewModel.Badge(component.Level)">@StatusViewModel.Label(component.Level)</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section aria-labelledby="build-heading" class="mb-4">
+    <h2 id="build-heading" class="h5">This deployment</h2>
+    <dl class="row mb-0">
+        <dt class="col-sm-3">Version</dt>
+        <dd class="col-sm-9"><code>@Model.Version</code></dd>
+        @if (demo.Enabled)
+        {
+            <dt class="col-sm-3">Last demo reset</dt>
+            <dd class="col-sm-9">
+                @if (demo.LastReset is { } last)
+                {
+                    <span>@last.OccurredAt.UtcDateTime.ToString("d MMMM yyyy 'at' HH:mm") UTC</span>
+                }
+                else
+                {
+                    <span>None since the demo was installed</span>
+                }
+            </dd>
+            <dt class="col-sm-3">Next demo reset</dt>
+            <dd class="col-sm-9">
+                @(demo.NextScheduledReset is { } next ? next.UtcDateTime.ToString("d MMMM yyyy 'at' HH:mm") + " UTC" : "Not scheduled")
+            </dd>
+        }
+    </dl>
+</section>
+
+<p class="small text-muted mb-0">
+    Machines should use <code>/health/ready</code> (database and identity server) and <code>/health/live</code> (process).
+</p>

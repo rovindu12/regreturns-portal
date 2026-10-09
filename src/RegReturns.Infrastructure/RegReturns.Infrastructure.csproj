@@ -16,6 +16,7 @@
     <PackageReference Include="QuestPDF" />
     <PackageReference Include="Dapper" />
     <PackageReference Include="Anthropic" />
+    <PackageReference Include="Cronos" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="RegReturns.UnitTests" />

@@ -17,6 +17,15 @@
         "resolved": "18.7.23",
         "contentHash": "dyj6z8m+LFjpeH69hdnciCcRCmD0YgMlvuQEywiEshjqj/blgQ+PuWX8Vd5gkWQFoBN4e+TFxx6DvGNSv/gIKg=="
       },
+      "QRCoder": {
+        "type": "Direct",
+        "requested": "[1.8.0, )",
+        "resolved": "1.8.0",
+        "contentHash": "RuvX3PEXU6pbY/I5ItAk800jm62r+YnoPLgyS2WTgwxkOnGkOfU9ORiipHUF0LkLyqM8rlroUCA319JjRYfRFQ==",
+        "dependencies": {
+          "System.Drawing.Common": "6.0.0"
+        }
+      },
       "SonarAnalyzer.CSharp": {
         "type": "Direct",
         "requested": "[10.35.0.4138, )",
@@ -231,6 +240,11 @@
         "resolved": "1.0.0",
         "contentHash": "N4KeF3cpcm1PUHym1RmakkzfkEv3GRMyofVv40uXsQhCQeglr2OHNcUk2WOG51AKpGO8ynGpo9M/kFXSzghwug=="
       },
+      "Microsoft.Win32.SystemEvents": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "hqTM5628jSsQiv+HGpiq3WKBl2c8v1KZfby2J6Pr7pEPlK9waPdgEO6b8A/+/xn/yZ9ulv8HuqK71ONy2tg67A=="
+      },
       "OpenTelemetry": {
         "type": "Transitive",
         "resolved": "1.19.1",
@@ -307,6 +321,14 @@
           "System.Security.Cryptography.ProtectedData": "9.0.11"
         }
       },
+      "System.Drawing.Common": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "NfuoKUiP2nUWwKZN6twGqXioIe1zVD0RIj2t976A+czLHr2nY454RwwXs6JU9Htc6mwqL6Dn/nEL3dpVf2jOhg==",
+        "dependencies": {
+          "Microsoft.Win32.SystemEvents": "6.0.0"
+        }
+      },
       "System.IdentityModel.Tokens.Jwt": {
         "type": "Transitive",
         "resolved": "8.19.2",
@@ -351,6 +373,7 @@
         "dependencies": {
           "Anthropic": "[12.50.0, )",
           "ClosedXML": "[0.105.1, )",
+          "Cronos": "[0.13.0, )",
           "Dapper": "[2.1.89, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.12, )",
           "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore": "[10.0.12, )",
@@ -395,6 +418,12 @@
           "RBush.Signed": "4.0.0",
           "SixLabors.Fonts": "[1.0.0, 3.0.0)"
         }
+      },
+      "Cronos": {
+        "type": "CentralTransitive",
+        "requested": "[0.13.0, )",
+        "resolved": "0.13.0",
+        "contentHash": "Nkve+Yi0+ol3ntSBRHeW0ka9cJQ8vndSUvvkXqF9LVqwpoqWueyxu/HS275r98RDOmF7/mzRnZW5XXUBXob+TA=="
       },
       "Dapper": {
         "type": "CentralTransitive",

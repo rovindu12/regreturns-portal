@@ -24,6 +24,10 @@ public static class IdentityErrors
     public static readonly Error DemoAccountProtected = new(
         "User.DemoAccountProtected", "Demo accounts cannot be changed.");
 
+    /// <summary>API client users and system accounts are not people: their access follows their client or the system.</summary>
+    public static readonly Error SystemAccountProtected = new(
+        "User.SystemAccountProtected", "API client and system accounts cannot be changed here.");
+
     /// <summary>The user name is reserved for an API client user or a system account.</summary>
     public static readonly Error ReservedUserName = new(
         "User.ReservedUserName", "The user name is reserved for an API client or a system account.");

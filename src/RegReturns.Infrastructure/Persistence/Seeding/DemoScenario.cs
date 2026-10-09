@@ -39,6 +39,8 @@ internal static class DemoScenario
             "Government securities repurchased after last month's corporate withdrawal; HQLA back to its usual level.",
         [(DemoBank.Crestmont, MlrTemplate.Code, CrestmontReturnedMonthsAgo, MlrTemplate.RuleL2bCap)] =
             "Includes listed corporate equities bought this month, which we consider eligible Level 2B assets.",
+        [(DemoBank.Crestmont, MlrTemplate.Code, CrestmontReturnedMonthsAgo, MlrTemplate.RuleLcrVariance)] =
+            "LCR rose because the listed corporate equities bought this month are counted as Level 2B HQLA.",
         [(DemoBank.Harbourline, MdaTemplate.Code, HarbourlineNplJumpMonthsAgo, MdaTemplate.RuleNplMaximum)] =
             "Two large manufacturing exposures were reclassified as non-performing after missed instalments. Provisions raised in full.",
         [(DemoBank.Harbourline, MdaTemplate.Code, HarbourlineNplJumpMonthsAgo, MdaTemplate.RuleNplVariance)] =

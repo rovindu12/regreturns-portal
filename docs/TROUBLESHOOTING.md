@@ -349,3 +349,36 @@ The SDK's HTTP call shows as an `HTTP POST` span to `api.anthropic.com` under th
 | The button gives 403 | The user is not a supervision reviewer or approver | Expected for other roles |
 | Refresh shows the same insight | Nothing changed since the last one (5502) | Expected; a new revision or approved prior period gives a new one |
 | A stored insight no longer matches its audit entry | The row in `returns.ReturnInsights` was changed | Treat as tampering; the audit entry's digests are the reference |
+
+## 13. Demo and reset
+
+The demo pages, the reset and the administrator's directory ([guide](DEMO.md), ADR 0031) log:
+
+```
+EventId.Id = 5601                                  -- reset done (trigger, rows removed, obligations and returns seeded, ms, audit entry)
+EventId.Id = 5602                                  -- reset refused (trigger, error code) (warning)
+EventId.Id = 5603                                  -- next scheduled reset (expression, time)
+EventId.Id = 5604                                  -- scheduled reset is off (demo mode or Demo:ResetSchedule not set)
+EventId.Id = 5605                                  -- scheduled reset failed; nothing changed, tried again next time (error)
+EventId.Id = 3011                                  -- a person's portal access was disabled or re-enabled
+EventId.Id = 3012                                  -- change of portal access refused (error code) (warning)
+```
+
+Each reset runs in a `ResetDemo` activity and counts in `regreturns.demo.resets` (tags `trigger`, `outcome`,
+`error_code`) and `regreturns.demo.reset.duration`. Every reset that ran is a `DemoReset` audit entry; filter the
+audit trail on *Demo reset* to see them with what each removed and seeded.
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `/demo` answers 404 and there is no banner | Demo mode is off (`Demo:Enabled` is `false` outside Development) | Set `Demo__Enabled=true` on the demo deployment only |
+| `/demo` says the password is not configured, or shows no QR code for an account that needs one | `Demo:UserPassword` or `Demo:TotpSecrets:<USER>` is empty | Run `scripts/dev-secrets.sh` after IamBootstrap `apply`; on a server set `Demo__UserPassword` and `Demo__TotpSecrets__APPROVER_MFA` |
+| The published TOTP key is refused at sign-in | WSO2's key changed (IamBootstrap `demo-users` enrols again) but the portal still has the old one | Copy the new `TOTP_SECRET_<USER>` values from `.env.generated` into the portal's settings and restart it |
+| *Reset demo* says "reset a few minutes ago" | The cooldown (`Demo:ResetCooldownMinutes`) after the last reset, manual or scheduled | Wait until the time the message gives; the scheduled reset ignores the cooldown |
+| *Reset demo* says "already running" (`Demo.InProgress`) | Another reset holds the `RegReturns.DemoReset` lock | Wait for it to finish; a reset takes seconds |
+| *Reset demo* says the directory holds people who are not demo accounts (`Demo.NotADemoDatabase`) | The database has a real or test person in `iam.Users` | Expected: such a database is never reset. Use a dedicated demo database |
+| No reset at night and 5604 at start-up | `Demo:ResetSchedule` is empty or demo mode is off | Set the schedule (default `0 3 * * *`, UTC) |
+| The portal stops at start-up with a `Demo:` validation error | An invalid cron expression in `Demo:ResetSchedule`, or `Demo:ApiBaseUrl` not an absolute `https` URL | Fix the setting the message names |
+| 5605 with an exception | The database was unavailable, or the seed could not be built | The transaction rolled back and the demo is unchanged; fix the cause, then use *Reset demo* |
+| Disabling a person says demo accounts cannot be changed | Demo accounts are shared by every visitor | Expected |
+| A disabled person still signs in to WSO2 | The portal only stops them acting in the portal (`User.NotLinked`) | Disable the account in WSO2 too (through IamBootstrap or SCIM, never the Console) |
+| `scripts/demo-scenario.sh` finds no MDA return for last month | The demo was not reset since the month changed, or someone already filed it | Reset the demo, then run the script again |

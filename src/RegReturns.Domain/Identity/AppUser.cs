@@ -184,13 +184,14 @@ public sealed class AppUser : Entity
     /// <param name="wso2UserId">The SCIM user id.</param>
     public void LinkIdentity(string wso2UserId) => Wso2UserId = Guard.NotBlank(wso2UserId, 64);
 
-    /// <summary>Disables the user.</summary>
-    /// <returns>Failure if the user is a demo account.</returns>
+    /// <summary>Disables the user, so they can no longer sign in to the portal.</summary>
+    /// <returns>Failure if the user is a demo account, an API client user or a system account.</returns>
     public Result Disable()
     {
-        if (IsDemoAccount)
+        var check = CheckChangeable();
+        if (check.IsFailure)
         {
-            return IdentityErrors.DemoAccountProtected;
+            return check;
         }
 
         Status = UserStatus.Disabled;
@@ -198,11 +199,32 @@ public sealed class AppUser : Entity
     }
 
     /// <summary>Re-enables a disabled user.</summary>
-    public void Enable() => Status = UserStatus.Active;
+    /// <returns>Failure if the user is a demo account, an API client user or a system account.</returns>
+    public Result Enable()
+    {
+        var check = CheckChangeable();
+        if (check.IsFailure)
+        {
+            return check;
+        }
+
+        Status = UserStatus.Active;
+        return Result.Success();
+    }
 
     /// <summary>Creates the domain <see cref="Actor"/> for this user.</summary>
     /// <returns>An actor carrying the user's id, name, roles and bank.</returns>
     public Actor ToActor() => new(Id, DisplayName, _roles, InstitutionId);
+
+    private Result CheckChangeable()
+    {
+        if (IsDemoAccount)
+        {
+            return IdentityErrors.DemoAccountProtected;
+        }
+
+        return IsApiClientUser || IsSystemAccount ? IdentityErrors.SystemAccountProtected : Result.Success();
+    }
 
     private static bool IsReserved(string userName) =>
         userName == MigrationUserName || userName.StartsWith(ApiClientUserNamePrefix, StringComparison.Ordinal);

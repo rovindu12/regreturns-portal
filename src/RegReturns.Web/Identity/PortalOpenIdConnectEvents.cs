@@ -1,3 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text.RegularExpressions;
+
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.WebUtilities;
@@ -21,6 +24,28 @@ public sealed partial class PortalOpenIdConnectEvents(
     AccessDeniedAuditor failureAuditor,
     ILogger<PortalOpenIdConnectEvents> logger) : OpenIdConnectEvents
 {
+    /// <summary>The authentication property that carries a user name to fill in on WSO2's sign-in page.</summary>
+    public const string LoginHintItem = "regreturns.login_hint";
+
+    /// <summary>Returns whether a value may be sent as <c>login_hint</c>: a plausible user name, nothing else.</summary>
+    /// <param name="value">The value.</param>
+    /// <returns><see langword="true"/> when it may be sent.</returns>
+    public static bool IsLoginHint([NotNullWhen(true)] string? value) => value is not null && LoginHintPattern().IsMatch(value);
+
+    /// <summary>Adds the requested <c>login_hint</c>, so WSO2's sign-in page starts with that user name.</summary>
+    /// <param name="context">The redirect context.</param>
+    /// <returns>A completed task.</returns>
+    public override Task RedirectToIdentityProvider(RedirectContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (context.Properties.Items.TryGetValue(LoginHintItem, out var hint) && IsLoginHint(hint))
+        {
+            context.ProtocolMessage.LoginHint = hint;
+        }
+
+        return base.RedirectToIdentityProvider(context);
+    }
+
     /// <inheritdoc />
     public override async Task TokenValidated(TokenValidatedContext context)
     {
@@ -82,4 +107,7 @@ public sealed partial class PortalOpenIdConnectEvents(
 
     [LoggerMessage(EventId = 3104, Level = LogLevel.Warning, Message = "Sign-in through WSO2 failed: {FailureCode}")]
     private static partial void LogRemoteFailure(ILogger logger, Exception? exception, string failureCode);
+
+    [GeneratedRegex("^[a-z0-9][a-z0-9._-]{0,63}$", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
+    private static partial Regex LoginHintPattern();
 }

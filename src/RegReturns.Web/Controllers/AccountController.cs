@@ -21,15 +21,28 @@ public sealed partial class AccountController(ILogger<AccountController> logger)
 
     /// <summary>Starts a WSO2 sign-in, returning to a local URL afterwards.</summary>
     /// <param name="returnUrl">Where to go after signing in; anything not local is replaced by the home page.</param>
+    /// <param name="user">
+    /// A user name to fill in on WSO2's sign-in page (<c>login_hint</c>), as the demo page's buttons do. Ignored unless
+    /// it looks like a user name.
+    /// </param>
     /// <returns>A challenge, or a redirect when already signed in.</returns>
     [HttpGet(PortalPaths.SignInAction)]
     [AllowAnonymous]
-    public IActionResult SignIn(string? returnUrl)
+    public IActionResult SignIn(string? returnUrl, string? user = null)
     {
         var target = returnUrl is not null && Url.IsLocalUrl(returnUrl) ? returnUrl : "/";
-        return User.Identity?.IsAuthenticated == true
-            ? LocalRedirect(target)
-            : Challenge(new AuthenticationProperties { RedirectUri = target });
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            return LocalRedirect(target);
+        }
+
+        var properties = new AuthenticationProperties { RedirectUri = target };
+        if (PortalOpenIdConnectEvents.IsLoginHint(user))
+        {
+            properties.Items[PortalOpenIdConnectEvents.LoginHintItem] = user;
+        }
+
+        return Challenge(properties);
     }
 
     /// <summary>

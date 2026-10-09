@@ -1,0 +1,108 @@
+@model RegReturns.Web.Models.Admin.UsersViewModel
+@using RegReturns.Domain.Identity
+@using RegReturns.Web.Models.Admin
+@{
+    ViewData["Title"] = "Users and API clients";
+}
+
+<nav aria-label="Breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="@PortalAreas.Admin.Path">@PortalAreas.Admin.Title</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Users and API clients</li>
+    </ol>
+</nav>
+
+<section class="mb-4">
+    <h1 class="h2">Users and API clients</h1>
+    <p class="lead mb-0">
+        WSO2 Identity Server holds every account, its password and its roles; the portal keeps a copy that is brought up
+        to date at each sign-in. Here you can disable or re-enable a person's access to the portal.
+    </p>
+</section>
+
+<partial name="_Flash" />
+
+<section aria-labelledby="people-heading" class="mb-4">
+    <h2 id="people-heading" class="h5">People</h2>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <caption class="small">Demo accounts are shared by every visitor and cannot be changed.</caption>
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">User name</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Bank</th>
+                    <th scope="col">Roles</th>
+                    <th scope="col">Signed in</th>
+                    <th scope="col">Access</th>
+                    <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var person in Model.Directory.People)
+                {
+                    <tr data-user="@person.UserName">
+                        <th scope="row"><code>@person.UserName</code></th>
+                        <td>@person.DisplayName</td>
+                        <td>@(person.InstitutionCode ?? "Regulator")</td>
+                        <td>@UsersViewModel.RoleList(person.Roles)</td>
+                        <td>@(person.IsLinked ? "Yes" : "Not yet")</td>
+                        <td>
+                            @if (person.Status == UserStatus.Active)
+                            {
+                                <span class="badge text-bg-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">Disabled</span>
+                            }
+                            @if (person.IsDemoAccount)
+                            {
+                                <span class="badge text-bg-light border">Demo account</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            @if (person.CanChangeAccess)
+                            {
+                                var action = person.Status == UserStatus.Active ? "DisableUser" : "EnableUser";
+                                <form method="post" asp-action="@action" asp-route-userId="@person.Id" class="d-inline">
+                                    <button type="submit" class="btn btn-sm @(person.Status == UserStatus.Active ? "btn-outline-danger" : "btn-outline-primary")">
+                                        @(person.Status == UserStatus.Active ? "Disable" : "Enable")<span class="visually-hidden"> @person.UserName</span>
+                                    </button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section aria-labelledby="clients-heading" class="mb-4">
+    <h2 id="clients-heading" class="h5">API clients</h2>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle">
+            <caption class="small">Bank systems that call the REST API with client credentials. IamBootstrap registers them in WSO2.</caption>
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Client id</th>
+                    <th scope="col">Application</th>
+                    <th scope="col">Bank</th>
+                    <th scope="col">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var client in Model.Directory.ApiClients)
+                {
+                    <tr>
+                        <th scope="row"><code>@client.ClientId</code></th>
+                        <td>@client.Name</td>
+                        <td>@client.InstitutionCode</td>
+                        <td>@(client.IsActive ? "Active" : "Inactive")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>

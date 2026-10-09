@@ -32,3 +32,4 @@
 | [0028](0028-reporting-views-and-exports.md) | Reporting views read with Dapper, and audited Excel and PDF exports |
 | [0029](0029-legacy-data-migration.md) | Legacy data migration: mapping file, one reconciled transaction, approved returns through a system account |
 | [0030](0030-advisory-return-insights.md) | Advisory return insights: figures-only payload, Claude with a rule-based fallback, every generation audited |
+| [0031](0031-public-demo-and-demo-reset.md) | Public demo pages, and a demo reset that replaces the workload but keeps the directory and the audit chain |

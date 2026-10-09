@@ -46,6 +46,10 @@ public sealed class PortalEndpointMetadataTests(SqlServerFixture sql) : IDisposa
         actions.ShouldContain("Admin.Index");
         actions.ShouldContain("Templates.Index");
         actions.ShouldContain("Templates.Publish");
+        actions.ShouldContain("Admin.ResetDemo");
+        actions.ShouldContain("Admin.DisableUser");
+        actions.ShouldContain("Demo.Index");
+        actions.ShouldContain("Status.Index");
     }
 
     [Theory]
@@ -57,14 +61,38 @@ public sealed class PortalEndpointMetadataTests(SqlServerFixture sql) : IDisposa
     [InlineData("Supervision", "GenerateInsight", Policies.SupervisionAccess)]
     public void Workflow_steps_require_the_policy_of_their_role(string controller, string action, string policy)
     {
-        var endpoint = _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
-            .Single(e => e.Metadata.GetMetadata<ControllerActionDescriptor>() is { } descriptor
-                && descriptor.ControllerName == controller && descriptor.ActionName == action);
+        EndpointOf(controller, action).Metadata.GetOrderedMetadata<IAuthorizeData>().Select(data => data.Policy).ShouldContain(policy);
+    }
 
-        endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Select(data => data.Policy).ShouldContain(policy);
+    [Theory]
+    [InlineData("Admin", "ResetDemo")]
+    [InlineData("Admin", "Users")]
+    [InlineData("Admin", "DisableUser")]
+    [InlineData("Admin", "EnableUser")]
+    public void Demo_reset_and_user_access_need_an_administrator_with_two_step_sign_in(string controller, string action)
+    {
+        var endpoint = EndpointOf(controller, action);
+
+        endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Select(data => data.Policy).ShouldContain(Policies.AdminManage);
+        endpoint.Metadata.GetMetadata<IAllowAnonymous>().ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("Home", "Index")]
+    [InlineData("Demo", "Index")]
+    [InlineData("Demo", "Guide")]
+    [InlineData("Status", "Index")]
+    public void Public_pages_allow_anonymous_visitors(string controller, string action)
+    {
+        EndpointOf(controller, action).Metadata.GetMetadata<IAllowAnonymous>().ShouldNotBeNull();
     }
 
     public void Dispose() => _factory.Dispose();
+
+    private Endpoint EndpointOf(string controller, string action) =>
+        _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints
+            .Single(e => e.Metadata.GetMetadata<ControllerActionDescriptor>() is { } descriptor
+                && descriptor.ControllerName == controller && descriptor.ActionName == action);
 
     // The conventional route itself is registered for URL generation only and never matches a request.
     private static bool IsLinkGenerationOnly(Endpoint endpoint) =>

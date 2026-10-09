@@ -1,0 +1,10 @@
+@model RegReturns.Web.Models.Demo.DemoBannerViewModel
+
+<div class="demo-banner text-center small py-1 px-2" role="note">
+    <strong>Demo environment</strong> &ndash; fictional banks, people and figures.
+    @if (Model.NextReset is { } next)
+    {
+        <span>Everything you change is undone at the next reset, @next.UtcDateTime.ToString("HH:mm") UTC (@Model.Countdown).</span>
+    }
+    <a class="link-dark fw-semibold" asp-controller="Demo" asp-action="Index">Demo accounts</a>
+</div>

@@ -38,4 +38,10 @@ public enum AuditAction
     /// attempted, the outcome, and the SHA-256 of the payload and content, never a figure.
     /// </summary>
     InsightGenerated = 11,
+
+    /// <summary>
+    /// The demo data was reset (ADR 0031): the workload replaced by the seed, the directory and this chain kept. The
+    /// details name the trigger, the rows removed and seeded, and the duration.
+    /// </summary>
+    DemoReset = 12,
 }

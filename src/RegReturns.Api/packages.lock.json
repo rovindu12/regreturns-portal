@@ -413,6 +413,7 @@
         "dependencies": {
           "Anthropic": "[12.50.0, )",
           "ClosedXML": "[0.105.1, )",
+          "Cronos": "[0.13.0, )",
           "Dapper": "[2.1.89, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.12, )",
           "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore": "[10.0.12, )",
@@ -457,6 +458,12 @@
           "RBush.Signed": "4.0.0",
           "SixLabors.Fonts": "[1.0.0, 3.0.0)"
         }
+      },
+      "Cronos": {
+        "type": "CentralTransitive",
+        "requested": "[0.13.0, )",
+        "resolved": "0.13.0",
+        "contentHash": "Nkve+Yi0+ol3ntSBRHeW0ka9cJQ8vndSUvvkXqF9LVqwpoqWueyxu/HS275r98RDOmF7/mzRnZW5XXUBXob+TA=="
       },
       "Dapper": {
         "type": "CentralTransitive",

@@ -136,6 +136,26 @@ and the project uses [Semantic Versioning](https://semver.org/).
   5501 to 5506 and 5511 to 5515, the metrics `regreturns.insights.generated`, `regreturns.insights.duration` and
   `regreturns.ai.tokens`, a guide (`docs/AI-ASSISTANT.md`) and a troubleshooting section.
 
+- Phase 9: the public demo (ADR 0031, `docs/DEMO.md`). Demo mode (`Demo:Enabled`) is off by default and on in
+  Development; only then does the portal show the demo pages, the banner and the reset button.
+- Anonymous pages: a landing page with the architecture diagram (Mermaid source in `docs/diagrams`, rendered ahead of
+  time to plain SVG by `scripts/render-diagrams.sh`), a feature tour and who does what; `/demo` with every demo
+  account by role, *Sign in as* buttons that pass a WSO2 login hint, the shared password, the authenticator keys as
+  text and QR code, and the read-only Swagger client; `/demo/guide`, the guided tour; `/status`, the portal, database
+  and WSO2 as operational, degraded or down (cached 15 seconds), with the last and next reset.
+- Demo reset: the workload (returns, templates, obligations, uploads, insights, migration runs, idempotency records)
+  is deleted and seeded again for today in one transaction; institutions, people, API clients and the audit chain are
+  kept, and a `DemoReset` audit event marks the boundary. Nightly at 03:00 UTC (Cronos) and from the administrator's
+  *Reset demo* button, at most once per ten minutes, never twice at once (application lock), and never on a database
+  with people who are not demo accounts. Log events 5601 to 5605, the metrics `regreturns.demo.resets` and
+  `regreturns.demo.reset.duration`.
+- Sandboxed administration: `/admin/users` lists people and API clients and can disable or re-enable a person's portal
+  access; demo, system and client accounts and the administrator's own account are refused (log events 3011, 3012).
+- `scripts/demo-scenario.sh` plays the guided tour in headless Chromium against a running demo, WSO2 sign-in with TOTP
+  included, reading the credentials from `/demo` as a visitor would; the browser smoke tests share a launcher that
+  pins exactly the certificates they verified.
+- The seed builds for any reset date: a test seeds on the first of every month for ten years.
+
 ### Changed
 
 - SQL Server 2025 replaces 2022 for local Docker Compose and the integration tests (ADR 0013).

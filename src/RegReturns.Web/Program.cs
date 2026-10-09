@@ -8,6 +8,7 @@ using RegReturns.Infrastructure;
 using RegReturns.Infrastructure.Identity.Authorization;
 using RegReturns.ServiceDefaults.Web;
 using RegReturns.Web.Identity;
+using RegReturns.Web.Status;
 
 using Serilog;
 
@@ -27,6 +28,8 @@ try
     builder.Services.AddAuditTrail(builder.Configuration);
     builder.Services.AddReporting(builder.Configuration);
     builder.Services.AddInsights(builder.Configuration);
+    builder.Services.AddDemo(builder.Configuration);
+    builder.Services.AddSingleton<PortalStatus>();
     builder.Services.AddWso2Backchannel(builder.Configuration);
     builder.Services.AddRegReturnsAuthorization(builder.Configuration);
     builder.Services.AddPortalAuthentication(builder.Configuration);

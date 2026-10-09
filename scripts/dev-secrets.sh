@@ -24,11 +24,19 @@ connection="Server=localhost,1433;Database=RegReturns;User Id=sa;Password=${sa_p
 audit_key="$(env_get "${ENV_FILE}" AUDIT_HMAC_KEY)"
 portal_secret="$(env_get "${GENERATED_FILE}" Oidc__ClientSecret)"
 anthropic_key="$(env_get "${ENV_FILE}" ANTHROPIC_API_KEY)"
+# Published on the portal's demo page (ADR 0031): the shared demo password, the read-only Swagger client and the TOTP
+# secrets IamBootstrap enrolled, as Demo:TotpSecrets:<USER>.
+demo_password="$(env_get "${ENV_FILE}" DEMO_USER_PASSWORD)"
+demo_api_id="$(env_get "${GENERATED_FILE}" DEMO_API_CLIENT_ID)"
+demo_api_secret="$(env_get "${GENERATED_FILE}" DEMO_API_CLIENT_SECRET)"
+totp_lines="$( [ -f "${GENERATED_FILE}" ] && grep -E '^TOTP_SECRET_[A-Z0-9_]+=' "${GENERATED_FILE}" || true)"
 
 # set_secrets <project> <jq filter>: merges the JSON object into the project's user-secrets. jq reads the values
 # from its environment ($ENV), not from --arg, so they never appear in the process list.
 set_secrets() {
-  RR_CS="${connection}" RR_AUDIT="${audit_key}" RR_PORTAL="${portal_secret}" RR_AI="${anthropic_key}" jq -n "$2" |
+  RR_CS="${connection}" RR_AUDIT="${audit_key}" RR_PORTAL="${portal_secret}" RR_AI="${anthropic_key}" \
+    RR_DEMO_PASSWORD="${demo_password}" RR_DEMO_API_ID="${demo_api_id}" RR_DEMO_API_SECRET="${demo_api_secret}" \
+    RR_TOTP="${totp_lines}" jq -n "$2" |
     dotnet user-secrets set --project "${ROOT}/$1" > /dev/null
   echo "Updated user-secrets for $1"
 }
@@ -39,7 +47,12 @@ set_secrets src/RegReturns.Api '{"ConnectionStrings:RegReturns": $ENV.RR_CS, "Au
 set_secrets src/RegReturns.Web \
   '{"ConnectionStrings:RegReturns": $ENV.RR_CS, "Audit:HmacKey": $ENV.RR_AUDIT}
    + (if $ENV.RR_PORTAL == "" then {} else {"Oidc:ClientSecret": $ENV.RR_PORTAL} end)
-   + (if $ENV.RR_AI == "" then {} else {"Ai:Anthropic:ApiKey": $ENV.RR_AI} end)'
+   + (if $ENV.RR_AI == "" then {} else {"Ai:Anthropic:ApiKey": $ENV.RR_AI} end)
+   + (if $ENV.RR_DEMO_PASSWORD == "" then {} else {"Demo:UserPassword": $ENV.RR_DEMO_PASSWORD} end)
+   + (if $ENV.RR_DEMO_API_ID == "" then {} else {"Demo:ApiClientId": $ENV.RR_DEMO_API_ID} end)
+   + (if $ENV.RR_DEMO_API_SECRET == "" then {} else {"Demo:ApiClientSecret": $ENV.RR_DEMO_API_SECRET} end)
+   + ($ENV.RR_TOTP | split("\n") | map(select(length > 0) | capture("^TOTP_SECRET_(?<user>[A-Z0-9_]+)=(?<secret>.*)$"))
+      | map({key: ("Demo:TotpSecrets:" + .user), value: .secret}) | from_entries)'
 # An API key removed from .env is removed from user-secrets too, so insights go back to the rule-based writer.
 if [ -z "${anthropic_key}" ]; then
   dotnet user-secrets remove "Ai:Anthropic:ApiKey" --project "${ROOT}/src/RegReturns.Web" > /dev/null 2>&1 || true

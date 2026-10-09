@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 
 using Microsoft.Extensions.Options;
 
+using RegReturns.Application.Demo;
 using RegReturns.IamBootstrap.Wso2;
 using RegReturns.Infrastructure.Identity.Wso2;
 
@@ -47,11 +48,13 @@ internal sealed class DemoTotpStep(
     /// <inheritdoc />
     public string Name => StepName;
 
-    /// <summary>The generated-settings key that holds a user's TOTP secret.</summary>
+    /// <summary>
+    /// The generated-settings key that holds a user's TOTP secret. The portal's demo page reads the same secret as
+    /// <c>Demo:TotpSecrets:</c> plus the same suffix (ADR 0031).
+    /// </summary>
     /// <param name="userName">The user name.</param>
     /// <returns>For example <c>TOTP_SECRET_APPROVER_MFA</c>.</returns>
-    public static string SecretKey(string userName) =>
-        "TOTP_SECRET_" + new string([.. userName.ToUpperInvariant().Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_')]);
+    public static string SecretKey(string userName) => "TOTP_SECRET_" + DemoAccounts.SettingSuffix(userName);
 
     /// <inheritdoc />
     public async Task RunAsync(BootstrapState state, CancellationToken cancellationToken)

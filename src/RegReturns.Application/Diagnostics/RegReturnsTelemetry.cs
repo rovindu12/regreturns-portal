@@ -75,6 +75,17 @@ public static class RegReturnsTelemetry
     public static Counter<long> AiTokens { get; } = Meter.CreateCounter<long>(
         "regreturns.ai.tokens", "{token}", "Tokens billed by the AI provider.");
 
+    /// <summary>
+    /// Gets the count of demo resets, tagged with <c>trigger</c> (Scheduled, Manual), <c>outcome</c> (done, refused)
+    /// and, when refused, <c>error_code</c>.
+    /// </summary>
+    public static Counter<long> DemoResets { get; } = Meter.CreateCounter<long>(
+        "regreturns.demo.resets", "{reset}", "Demo resets by trigger and outcome.");
+
+    /// <summary>Gets the time a demo reset took, tagged with <c>trigger</c>.</summary>
+    public static Histogram<double> DemoResetDuration { get; } = Meter.CreateHistogram<double>(
+        "regreturns.demo.reset.duration", "ms", "Time to reset the demo data.");
+
     /// <summary>Gets the count of returns first submitted after their due date.</summary>
     public static Counter<long> LateSubmissions { get; } = Meter.CreateCounter<long>(
         "regreturns.workflow.late_submissions", "{return}", "Returns first submitted after their due date.");
