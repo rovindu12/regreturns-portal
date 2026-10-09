@@ -45,7 +45,8 @@ internal sealed class DemoDataBuilder(DateTimeOffset now)
         var months = PeriodsEndingAt(latestMonth, MonthsOfHistory);
         var quarters = PeriodsEndingAt(latestQuarter, QuartersOfHistory);
 
-        var effectiveFrom = quarters[0].Start < months[0].Start ? quarters[0].Start : months[0].Start;
+        var firstPeriodStart = quarters[0].Start < months[0].Start ? quarters[0].Start : months[0].Start;
+        var effectiveFrom = DemoScenario.FormsInForceSince < firstPeriodStart ? DemoScenario.FormsInForceSince : firstPeriodStart;
         var templates = new Dictionary<string, TemplateVersion>(StringComparer.Ordinal)
         {
             [MlrTemplate.Code] = MlrTemplate.CreateTemplate(mlr, effectiveFrom),

@@ -279,3 +279,36 @@ exported", or query `audit.AuditEntries` for `Action = N'ReportExported'`.
 | Charts are blank but tables show figures | `chart.umd.min.js` or `reports.js` did not load (check the browser console) | Restore `wwwroot/lib/chart.js`; the page stays readable without charts |
 | PDF export fails with a QuestPDF licence exception | The licence was not set before rendering | It is set in `ComplianceReportRenderer`'s static constructor; render only through that class |
 | PDF export fails with `DllNotFoundException` for QuestPDF's native library | A runtime without a matching native build (for example an unusual Linux distribution) | Run on a glibc or musl x64/arm64 image; QuestPDF ships those builds |
+
+## 11. Legacy data migration
+
+`regreturns-migrator legacy` (ADR 0029, [data migration guide](DATA-MIGRATION.md)) logs each run under the trace of
+its `migration.legacy` activity, never with return figures:
+
+```
+EventId.Id = 2101                                  -- started (files, source folder, dry run)
+EventId.Id = 2102                                  -- file read (name, rows, SHA-256)
+EventId.Id = 2103                                  -- finished (run id, outcome, counts, committed)
+EventId.Id = 2104                                  -- did not reconcile; nothing committed (warning)
+EventId.Id = 2105                                  -- could not start (error code and reason)
+EventId.Id = 2106                                  -- failed with an exception; nothing committed (critical)
+```
+
+Every run, including dry runs and runs that did not reconcile, is a row in `migration.Runs`, with its files in
+`migration.RunFiles` and row errors in `migration.RowErrors`. Rejected rows are expected and do not change the exit
+code; the row error codes are explained in the data migration guide.
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Exit code 1, `Migration.SourceNotFound` | Wrong `--source` or no `mapping.json` in it | Check the path; it is relative to the shell's folder. Pass `--mapping` for a mapping kept elsewhere |
+| Exit code 1, `Migration.MappingInvalid` | Malformed JSON, an unknown member, a name mapped to two banks, a column named twice, an unknown return type or field code | Fix what the message names; every problem is listed |
+| Exit code 1, `Migration.SourceMismatch` | A `.csv` file in the folder is not in the mapping (or the other way round), or a header column is neither mapped nor ignored | Map or remove the file; add the column to `fields` or `ignoredColumns` |
+| Exit code 1, `Migration.FileUnreadable` | Not UTF-8 text, or larger than 64 MB | Re-export as UTF-8 CSV; split a larger export |
+| Exit code 1 at start-up, `Audit:HmacKey` validation error | The migrator has no audit key | Run `scripts/dev-secrets.sh`, or set `Audit__HmacKey` to the key the portal uses |
+| Exit code 2, "did not reconcile" | A stored value differs from the source: a re-export with changed figures for a period already migrated, or a value changed in the database since | Compare `reconciliation-detail.csv` (status `Mismatch`); correct history in the portal, not by rerunning |
+| Every row of a file is `Legacy.BadDate` | The file's date style is not in `dateFormats` | Add the format; for `05/06/2024`, list the day-first or month-first format you mean first |
+| Many `Legacy.UnknownInstitution` rows | A bank's spelling is missing from the mapping | Add it under the bank code in `institutions` |
+| A row is `Legacy.AlreadyFiled` | The portal already has a return filed there for the period | Expected: portal returns are never replaced |
+| Rows from before 2024 are `Legacy.NoTemplate` | No template is in force for the period | Expected for the samples; publish a template for the period if that history is needed |
+| A migrated return shows warnings | VRRS accepted them; the migration keeps them with a fixed justification | None |
+| `SqlException` 1205 (deadlock) or a timeout during a large run | Other writers hold locks the load needs | Run outside working hours; the run is one transaction and rolls back cleanly |

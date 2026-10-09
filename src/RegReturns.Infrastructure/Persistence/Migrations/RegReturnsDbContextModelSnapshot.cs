@@ -247,6 +247,111 @@ namespace RegReturns.Infrastructure.Persistence.Migrations
                     b.ToTable("Institutions", "reference");
                 });
 
+            modelBuilder.Entity("RegReturns.Domain.Migration.MigrationRowError", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("Field")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<Guid>("MigrationRunId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MigrationRunId", "FileName", "LineNumber");
+
+                    b.ToTable("RowErrors", "migration");
+                });
+
+            modelBuilder.Entity("RegReturns.Domain.Migration.MigrationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("AlreadyMigratedReturns")
+                        .HasColumnType("int");
+
+                    b.Property<int>("BlankRows")
+                        .HasColumnType("int");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("IsDryRun")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MappingSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("char(64)")
+                        .IsFixedLength();
+
+                    b.Property<int>("MigratedReturns")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Mismatches")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("RejectedRows")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RowsRead")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<int>("SupersededRows")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartedAt");
+
+                    b.ToTable("Runs", "migration");
+                });
+
             modelBuilder.Entity("RegReturns.Domain.Obligations.ReturnObligation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -874,6 +979,63 @@ namespace RegReturns.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("RegReturns.Domain.Migration.MigrationRowError", b =>
+                {
+                    b.HasOne("RegReturns.Domain.Migration.MigrationRun", null)
+                        .WithMany("Errors")
+                        .HasForeignKey("MigrationRunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RegReturns.Domain.Migration.MigrationRun", b =>
+                {
+                    b.OwnsMany("RegReturns.Domain.Migration.MigrationSourceFile", "Files", b1 =>
+                        {
+                            b1.Property<Guid>("MigrationRunId")
+                                .HasColumnType("uniqueidentifier");
+
+                            b1.Property<int>("Id")
+                                .ValueGeneratedOnAdd()
+                                .HasColumnType("int");
+
+                            SqlServerPropertyBuilderExtensions.UseIdentityColumn(b1.Property<int>("Id"));
+
+                            b1.Property<string>("FileName")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("nvarchar(200)");
+
+                            b1.Property<string>("ReturnTypeCode")
+                                .IsRequired()
+                                .HasMaxLength(64)
+                                .IsUnicode(false)
+                                .HasColumnType("varchar(64)");
+
+                            b1.Property<int>("Rows")
+                                .HasColumnType("int");
+
+                            b1.Property<string>("Sha256")
+                                .IsRequired()
+                                .HasMaxLength(64)
+                                .IsUnicode(false)
+                                .HasColumnType("char(64)")
+                                .IsFixedLength();
+
+                            b1.HasKey("MigrationRunId", "Id");
+
+                            b1.HasIndex("MigrationRunId", "FileName")
+                                .IsUnique();
+
+                            b1.ToTable("RunFiles", "migration");
+
+                            b1.WithOwner()
+                                .HasForeignKey("MigrationRunId");
+                        });
+
+                    b.Navigation("Files");
+                });
+
             modelBuilder.Entity("RegReturns.Domain.Obligations.ReturnObligation", b =>
                 {
                     b.HasOne("RegReturns.Domain.Institutions.Institution", null)
@@ -1027,6 +1189,11 @@ namespace RegReturns.Infrastructure.Persistence.Migrations
                         .HasForeignKey("TemplateVersionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("RegReturns.Domain.Migration.MigrationRun", b =>
+                {
+                    b.Navigation("Errors");
                 });
 
             modelBuilder.Entity("RegReturns.Domain.Submissions.Submission", b =>

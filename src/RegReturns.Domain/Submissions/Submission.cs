@@ -142,6 +142,105 @@ public sealed class Submission : Entity
         return submission;
     }
 
+    /// <summary>
+    /// Creates an approved return from a legacy system's record (ADR 0029). The legacy system ran its own maker-checker
+    /// and supervisory review, so the return arrives approved with one <see cref="WorkflowAction.Migrate"/> step by the
+    /// migration account. The values must pass the template's error rules; warnings are kept, each with the given note.
+    /// </summary>
+    /// <param name="obligation">The obligation, which must never have been filed in the portal; it is marked fulfilled.</param>
+    /// <param name="template">The published template version in force for the period.</param>
+    /// <param name="values">Values keyed by field code.</param>
+    /// <param name="findings">The validation engine's findings for the values.</param>
+    /// <param name="filing">The legacy filing and approval dates and the notes to record.</param>
+    /// <param name="migrator">The migration account, which belongs to no institution.</param>
+    /// <param name="now">The current time, when the migration step is recorded.</param>
+    /// <returns>The approved return, or the rule that was broken.</returns>
+    public static Result<Submission> Migrate(
+        ReturnObligation obligation,
+        TemplateVersion template,
+        IReadOnlyDictionary<string, string?> values,
+        IEnumerable<FindingDraft> findings,
+        MigratedFiling filing,
+        Actor migrator,
+        DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(obligation);
+        ArgumentNullException.ThrowIfNull(template);
+        ArgumentNullException.ThrowIfNull(values);
+        ArgumentNullException.ThrowIfNull(findings);
+        ArgumentNullException.ThrowIfNull(filing);
+        ArgumentNullException.ThrowIfNull(migrator);
+
+        var drafts = findings.ToList();
+        var checks = Check(
+            () => template.ReturnTypeId == obligation.ReturnTypeId ? Result.Success() : SubmissionErrors.TemplateMismatch,
+            () => migrator.IsRegulatorStaff ? Result.Success() : SubmissionErrors.RegulatorOnly,
+            () => obligation.Status == ObligationStatus.Open && obligation.FirstSubmittedAt is null
+                ? Result.Success()
+                : SubmissionErrors.AlreadyFiled,
+            () => filing.IsInOrder(obligation.Period.End, now) ? Result.Success() : SubmissionErrors.MigrationDates,
+            () => RequireComment(filing.Comment),
+            () => filing.WarningNote?.Trim().Length is >= ValidationFinding.JustificationMinLength and <= ValidationFinding.JustificationMaxLength
+                ? Result.Success()
+                : SubmissionErrors.JustificationLength,
+            () => drafts.Exists(f => f.Severity == Severity.Error) ? SubmissionErrors.HasErrors : Result.Success());
+        if (checks.IsFailure)
+        {
+            return checks.Error!;
+        }
+
+        var submission = new Submission
+        {
+            ObligationId = obligation.Id,
+            InstitutionId = obligation.InstitutionId,
+            ReturnTypeId = obligation.ReturnTypeId,
+            TemplateVersionId = template.Id,
+            Status = SubmissionStatus.Approved,
+            Revision = 1,
+            Source = SubmissionSource.Migration,
+            PreparedByUserId = migrator.UserId,
+            LastEditedByUserId = migrator.UserId,
+            SubmittedByUserId = migrator.UserId,
+            DecidedByUserId = migrator.UserId,
+            CreatedAt = filing.SubmittedAt,
+            LastEditedAt = filing.SubmittedAt,
+            FirstSubmittedAt = filing.SubmittedAt,
+            LastSubmittedAt = filing.SubmittedAt,
+            DecidedAt = filing.ApprovedAt,
+            IsLate = obligation.WouldBeLate(filing.SubmittedAt),
+        };
+
+        var applied = submission.ApplyValues(template, values);
+        if (applied.IsFailure)
+        {
+            return applied.Error!;
+        }
+
+        if (!applied.Value)
+        {
+            return SubmissionErrors.NoValues;
+        }
+
+        submission.EditVersion = 1;
+        submission.ValidatedEditVersion = 1;
+        foreach (var draft in drafts)
+        {
+            var finding = ValidationFinding.Create(1, draft);
+            if (draft.Severity == Severity.Warning)
+            {
+                finding.Justify(filing.WarningNote.Trim(), migrator.UserId, now);
+            }
+
+            submission._findings.Add(finding);
+        }
+
+        submission._events.Add(WorkflowEvent.Create(
+            1, WorkflowAction.Migrate, null, SubmissionStatus.Approved, migrator, filing.Comment.Trim(), now));
+        obligation.MarkSubmitted(filing.SubmittedAt);
+        obligation.MarkFulfilled();
+        return submission;
+    }
+
     /// <summary>Returns the value of a field, if present.</summary>
     /// <param name="fieldCode">The field code.</param>
     /// <returns>The value, or <see langword="null"/>.</returns>
@@ -180,42 +279,14 @@ public sealed class Submission : Entity
             return bankCheck;
         }
 
-        var fields = new List<(TemplateField Field, string? Raw)>(values.Count);
-        foreach (var (code, raw) in values)
+        var applied = ApplyValues(template, values);
+        if (applied.IsFailure)
         {
-            var field = template.FindField(code);
-            if (field is null)
-            {
-                return SubmissionErrors.UnknownField.WithMessage($"Field '{code}' is not in the return template.");
-            }
-
-            if (raw?.Trim().Length > SubmissionValue.RawValueMaxLength)
-            {
-                return SubmissionErrors.ValueTooLong.WithMessage(
-                    $"{field.Label} must be at most {SubmissionValue.RawValueMaxLength} characters.");
-            }
-
-            fields.Add((field, raw));
-        }
-
-        var changed = false;
-        foreach (var (field, raw) in fields)
-        {
-            var existing = FindValue(field.Code);
-            if (existing is null)
-            {
-                _values.Add(SubmissionValue.Create(field, raw));
-                changed = true;
-            }
-            else if (!string.Equals(existing.RawValue, SubmissionValue.Normalize(raw), StringComparison.Ordinal))
-            {
-                existing.Update(field, raw);
-                changed = true;
-            }
+            return applied.Error!;
         }
 
         // Saving an unchanged form is not an edit: it must not make the saver the last editor or outdate validation.
-        if (!changed)
+        if (!applied.Value)
         {
             return Result.Success();
         }
@@ -521,6 +592,45 @@ public sealed class Submission : Entity
         DecidedAt = now;
         Move(action, approver, comment, now);
         return Result.Success();
+    }
+
+    private Result<bool> ApplyValues(TemplateVersion template, IReadOnlyDictionary<string, string?> values)
+    {
+        var fields = new List<(TemplateField Field, string? Raw)>(values.Count);
+        foreach (var (code, raw) in values)
+        {
+            var field = template.FindField(code);
+            if (field is null)
+            {
+                return SubmissionErrors.UnknownField.WithMessage($"Field '{code}' is not in the return template.");
+            }
+
+            if (raw?.Trim().Length > SubmissionValue.RawValueMaxLength)
+            {
+                return SubmissionErrors.ValueTooLong.WithMessage(
+                    $"{field.Label} must be at most {SubmissionValue.RawValueMaxLength} characters.");
+            }
+
+            fields.Add((field, raw));
+        }
+
+        var changed = false;
+        foreach (var (field, raw) in fields)
+        {
+            var existing = FindValue(field.Code);
+            if (existing is null)
+            {
+                _values.Add(SubmissionValue.Create(field, raw));
+                changed = true;
+            }
+            else if (!string.Equals(existing.RawValue, SubmissionValue.Normalize(raw), StringComparison.Ordinal))
+            {
+                existing.Update(field, raw);
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     private Result RequireTransition(WorkflowAction action) =>

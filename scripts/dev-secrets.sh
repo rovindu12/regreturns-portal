@@ -32,7 +32,7 @@ set_secrets() {
   echo "Updated user-secrets for $1"
 }
 
-set_secrets tools/RegReturns.Migrator '{"ConnectionStrings:RegReturns": $ENV.RR_CS}'
+set_secrets tools/RegReturns.Migrator '{"ConnectionStrings:RegReturns": $ENV.RR_CS, "Audit:HmacKey": $ENV.RR_AUDIT}'
 set_secrets tools/RegReturns.IamBootstrap '{"ConnectionStrings:RegReturns": $ENV.RR_CS}'
 set_secrets src/RegReturns.Api '{"ConnectionStrings:RegReturns": $ENV.RR_CS, "Audit:HmacKey": $ENV.RR_AUDIT}'
 set_secrets src/RegReturns.Web \

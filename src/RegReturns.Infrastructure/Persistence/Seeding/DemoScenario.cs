@@ -7,6 +7,12 @@ namespace RegReturns.Infrastructure.Persistence.Seeding;
 /// </summary>
 internal static class DemoScenario
 {
+    /// <summary>
+    /// The day the current return forms came into force. The legacy returns system holds the filings from then until
+    /// the portal took over, so the seeded templates apply from this date and migrated history files against them.
+    /// </summary>
+    public static readonly DateOnly FormsInForceSince = new(2024, 1, 1);
+
     public const int LotusLiquidityShockMonthsAgo = 3;
     public const int CrestmontReturnedMonthsAgo = 6;
     public const int HarbourlineNplJumpMonthsAgo = 2;

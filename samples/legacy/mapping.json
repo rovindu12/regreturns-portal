@@ -1,0 +1,128 @@
+{
+  "system": "VRRS (Valoria Returns Reporting System)",
+  "dateFormats": [
+    "yyyy-MM-dd",
+    "yyyy-MM-dd HH:mm:ss",
+    "dd/MM/yyyy",
+    "dd/MM/yyyy HH:mm",
+    "d/M/yyyy",
+    "dd-MMM-yyyy",
+    "dd.MM.yyyy",
+    "yyyyMMdd",
+    "MMM d, yyyy"
+  ],
+  "excelSerialDates": true,
+  "nullTokens": [
+    "N/A",
+    "NA",
+    "n.a.",
+    "NULL",
+    "#N/A"
+  ],
+  "currencyCodes": [
+    "VLD"
+  ],
+  "institutions": {
+    "HLB": [
+      "Harbourline Bank PLC"
+    ],
+    "CCB": [
+      "Crestmont Commercial Bank",
+      "Crestmont Commercial Bank Ltd",
+      "Crestmont Comm Bank"
+    ],
+    "LUB": [
+      "Lotus Union Bank",
+      "Lotus Union Bank Ltd"
+    ],
+    "NSB": [
+      "Northgate Savings Bank",
+      "Northgate Savings",
+      "Northgate Savings Bank Ltd"
+    ],
+    "MDB": [
+      "Meridian Development Bank",
+      "Meridian Dev Bank",
+      "Meridian Development Bank MDB"
+    ],
+    "VAB": [
+      "Valoria Agricultural Bank"
+    ]
+  },
+  "files": [
+    {
+      "file": "VRRS_MLR_EXPORT.csv",
+      "returnType": "MLR",
+      "institutionColumn": "Institution",
+      "periodEndColumn": "Return Period",
+      "submittedColumn": "Received On",
+      "approvedColumn": "Approved On",
+      "fields": {
+        "Lvl 1 Assets": "L1_HQLA",
+        "Lvl 2A Assets": "L2A_HQLA",
+        "Lvl 2B Assets": "L2B_HQLA",
+        "Total HQLA": "TOTAL_HQLA",
+        "Cash Outflows 30d": "CASH_OUTFLOWS_30D",
+        "Cash Inflows 30d": "CASH_INFLOWS_30D",
+        "Net Cash Outflows": "NET_CASH_OUTFLOWS",
+        "LCR %": "LCR",
+        "Total Deposits": "TOTAL_DEPOSITS",
+        "Liquid Assets": "LIQUID_ASSETS",
+        "Liquid Assets Ratio %": "LIQUID_ASSETS_RATIO"
+      },
+      "ignoredColumns": [
+        "Remarks"
+      ]
+    },
+    {
+      "file": "vrrs_mda_history.csv",
+      "returnType": "MDA",
+      "institutionColumn": "BANK",
+      "periodEndColumn": "PERIOD_END",
+      "submittedColumn": "SUBMITTED",
+      "approvedColumn": "APPROVED",
+      "fields": {
+        "DEP_DD": "DEP_DEMAND",
+        "DEP_SAV": "DEP_SAVINGS",
+        "DEP_TIME": "DEP_TIME",
+        "DEP_TOT": "TOTAL_DEPOSITS",
+        "ADV_AGRI": "LOANS_AGRICULTURE",
+        "ADV_MFG": "LOANS_MANUFACTURING",
+        "ADV_TRADE": "LOANS_TRADE",
+        "ADV_PERS": "LOANS_PERSONAL",
+        "ADV_OTH": "LOANS_OTHER",
+        "ADV_TOT": "TOTAL_LOANS",
+        "NPL_AMT": "NPL_AMOUNT",
+        "NPL_PCT": "NPL_RATIO"
+      },
+      "ignoredColumns": [
+        "OPERATOR"
+      ]
+    },
+    {
+      "file": "VRRS_QCAR_2024_2025.csv",
+      "returnType": "QCAR",
+      "institutionColumn": "Bank Name",
+      "periodEndColumn": "Quarter End",
+      "submittedColumn": "Date Submitted",
+      "approvedColumn": "Date Approved",
+      "fields": {
+        "CET1 Capital": "CET1",
+        "AT1 Capital": "AT1",
+        "Tier 1 Capital": "TIER1",
+        "Tier 2 Capital": "TIER2",
+        "Total Capital": "TOTAL_CAPITAL",
+        "Credit RWA": "RWA_CREDIT",
+        "Market RWA": "RWA_MARKET",
+        "Operational RWA": "RWA_OPERATIONAL",
+        "Total RWA": "TOTAL_RWA",
+        "CET1 Ratio": "CET1_RATIO",
+        "Tier 1 Ratio": "TIER1_RATIO",
+        "Total CAR": "CAR"
+      },
+      "ignoredColumns": [
+        "Comments"
+      ]
+    }
+  ]
+}

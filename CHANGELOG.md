@@ -101,6 +101,23 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - Key ratios configured in `Reports:KeyRatios`, labelled from the latest published template.
 - Log event 5401 (report exported), the `regreturns.reports.exports` metric, and a troubleshooting section for
   reports.
+- Phase 7: legacy data migration. `regreturns-migrator legacy --source <folder> [--dry-run] [--report <folder>]`
+  migrates CSV exports of the legacy returns system (VRRS) as approved returns marked `Source=Migration`, filed by the
+  `system.migration` account, which cannot sign in (ADR 0029).
+- A JSON mapping names bank spellings, columns and cleansing rules: several date formats, Excel serial dates,
+  thousand separators, currency codes, percent signs, accounting brackets and null tokens. Decimal commas and other
+  ambiguous values are refused, never guessed; the last row for a bank and period wins.
+- Every row is validated with the template rules in force for its period; a portal return is never replaced, and a
+  period migrated before is skipped and reconciled again.
+- One transaction per run: values are read back and reconciled with the source by return, field, bank and period; it
+  commits only if it reconciles and is not a dry run. Exit codes 0 reconciled, 1 failed, 2 mismatch.
+- Runs, their files with SHA-256 hashes and every row error are kept in a new `migration` schema; migrated returns
+  and runs join the audit chain as the migrator.
+- Console tables and five CSV reports (summary, row errors, reconciliation detail, by bank, by period), with the CSV
+  formula guard.
+- `legacy-samples` regenerates deterministic sample exports with planted defects, committed under `samples/legacy`
+  with a README of every defect and the expected result.
+- Log events 2101 to 2106, a data migration guide (`docs/DATA-MIGRATION.md`) and a troubleshooting section.
 
 ### Changed
 
@@ -110,3 +127,5 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - An obligation can have one live return; a filtered unique index replaces the plain obligation index (ADR 0023).
 - Template `EffectiveFrom` is the first reporting period a version applies to; retiring is an explicit step (ADR 0009).
 - Collections load with split queries by default.
+- Seeded templates are in force from 1 January 2024, so migrated history has a template (ADR 0029).
+- `AppUser.Create` refuses reserved user names (`system.migration`, the API client users' prefix).

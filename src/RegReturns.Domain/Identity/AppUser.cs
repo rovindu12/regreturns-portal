@@ -24,6 +24,9 @@ public sealed class AppUser : Entity
     /// <summary>The prefix of a client user's user name, which no WSO2 user name can be linked to (ADR 0026).</summary>
     public const string ApiClientUserNamePrefix = "api-client.";
 
+    /// <summary>User name of the account legacy migrations act as (ADR 0029).</summary>
+    public const string MigrationUserName = "system.migration";
+
     private readonly List<Role> _roles = [];
 
     private AppUser()
@@ -66,6 +69,9 @@ public sealed class AppUser : Entity
     /// <summary>Gets a value indicating whether this is a client user, which no person can sign in as.</summary>
     public bool IsApiClientUser => ApiClientId is not null;
 
+    /// <summary>Gets a value indicating whether this is a system account, such as the migration account, which no person can sign in as.</summary>
+    public bool IsSystemAccount => string.Equals(UserName, MigrationUserName, StringComparison.Ordinal);
+
     /// <summary>
     /// Creates a user, enforcing role and institution rules:
     /// bank roles require a bank; regulator roles forbid one; bank and regulator roles cannot be mixed.
@@ -94,9 +100,15 @@ public sealed class AppUser : Entity
             return roleCheck.Error!;
         }
 
+        var name = Guard.NotBlank(userName, UserNameMaxLength).ToLowerInvariant();
+        if (IsReserved(name))
+        {
+            return IdentityErrors.ReservedUserName;
+        }
+
         var user = new AppUser
         {
-            UserName = Guard.NotBlank(userName, UserNameMaxLength).ToLowerInvariant(),
+            UserName = name,
             DisplayName = Guard.NotBlank(displayName, DisplayNameMaxLength),
             Email = Guard.NotBlank(email, EmailMaxLength).ToLowerInvariant(),
             InstitutionId = institutionId,
@@ -106,6 +118,19 @@ public sealed class AppUser : Entity
         user._roles.AddRange(roleSet);
         return user;
     }
+
+    /// <summary>
+    /// Creates the account legacy migrations act as (ADR 0029): regulator side, with no role, no e-mail and no WSO2
+    /// user, so no one can sign in as it and it can take no workflow step. Migrated returns name it as their preparer,
+    /// submitter and approver.
+    /// </summary>
+    /// <returns>The migration account.</returns>
+    public static AppUser ForMigration() => new()
+    {
+        UserName = MigrationUserName,
+        DisplayName = "Legacy data migration",
+        Status = UserStatus.Active,
+    };
 
     /// <summary>
     /// Creates the user a bank's API client acts through (ADR 0026): a bank maker of the client's institution, with no
@@ -178,6 +203,9 @@ public sealed class AppUser : Entity
     /// <summary>Creates the domain <see cref="Actor"/> for this user.</summary>
     /// <returns>An actor carrying the user's id, name, roles and bank.</returns>
     public Actor ToActor() => new(Id, DisplayName, _roles, InstitutionId);
+
+    private static bool IsReserved(string userName) =>
+        userName == MigrationUserName || userName.StartsWith(ApiClientUserNamePrefix, StringComparison.Ordinal);
 
     private static Result CheckRoles(List<Role> roles, Guid? institutionId)
     {

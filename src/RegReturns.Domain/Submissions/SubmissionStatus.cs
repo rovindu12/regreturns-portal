@@ -42,6 +42,12 @@ public enum WorkflowAction
 
     /// <summary>A supervisor approver rejects the return.</summary>
     Reject = 6,
+
+    /// <summary>
+    /// The return was loaded, already approved, from the legacy returns system (ADR 0029). It is the only step of a
+    /// migrated return and no workflow transition leads to or from it.
+    /// </summary>
+    Migrate = 7,
 }
 
 /// <summary>Where a submission's data came from.</summary>

@@ -20,4 +20,7 @@ internal static class Schemas
 
     /// <summary>Read-only views behind the dashboards and reports (ADR 0028).</summary>
     public const string Reporting = "reporting";
+
+    /// <summary>Legacy migration runs and their row errors (ADR 0029).</summary>
+    public const string Migration = "migration";
 }

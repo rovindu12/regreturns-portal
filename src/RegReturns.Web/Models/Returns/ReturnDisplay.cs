@@ -56,6 +56,7 @@ public static class ReturnDisplay
         WorkflowAction.ReturnForCorrection => "Returned for correction",
         WorkflowAction.Approve => "Approved",
         WorkflowAction.Reject => "Rejected",
+        WorkflowAction.Migrate => "Migrated from the legacy system, approved",
         _ => action.ToString(),
     };
 
