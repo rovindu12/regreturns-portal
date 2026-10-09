@@ -85,4 +85,75 @@ public sealed class AppUserTests
         user.IsApiClientUser.ShouldBeTrue();
         user.Status.ShouldBe(UserStatus.Active);
     }
+
+    [Fact]
+    public void The_migration_account_is_regulator_side_with_no_role_e_mail_or_sign_in()
+    {
+        var account = AppUser.ForMigration();
+
+        account.UserName.ShouldBe(AppUser.MigrationUserName);
+        account.UserName.ShouldBe("system.migration");
+        account.DisplayName.ShouldBe("Legacy data migration");
+        account.Roles.ShouldBeEmpty();
+        account.Email.ShouldBeNull();
+        account.InstitutionId.ShouldBeNull();
+        account.Wso2UserId.ShouldBeNull();
+        account.ApiClientId.ShouldBeNull();
+        account.IsDemoAccount.ShouldBeFalse();
+        account.Status.ShouldBe(UserStatus.Active);
+    }
+
+    [Fact]
+    public void The_migration_account_is_a_system_account_and_not_a_client_user()
+    {
+        var account = AppUser.ForMigration();
+
+        account.IsSystemAccount.ShouldBeTrue();
+        account.IsApiClientUser.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void The_migration_account_acts_as_regulator_staff_without_any_role()
+    {
+        var account = AppUser.ForMigration();
+
+        var actor = account.ToActor();
+
+        actor.UserId.ShouldBe(account.Id);
+        actor.DisplayName.ShouldBe("Legacy data migration");
+        actor.IsRegulatorStaff.ShouldBeTrue();
+        actor.Roles.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void People_and_client_users_are_not_system_accounts()
+    {
+        var bank = Institution.Create("HLB", "Harbourline Bank PLC", LicenceCategory.Commercial);
+        var person = AppUser.Create("approver", "Approver", "a@x.example", null, [Role.SupervisorApprover]).Value;
+        var clientUser = AppUser.ForApiClient(ApiClient.Create(bank, "regreturns-bank-hlb", "Harbourline core banking"));
+
+        person.IsSystemAccount.ShouldBeFalse();
+        clientUser.IsSystemAccount.ShouldBeFalse();
+    }
+
+    [Theory]
+    [InlineData("system.migration")]
+    [InlineData("  SYSTEM.Migration ")]
+    [InlineData("api-client.0199a3b4c5d6")]
+    [InlineData("API-Client.anything")]
+    public void Reserved_user_names_cannot_be_given_to_a_person(string userName)
+    {
+        AppUser.Create(userName, "Impostor", "i@x.example", null, [Role.SupervisorApprover]).Error
+            .ShouldBe(IdentityErrors.ReservedUserName);
+    }
+
+    [Theory]
+    [InlineData("system.migration2")]
+    [InlineData("migration")]
+    [InlineData("api-client")]
+    [InlineData("my.api-client.user")]
+    public void User_names_that_only_resemble_a_reserved_one_are_allowed(string userName)
+    {
+        AppUser.Create(userName, "Person", "p@x.example", null, [Role.SupervisorReviewer]).IsSuccess.ShouldBeTrue();
+    }
 }

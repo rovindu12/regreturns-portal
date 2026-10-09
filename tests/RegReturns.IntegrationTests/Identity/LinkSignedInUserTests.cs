@@ -165,6 +165,38 @@ public sealed class LinkSignedInUserTests(SqlServerFixture sql)
     }
 
     [Fact]
+    public async Task A_sign_in_with_the_user_name_of_the_migration_account_is_refused()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (connection, _) = await CreateDatabaseAsync(ct);
+        await using (var db = SqlServerFixture.CreateContext(connection))
+        {
+            await db.Users.AddAsync(AppUser.ForMigration(), ct);
+            await db.SaveChangesAsync(ct);
+        }
+
+        var result = await HandleAsync(connection, Regulator(Sub, AppUser.MigrationUserName), ct);
+
+        result.Error.ShouldBe(LinkSignedInUserHandler.SystemAccount);
+        result.Error!.Code.ShouldBe("User.SystemAccount");
+        var account = await SingleUserAsync(connection, ct);
+        account.Wso2UserId.ShouldBeNull();
+        account.Roles.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_first_sign_in_with_a_reserved_user_name_is_refused_and_nothing_is_stored()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        var (connection, _) = await CreateDatabaseAsync(ct);
+
+        var result = await HandleAsync(connection, Regulator(Sub, "System.Migration"), ct);
+
+        result.Error.ShouldBe(IdentityErrors.ReservedUserName);
+        (await UserCountAsync(connection, ct)).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task Inactive_institution_is_refused_and_nothing_is_stored()
     {
         var ct = TestContext.Current.CancellationToken;
@@ -277,6 +309,9 @@ public sealed class LinkSignedInUserTests(SqlServerFixture sql)
 
     private static LinkSignedInUser Maker(string sub, string userName, string? displayName) =>
         new(sub, userName, displayName, $"{userName.Trim()}@alpha.example", "ALPHA", [Role.BankMaker]);
+
+    private static LinkSignedInUser Regulator(string sub, string userName) =>
+        new(sub, userName, "Impostor", "impostor@valoria.example", null, [Role.SupervisorApprover]);
 
     private static async Task<Result<SignedInUserLink>> HandleAsync(string connection, LinkSignedInUser command, CancellationToken ct)
     {

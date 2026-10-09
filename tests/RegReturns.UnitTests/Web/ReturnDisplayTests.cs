@@ -74,6 +74,27 @@ public sealed class ReturnDisplayTests
     }
 
     [Fact]
+    public void A_migrated_step_reads_as_approved_in_the_legacy_system()
+    {
+        ReturnDisplay.Label(WorkflowAction.Migrate).ShouldBe("Migrated from the legacy system, approved");
+    }
+
+    [Fact]
+    public void Every_workflow_step_has_its_own_label()
+    {
+        var labels = Enum.GetValues<WorkflowAction>().Select(ReturnDisplay.Label).ToList();
+
+        labels.ShouldBeUnique();
+        labels.ShouldNotContain(label => Enum.GetNames<WorkflowAction>().Contains(label));
+    }
+
+    [Fact]
+    public void A_migrated_return_names_the_legacy_migration_as_its_source()
+    {
+        ReturnDisplay.Label(SubmissionSource.Migration).ShouldBe("Legacy migration");
+    }
+
+    [Fact]
     public void Times_are_shown_in_utc()
     {
         ReturnDisplay.Utc(new DateTimeOffset(2026, 10, 5, 16, 5, 0, TimeSpan.FromHours(2))).ShouldBe("5 Oct 2026 14:05 UTC");
