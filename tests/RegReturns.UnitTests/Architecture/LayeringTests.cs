@@ -47,6 +47,16 @@ public sealed class LayeringTests
     }
 
     [Fact]
+    public void Only_infrastructure_talks_to_the_ai_provider()
+    {
+        var result = Types.InAssemblies([Domain, Application, Web]).ShouldNot()
+            .HaveDependencyOn("Anthropic")
+            .GetResult();
+
+        result.IsSuccessful.ShouldBeTrue(Describe(result));
+    }
+
+    [Fact]
     public void Controllers_do_not_use_the_database_directly()
     {
         var result = Types.InAssembly(Web).That().Inherit(typeof(ControllerBase)).ShouldNot()

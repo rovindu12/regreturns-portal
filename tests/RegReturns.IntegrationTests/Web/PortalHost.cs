@@ -13,7 +13,10 @@ internal static class PortalHost
     /// <summary>The portal only issues Secure cookies, so clients talk to the test server over HTTPS.</summary>
     public static readonly Uri BaseAddress = new("https://localhost");
 
-    public static WebApplicationFactory<Program> Create(string connectionString, Action<IServiceCollection>? configureServices = null) =>
+    public static WebApplicationFactory<Program> Create(
+        string connectionString,
+        Action<IServiceCollection>? configureServices = null,
+        IReadOnlyDictionary<string, string?>? settings = null) =>
         new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder
@@ -21,6 +24,11 @@ internal static class PortalHost
                 .UseSetting("Serilog:MinimumLevel:Default", "Warning")
                 .UseSetting("ConnectionStrings:RegReturns", connectionString)
                 .UseTestAuth();
+            foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
+            {
+                builder.UseSetting(key, value);
+            }
+
             if (configureServices is not null)
             {
                 builder.ConfigureTestServices(configureServices);
