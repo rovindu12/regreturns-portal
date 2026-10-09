@@ -87,3 +87,15 @@ jobs:
             echo "::error::High or critical vulnerabilities found in NuGet dependencies"
             exit 1
           fi
+
+  edge-check:
+    name: Edge proxy (Caddy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Validates deploy/caddy/Caddyfile and runs it against stub upstreams: allowlist, sign-in paths, HSTS, redaction.
+      - name: Check the Caddyfile
+        run: scripts/check-caddy.sh
