@@ -1,0 +1,33 @@
+%% RegReturns architecture: the source of src/RegReturns.Web/wwwroot/img/architecture.svg.
+%% Render with scripts/render-diagrams.sh after changing it (ADR 0031).
+flowchart LR
+    subgraph People["People"]
+        bank["Bank staff<br/>maker, checker"]
+        sup["Bank of Valoria staff<br/>reviewer, approver, auditor, admin"]
+    end
+    banksys["Bank systems<br/>client credentials"]
+
+    subgraph Edge["Caddy reverse proxy (TLS)"]
+        direction TB
+        portal["Web portal<br/>ASP.NET Core MVC"]
+        api["REST API v1<br/>ASP.NET Core"]
+    end
+
+    wso2["WSO2 Identity Server<br/>OIDC, TOTP, roles"]
+    sql[("SQL Server<br/>returns, templates,<br/>audit hash chain")]
+    seq["Seq<br/>logs and traces"]
+    ai["Claude API<br/>figures only, optional"]
+    tools["Migrator and IamBootstrap<br/>schema, seed, legacy data, WSO2 setup"]
+
+    bank -- "sign in" --> portal
+    sup -- "sign in" --> portal
+    banksys -- "token" --> api
+    portal -- "OIDC code flow" --> wso2
+    api -- "JWT validation" --> wso2
+    portal --> sql
+    api --> sql
+    portal -. "advisory insights" .-> ai
+    portal -. "OpenTelemetry" .-> seq
+    api -. "OpenTelemetry" .-> seq
+    tools --> sql
+    tools --> wso2

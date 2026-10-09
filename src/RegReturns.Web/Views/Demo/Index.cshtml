@@ -1,0 +1,148 @@
+@model RegReturns.Web.Models.Demo.DemoPageViewModel
+@{
+    ViewData["Title"] = "Try the demo";
+    var last = Model.Status.LastReset;
+}
+
+<section class="mb-4">
+    <h1 class="h2">Try the demo</h1>
+    <p class="lead">
+        Sign in as any of these fictional people to see the portal through their eyes. They all share one password.
+        Everything you change is undone at the next reset@(Model.Status.NextScheduledReset is { } next ? $", {next.UtcDateTime:d MMMM 'at' HH:mm} UTC" : string.Empty).
+    </p>
+    <p class="mb-0">
+        New here? The <a asp-action="Guide">guided tour</a> takes one return from draft to approval in six steps.
+        @if (last is not null)
+        {
+            <span class="text-muted">Last reset @last.OccurredAt.UtcDateTime.ToString("d MMMM 'at' HH:mm") UTC.</span>
+        }
+    </p>
+</section>
+
+<partial name="_Flash" />
+
+<section class="card mb-4" aria-labelledby="password-heading">
+    <div class="card-body">
+        <h2 id="password-heading" class="h5">Password for every demo account</h2>
+        @if (Model.Password is { } password)
+        {
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <code class="fs-5 user-select-all" id="demo-password" data-demo="password">@password</code>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-copy-target="demo-password">Copy</button>
+            </div>
+            <p class="small text-muted mt-2 mb-0">
+                Demo accounts cannot change their password or two-step settings, and the administrator cannot change
+                them either, so the next visitor finds them as you did.
+            </p>
+        }
+        else
+        {
+            <p class="mb-0">The demo password is not configured on this server (<code>Demo:UserPassword</code>).</p>
+        }
+    </div>
+</section>
+
+@foreach (var group in Model.Roles)
+{
+    var headingId = "role-" + group.Role.Role.ToString().ToLowerInvariant();
+    <section class="mb-4" aria-labelledby="@headingId">
+        <h2 id="@headingId" class="h5 mb-1">@group.Role.Title</h2>
+        <p class="text-muted mb-2">@group.Role.CanDo @group.Role.MustNot</p>
+        <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+            @foreach (var account in group.Accounts)
+            {
+                var userId = "user-" + account.UserName.Replace('.', '-');
+                <div class="col">
+                    <article class="card h-100 demo-account" data-demo-user="@account.UserName">
+                        <div class="card-body d-flex flex-column">
+                            <h3 class="h6 mb-1">@account.DisplayName</h3>
+                            @if (account.Bank is not null)
+                            {
+                                <p class="small text-muted mb-2">@account.Bank</p>
+                            }
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <span class="small text-muted">User name</span>
+                                <code class="user-select-all" id="@userId">@account.UserName</code>
+                                <button type="button" class="btn btn-link btn-sm p-0" data-copy-target="@userId">Copy<span class="visually-hidden"> @account.UserName</span></button>
+                            </div>
+                            @if (account.TotpSecret is not null)
+                            {
+                                var secretId = "totp-" + account.UserName.Replace('.', '-');
+                                <div class="border rounded p-2 mb-3">
+                                    <p class="small mb-2">
+                                        This account signs in with a one-time code. Scan the QR code with an
+                                        authenticator app, or enter the key by hand.
+                                    </p>
+                                    <div class="d-flex flex-wrap align-items-start gap-3">
+                                        <div class="totp-qr" role="img" aria-label="QR code for the authenticator key of @account.UserName">@Html.Raw(account.TotpQrSvg)</div>
+                                        <div>
+                                            <span class="d-block small text-muted">Key (TOTP, 6 digits, 30 seconds)</span>
+                                            <code class="user-select-all text-break" id="@secretId" data-demo="totp">@account.TotpSecret</code>
+                                            <button type="button" class="btn btn-link btn-sm p-0 d-block" data-copy-target="@secretId">Copy key</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                            <a class="btn btn-primary btn-sm mt-auto align-self-start"
+                               asp-controller="Account" asp-action="SignIn"
+                               asp-route-returnUrl="@group.Role.Area.Path" asp-route-user="@account.UserName">Sign in as @account.UserName</a>
+                        </div>
+                    </article>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@if (Model.Api is { } api)
+{
+    <section class="card mb-4" aria-labelledby="api-heading">
+        <div class="card-body">
+            <h2 id="api-heading" class="h5">API demo client</h2>
+            <p>
+                A read-only client of the REST API that acts for Harbourline Bank: it can read reference data and the
+                bank's returns, but not deliver them. Use it in Swagger UI with <em>Authorize</em>, or with any HTTP client.
+            </p>
+            <dl class="row mb-3">
+                <dt class="col-sm-3">Client id</dt>
+                <dd class="col-sm-9"><code class="user-select-all" id="api-client-id">@api.ClientId</code></dd>
+                <dt class="col-sm-3">Client secret</dt>
+                <dd class="col-sm-9">
+                    @if (api.ClientSecret is { } secret)
+                    {
+                        <code class="user-select-all text-break" id="api-client-secret" data-demo="api-secret">@secret</code>
+                        <button type="button" class="btn btn-link btn-sm p-0 ms-1" data-copy-target="api-client-secret">Copy</button>
+                    }
+                    else
+                    {
+                        <span>Not configured on this server (<code>Demo:ApiClientSecret</code>).</span>
+                    }
+                </dd>
+                <dt class="col-sm-3">Scopes</dt>
+                <dd class="col-sm-9">@string.Join(" ", api.Scopes)</dd>
+                @if (api.TokenEndpoint is { } token)
+                {
+                    <dt class="col-sm-3">Token endpoint</dt>
+                    <dd class="col-sm-9"><code class="text-break">@token</code></dd>
+                }
+            </dl>
+            @if (api.SwaggerUrl is { } swagger)
+            {
+                <a class="btn btn-outline-primary btn-sm" href="@swagger">Open Swagger UI</a>
+            }
+        </div>
+    </section>
+}
+
+<section class="mb-4" aria-labelledby="rules-heading">
+    <h2 id="rules-heading" class="h5">House rules</h2>
+    <ul class="mb-0">
+        <li>Every bank, person and figure here is fictional. Do not enter real data.</li>
+        <li>Other visitors use the same accounts at the same time, so returns may move on while you look at them.</li>
+        <li>Everything you do is recorded in the audit trail, which the reset keeps.</li>
+    </ul>
+</section>
+
+@section Scripts {
+    <script src="~/js/demo.js" asp-append-version="true"></script>
+}

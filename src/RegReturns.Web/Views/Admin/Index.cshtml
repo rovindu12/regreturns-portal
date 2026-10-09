@@ -1,12 +1,15 @@
-@model LandingViewModel
+@model RegReturns.Web.Models.Admin.AdminIndexViewModel
 @{
     ViewData["Title"] = Model.Area.Title;
+    var demo = Model.Demo;
 }
 
 <section class="mb-4">
     <h1 class="h2">@Model.Area.Title</h1>
     <p class="lead mb-0">@Model.Area.Summary</p>
 </section>
+
+<partial name="_Flash" />
 
 <section aria-labelledby="manage-heading" class="mb-4">
     <h2 id="manage-heading" class="h5">Manage</h2>
@@ -17,12 +20,64 @@
                 The fields and validation rules of each return: start drafts, publish and retire template versions.
             </span>
         </a>
-        <div class="list-group-item">
-            <span class="d-block fw-semibold">Institutions and users</span>
-            <span class="d-block small text-muted">Arrives in a later phase of the build.</span>
-        </div>
+        <a class="list-group-item list-group-item-action" asp-action="Users">
+            <span class="d-block fw-semibold">Users and API clients</span>
+            <span class="d-block small text-muted">
+                Who can use the portal and the API, with their roles from WSO2; disable or re-enable a person's portal access.
+            </span>
+        </a>
     </div>
 </section>
+
+@if (demo.Enabled)
+{
+    <section aria-labelledby="demo-heading" class="card mb-4" id="demo">
+        <div class="card-body">
+            <h2 id="demo-heading" class="h5">Demo data</h2>
+            <p>
+                Resetting replaces every return, obligation, template, insight, upload and legacy migration run with the
+                demo seed. Institutions, users, API clients and the audit trail are kept, and the reset itself is recorded
+                in the audit trail. It runs every night@(demo.NextScheduledReset is { } next ? $" (next at {next.UtcDateTime:HH:mm} UTC)" : string.Empty)
+                and can be started here at most once every @demo.CooldownMinutes minutes.
+            </p>
+            <form method="post" asp-action="ResetDemo" class="mb-3">
+                <button type="submit" class="btn btn-outline-danger" disabled="@(demo.ManualResetAvailableAt is null ? null : "disabled")">Reset demo</button>
+                @if (demo.ManualResetAvailableAt is { } available)
+                {
+                    <span class="small text-muted ms-2">Available again from @available.UtcDateTime.ToString("HH:mm") UTC.</span>
+                }
+            </form>
+            @if (demo.Recent.Count > 0)
+            {
+                <h3 class="h6">Recent resets</h3>
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <caption class="visually-hidden">The latest demo resets, newest first</caption>
+                        <thead class="table-light">
+                            <tr>
+                                <th scope="col">When (UTC)</th>
+                                <th scope="col">By</th>
+                                <th scope="col">Audit entry</th>
+                                <th scope="col">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var reset in demo.Recent)
+                            {
+                                <tr>
+                                    <td class="text-nowrap">@reset.OccurredAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td>@reset.Actor</td>
+                                    <td class="text-end">@reset.Sequence</td>
+                                    <td class="small">@reset.Details</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </section>
+}
 
 <section aria-labelledby="who-heading" class="card mb-4">
     <div class="card-body">

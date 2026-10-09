@@ -1,0 +1,112 @@
+@{
+    ViewData["Title"] = "Guided tour";
+}
+
+<nav aria-label="Breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a asp-action="Index">Try the demo</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Guided tour</li>
+    </ol>
+</nav>
+
+<section class="mb-4">
+    <h1 class="h2">Guided tour: one return, from draft to approval</h1>
+    <p class="lead">
+        Harbourline Bank has started last month's Monthly Deposits and Advances Return (MDA). Take it through the whole
+        process, playing each person in turn. It takes about ten minutes.
+    </p>
+    <div class="alert alert-info mb-0" role="note">
+        The password for every account, and the authenticator keys of the accounts that sign in with a one-time code,
+        are on the <a asp-action="Index">demo accounts</a> page. Sign out (top right) before you sign in as the next person.
+    </div>
+</section>
+
+<ol class="guide-steps list-unstyled">
+    <li class="card mb-3" id="step-prepare">
+        <div class="card-body">
+            <h2 class="h5"><span class="guide-step-number" aria-hidden="true">1</span> Prepare the return as the bank's maker</h2>
+            <ol>
+                <li>Sign in as <code>maker.hlb</code>. You land in <strong>Bank returns</strong>, which lists Harbourline's obligations.</li>
+                <li>Open the <strong>Monthly Deposits and Advances Return</strong> for last month; its status is <em>Draft</em>.</li>
+                <li>Press <strong>Validate</strong>. The engine runs every rule of the template and lists what it finds.</li>
+                <li>To see a rule refuse the return, change <em>Total deposits</em>, <strong>Save draft</strong> and validate again:
+                    the cross-field rule reports an error and the return cannot be submitted. Put the figure back, save and validate.</li>
+            </ol>
+            <p class="small text-muted mb-3">A maker can prepare, upload and validate, but never submit.</p>
+            <a class="btn btn-outline-primary btn-sm" asp-controller="Account" asp-action="SignIn" asp-route-returnUrl="/bank" asp-route-user="maker.hlb">Sign in as maker.hlb</a>
+        </div>
+    </li>
+    <li class="card mb-3" id="step-submit">
+        <div class="card-body">
+            <h2 class="h5"><span class="guide-step-number" aria-hidden="true">2</span> Check and submit it as the bank's checker</h2>
+            <ol>
+                <li>Sign in as <code>checker.hlb</code> and open the same return.</li>
+                <li>If validation lists warnings, write a justification of at least 20 characters for each one.</li>
+                <li>Add a comment under <strong>Submit to the Bank of Valoria</strong> and press <strong>Submit return</strong>.</li>
+            </ol>
+            <p class="small text-muted mb-3">
+                Separation of duties: if the checker changes a figure, they become its last editor and can no longer submit it.
+            </p>
+            <a class="btn btn-outline-primary btn-sm" asp-controller="Account" asp-action="SignIn" asp-route-returnUrl="/bank" asp-route-user="checker.hlb">Sign in as checker.hlb</a>
+        </div>
+    </li>
+    <li class="card mb-3" id="step-review">
+        <div class="card-body">
+            <h2 class="h5"><span class="guide-step-number" aria-hidden="true">3</span> Review it at the Bank of Valoria</h2>
+            <ol>
+                <li>Sign in as <code>reviewer</code>. The <strong>Supervision</strong> worklist shows every submitted return.</li>
+                <li>Open Harbourline's MDA and press <strong>Start review</strong>.</li>
+                <li>Under <strong>Advisory insight</strong>, press <strong>Generate insight</strong>. It lists the largest
+                    movements, such as the non-performing loan ratio against a year ago, and suggests questions for the bank.
+                    <em>What was shared</em> shows exactly which figures left the portal.</li>
+                <li>You could <strong>return it for correction</strong> with a comment; then the bank fixes it as in steps 1 and 2.</li>
+            </ol>
+            <a class="btn btn-outline-primary btn-sm" asp-controller="Account" asp-action="SignIn" asp-route-returnUrl="/supervision" asp-route-user="reviewer">Sign in as reviewer</a>
+        </div>
+    </li>
+    <li class="card mb-3" id="step-approve">
+        <div class="card-body">
+            <h2 class="h5"><span class="guide-step-number" aria-hidden="true">4</span> Approve it with two-step sign-in</h2>
+            <ol>
+                <li>Add the key of <code>approver.mfa</code> to an authenticator app (scan the QR code on the demo accounts page).</li>
+                <li>Sign in as <code>approver.mfa</code>; WSO2 asks for the six-digit code after the password.</li>
+                <li>Open the return, add a comment and press <strong>Approve</strong>. The bank's obligation is now fulfilled.</li>
+            </ol>
+            <p class="small text-muted mb-3">The reviewer of a return can never approve it, even with the approver role.</p>
+            <a class="btn btn-outline-primary btn-sm" asp-controller="Account" asp-action="SignIn" asp-route-returnUrl="/supervision" asp-route-user="approver.mfa">Sign in as approver.mfa</a>
+        </div>
+    </li>
+    <li class="card mb-3" id="step-audit">
+        <div class="card-body">
+            <h2 class="h5"><span class="guide-step-number" aria-hidden="true">5</span> Follow the trail as the auditor</h2>
+            <ol>
+                <li>Sign in as <code>auditor</code> and open <strong>Audit trail</strong>.</li>
+                <li>Every sign-in, edit, validation, justification, step and insight you just made is there, newest first,
+                    with what changed.</li>
+                <li>Press <strong>Verify chain</strong>: the portal recomputes every entry's HMAC and link to the one before.</li>
+            </ol>
+            <a class="btn btn-outline-primary btn-sm" asp-controller="Account" asp-action="SignIn" asp-route-returnUrl="/audit" asp-route-user="auditor">Sign in as auditor</a>
+        </div>
+    </li>
+    <li class="card mb-3" id="step-reports">
+        <div class="card-body">
+            <h2 class="h5"><span class="guide-step-number" aria-hidden="true">6</span> See the result in the reports and the API</h2>
+            <ol>
+                <li>As any regulator account, open <strong>Reports</strong>: the compliance grid now shows Harbourline's MDA as
+                    filed on time or late, next to the overdue and late returns of other banks. Export it to Excel or PDF.</li>
+                <li>In Swagger UI, press <strong>Authorize</strong> with the demo client from the demo accounts page and call
+                    <code>GET /v1/submissions</code>: Harbourline's systems see the approved return.</li>
+            </ol>
+            <a class="btn btn-outline-primary btn-sm" asp-controller="Account" asp-action="SignIn" asp-route-returnUrl="/reports" asp-route-user="reviewer">Sign in as reviewer</a>
+        </div>
+    </li>
+</ol>
+
+<section class="mb-4" aria-labelledby="more-heading">
+    <h2 id="more-heading" class="h5">More to explore</h2>
+    <ul class="mb-0">
+        <li>As <code>admin.demo</code>, start a draft of a return template, add a validation rule and publish it. The next reset puts the templates back.</li>
+        <li>As <code>maker.ccb</code>, download a return as Excel, change it and upload it again.</li>
+        <li>As <code>reviewer</code>, filter the worklist by bank or return type, and generate an insight on Lotus Union's liquidity return.</li>
+    </ul>
+</section>

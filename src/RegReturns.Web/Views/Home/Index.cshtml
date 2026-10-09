@@ -1,49 +1,176 @@
-@model RegReturns.Application.Portal.PortalSummary
+@model HomeViewModel
+@using RegReturns.Web.Demo
 @{
-    ViewData["Title"] = "Home";
+    ViewData["Title"] = "Regulatory returns, from bank to supervisor";
+    var signedIn = User.Identity?.IsAuthenticated == true;
+    var summary = Model.Summary;
 }
 
-<section class="mb-5">
-    <h1 class="h2">Regulatory Returns Portal</h1>
-    <p class="lead mb-0">
-        Licensed banks submit periodic regulatory returns to the Bank of Valoria. Returns are validated,
-        reviewed through a maker-checker workflow and tracked on supervisory dashboards.
+<section class="landing-hero rounded-3 p-4 p-md-5 mb-5">
+    <p class="text-uppercase small fw-semibold text-muted mb-2">Bank of Valoria &middot; Regulatory Returns Portal</p>
+    <h1 class="display-6 fw-semibold mb-3">Regulatory returns, from bank to supervisor</h1>
+    <p class="lead mb-4">
+        Licensed banks file their liquidity, deposits and capital returns online. The portal checks every figure,
+        routes each return through maker-checker and supervisory review, and keeps a tamper-evident record of who
+        did what. The banks, people and figures are fictional.
     </p>
-    @if (User.Identity?.IsAuthenticated != true)
-    {
-        <p class="mt-3 mb-0">
-            <a class="btn btn-primary" asp-controller="Account" asp-action="SignIn">Sign in to the portal</a>
-        </p>
-    }
+    <div class="d-flex flex-wrap gap-2">
+        @if (Model.DemoEnabled)
+        {
+            <a class="btn btn-primary btn-lg" asp-controller="Demo" asp-action="Index">Try the demo</a>
+            <a class="btn btn-outline-primary btn-lg" asp-controller="Demo" asp-action="Guide">Follow the guided tour</a>
+        }
+        @if (!signedIn)
+        {
+            <a class="btn @(Model.DemoEnabled ? "btn-outline-secondary" : "btn-primary") btn-lg" asp-controller="Account" asp-action="SignIn">Sign in</a>
+        }
+        @if (Model.SwaggerUrl is { } swagger)
+        {
+            <a class="btn btn-outline-secondary btn-lg" href="@swagger">API reference</a>
+        }
+    </div>
 </section>
 
-<section aria-labelledby="summary-heading">
+<section aria-labelledby="summary-heading" class="mb-5">
     <h2 id="summary-heading" class="h5 text-muted mb-3">At a glance</h2>
     <div class="row g-3">
         <div class="col-6 col-lg">
             <div class="card h-100"><div class="card-body">
-                <div class="display-6">@Model.Institutions</div><div class="text-muted">Licensed banks</div>
+                <div class="display-6">@summary.Institutions</div><div class="text-muted">Licensed banks</div>
             </div></div>
         </div>
         <div class="col-6 col-lg">
             <div class="card h-100"><div class="card-body">
-                <div class="display-6">@Model.ReturnTypes</div><div class="text-muted">Return types</div>
+                <div class="display-6">@summary.ReturnTypes</div><div class="text-muted">Return types</div>
             </div></div>
         </div>
         <div class="col-6 col-lg">
             <div class="card h-100"><div class="card-body">
-                <div class="display-6">@Model.AwaitingReview</div><div class="text-muted">Awaiting review</div>
+                <div class="display-6">@summary.AwaitingReview</div><div class="text-muted">Awaiting review</div>
             </div></div>
         </div>
         <div class="col-6 col-lg">
             <div class="card h-100"><div class="card-body">
-                <div class="display-6">@Model.Overdue</div><div class="text-muted">Overdue returns</div>
+                <div class="display-6">@summary.Overdue</div><div class="text-muted">Overdue returns</div>
             </div></div>
         </div>
         <div class="col-12 col-lg">
             <div class="card h-100"><div class="card-body">
-                <div class="display-6">@Model.ApprovedThisYear</div><div class="text-muted">Approved this year</div>
+                <div class="display-6">@summary.ApprovedThisYear</div><div class="text-muted">Approved this year</div>
             </div></div>
         </div>
+    </div>
+</section>
+
+<section aria-labelledby="features-heading" class="mb-5">
+    <h2 id="features-heading" class="h4 mb-3">What it does</h2>
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+        <div class="col">
+            <article class="card h-100 feature-card"><div class="card-body">
+                <h3 class="h6">Return entry and upload</h3>
+                <p class="mb-2">Makers type figures into the form or upload an Excel or CSV file built from the template. Uploads are checked by their content, size and layout, stored privately and never served back.</p>
+                <p class="small text-muted mb-0">Try it as a bank maker, such as <code>maker.hlb</code>.</p>
+            </div></article>
+        </div>
+        <div class="col">
+            <article class="card h-100 feature-card"><div class="card-body">
+                <h3 class="h6">Validation engine</h3>
+                <p class="mb-2">Required, data type, range, cross-field and period-on-period variance rules, all configurable per template version. Errors block a submission; every warning needs a written justification.</p>
+                <p class="small text-muted mb-0">Rules are edited by an administrator under Return templates.</p>
+            </div></article>
+        </div>
+        <div class="col">
+            <article class="card h-100 feature-card"><div class="card-body">
+                <h3 class="h6">Maker-checker and supervisory workflow</h3>
+                <p class="mb-2">A checker who did not prepare the return submits it. A reviewer picks it up and can send it back; an approver who did not review it approves or rejects it after a second sign-in factor.</p>
+                <p class="small text-muted mb-0">Late submissions are flagged against the due date.</p>
+            </div></article>
+        </div>
+        <div class="col">
+            <article class="card h-100 feature-card"><div class="card-body">
+                <h3 class="h6">Advisory insights for reviewers</h3>
+                <p class="mb-2">On request, Claude (or fixed rules when no AI is configured) highlights the largest movements and failed rules and suggests questions for the bank. Only figures are sent, never names, and every call is audited.</p>
+                <p class="small text-muted mb-0">See Harbourline's non-performing loans jump as <code>reviewer</code>.</p>
+            </div></article>
+        </div>
+        <div class="col">
+            <article class="card h-100 feature-card"><div class="card-body">
+                <h3 class="h6">Dashboards and exports</h3>
+                <p class="mb-2">A compliance grid by bank and period, overdue returns, the validation findings trend and key ratios, with Excel and PDF exports. Bank staff see only their own bank.</p>
+                <p class="small text-muted mb-0">Every export is recorded in the audit trail.</p>
+            </div></article>
+        </div>
+        <div class="col">
+            <article class="card h-100 feature-card"><div class="card-body">
+                <h3 class="h6">Tamper-evident audit trail</h3>
+                <p class="mb-2">Every change, sign-in and decision is an entry in an HMAC-SHA256 hash chain the database will not let anyone edit or delete. The auditor can verify the whole chain from the browser.</p>
+                <p class="small text-muted mb-0">Try it as <code>auditor</code>.</p>
+            </div></article>
+        </div>
+        <div class="col">
+            <article class="card h-100 feature-card"><div class="card-body">
+                <h3 class="h6">REST API for bank systems</h3>
+                <p class="mb-2">Versioned endpoints with OAuth 2.0 client credentials, idempotency keys, paging, rate limits and problem details. Bank systems deliver drafts; people still submit them.</p>
+                <p class="small text-muted mb-0">A read-only demo client is published on the demo page.</p>
+            </div></article>
+        </div>
+        <div class="col">
+            <article class="card h-100 feature-card"><div class="card-body">
+                <h3 class="h6">Legacy data migration</h3>
+                <p class="mb-2">A command-line migrator cleans messy CSV exports from the old system, rejects what it cannot read with a reason, and reconciles totals before it commits anything. Dry runs change nothing.</p>
+                <p class="small text-muted mb-0">Migrated history appears as approved returns.</p>
+            </div></article>
+        </div>
+        <div class="col">
+            <article class="card h-100 feature-card"><div class="card-body">
+                <h3 class="h6">Single sign-on with WSO2</h3>
+                <p class="mb-2">WSO2 Identity Server holds every account. The portal signs people in with OpenID Connect, keeps each person's roles and bank in step with WSO2 at every sign-in, and requires a TOTP code for approvals.</p>
+                <p class="small text-muted mb-0">Try two-step sign-in as <code>approver.mfa</code>.</p>
+            </div></article>
+        </div>
+    </div>
+</section>
+
+<section aria-labelledby="architecture-heading" class="mb-5">
+    <h2 id="architecture-heading" class="h4 mb-3">How it fits together</h2>
+    <div class="card">
+        <div class="card-body">
+            <img class="img-fluid d-block mx-auto architecture-diagram" src="~/img/architecture.svg" asp-append-version="true"
+                 alt="Architecture: bank staff and Bank of Valoria staff sign in to the web portal, and bank systems call the REST API, both behind a Caddy reverse proxy. The portal and API validate sign-ins and tokens with WSO2 Identity Server, keep their data in SQL Server, send logs and traces to Seq, and the portal can ask the Claude API for advisory insights. The migrator and IamBootstrap tools set up the database and WSO2." />
+        </div>
+        <div class="card-footer small text-muted">
+            .NET 10 (ASP.NET Core MVC and Web API), EF Core and Dapper on SQL Server, WSO2 Identity Server, Serilog and
+            OpenTelemetry into Seq, Docker. Each decision is recorded as an architecture decision record in the repository.
+        </div>
+    </div>
+</section>
+
+<section aria-labelledby="roles-heading" class="mb-4">
+    <h2 id="roles-heading" class="h4 mb-3">Who does what</h2>
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <caption class="small">Each role comes from WSO2. A person holds bank roles or regulator roles, never both.</caption>
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Role</th>
+                    <th scope="col">WSO2 role</th>
+                    <th scope="col">Works in</th>
+                    <th scope="col">Can</th>
+                    <th scope="col">Limits</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var role in PortalRoles.All)
+                {
+                    <tr>
+                        <th scope="row" class="text-nowrap">@role.Title</th>
+                        <td><code>@role.Wso2Role</code></td>
+                        <td class="text-nowrap">@role.Area.Title</td>
+                        <td>@role.CanDo</td>
+                        <td class="small">@role.MustNot</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
     </div>
 </section>

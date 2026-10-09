@@ -1,3 +1,4 @@
+@inject Microsoft.Extensions.Options.IOptions<RegReturns.Application.Demo.DemoOptions> DemoSettings
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,7 +10,7 @@
     <link rel="stylesheet" href="~/RegReturns.Web.styles.css" asp-append-version="true" />
 </head>
 <body class="d-flex flex-column min-vh-100">
-    <partial name="_DemoBanner" />
+    <vc:demo-banner />
     <header>
         <nav class="navbar navbar-expand-sm navbar-dark bg-primary-subtle border-bottom mb-4" aria-label="Main navigation">
             <div class="container">
@@ -24,6 +25,12 @@
                             <a class="nav-link text-dark" asp-controller="Home" asp-action="Index">Home</a>
                         </li>
                         <vc:area-navigation />
+                        @if (DemoSettings.Value.Enabled)
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-controller="Demo" asp-action="Index">Try the demo</a>
+                            </li>
+                        }
                     </ul>
                     <partial name="_SignInStatus" />
                 </div>
@@ -36,7 +43,10 @@
     <footer class="border-top py-3 text-muted small">
         <div class="container d-flex justify-content-between flex-wrap gap-2">
             <span>Bank of Valoria (fictional regulator) &middot; Regulatory Returns Portal</span>
-            <span>Version @RegReturns.ServiceDefaults.BuildInfo.Version</span>
+            <span>
+                <a class="link-secondary" asp-controller="Status" asp-action="Index">Service status</a>
+                &middot; Version @RegReturns.ServiceDefaults.BuildInfo.Version
+            </span>
         </div>
     </footer>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
