@@ -35,3 +35,4 @@
 | [0031](0031-public-demo-and-demo-reset.md) | Public demo pages, and a demo reset that replaces the workload but keeps the directory and the audit chain |
 | [0032](0032-administrator-opened-totp-enrolment.md) | Administrators open a TOTP enrolment window; the person enrols at their next sign-in |
 | [0033](0033-security-hardening.md) | Security hardening: browser policies, account lock, strict TLS to SQL Server, a deny-by-default edge and diagnostics |
+| [0034](0034-containers-release-pipeline-and-hosting.md) | Containers, a release pipeline that tests the production stack, and one server run by scripts |

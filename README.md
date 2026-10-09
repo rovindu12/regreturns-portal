@@ -110,12 +110,21 @@ The threat model, an OWASP ASVS self-assessment and how each control is tested a
 [docs/SECURITY.md](docs/SECURITY.md) ([ADR 0032](docs/adr/0032-administrator-opened-totp-enrolment.md),
 [ADR 0033](docs/adr/0033-security-hardening.md)).
 
+## Deployment
+
+One server runs the whole stack with Docker Compose behind Caddy: chiselled, non-root images for the portal, the API
+and the tools, WSO2, SQL Server Express and Seq, with only Caddy reachable from the internet. Every pull request builds
+the images, scans them, deploys the production stack on the CI runner, signs in through a browser, then backs up,
+changes, restores and checks it again; on `main` the tested images go to GHCR and, once a server is configured, are
+deployed over an SSH key that can run one command. `deploy/regreturns.sh` is the single entry point on the server
+(deploy, backup, restore, audit-chain check, smoke test). See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), the
+[disaster-recovery runbook](docs/DR-RUNBOOK.md) and [ADR 0034](docs/adr/0034-containers-release-pipeline-and-hosting.md).
+
 ## Tech stack
 
 .NET 10 · ASP.NET Core MVC and Web API · EF Core 10 · SQL Server 2025 · Serilog · OpenTelemetry · Seq ·
 Dapper · ClosedXML · QuestPDF · Chart.js · Anthropic SDK · Cronos · QRCoder · Mermaid · xUnit v3 · Testcontainers · GitHub Actions ·
-CodeQL · Caddy · WSO2 Identity Server 7.3.
-Docker deployment comes in a later phase.
+CodeQL · Caddy · WSO2 Identity Server 7.3 · Docker · Trivy · gitleaks · ShellCheck.
 
 ## Documentation
 
@@ -126,6 +135,7 @@ Docker deployment comes in a later phase.
 - [Data migration guide](docs/DATA-MIGRATION.md)
 - [Advisory insights](docs/AI-ASSISTANT.md)
 - [Security: threat model and controls](docs/SECURITY.md)
+- [Deployment](docs/DEPLOYMENT.md) · [Disaster recovery](docs/DR-RUNBOOK.md)
 - [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 ## Licence

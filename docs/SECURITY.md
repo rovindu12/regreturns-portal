@@ -58,6 +58,8 @@ flowchart LR
 4. **Apps to SQL Server.** TLS 1.2+ wrapping the whole session (TDS 8), certificate pinned.
 5. **Portal to Anthropic.** Optional; only codes, template text and figures leave.
 6. **Bank to regulator.** Bank users and bank systems are untrusted for anything outside their own bank.
+7. **CI to server.** GitHub Actions reaches the server only over SSH with a key restricted to one forced command;
+   only Caddy publishes ports, and SQL Server sits on an internal network with no route out (ADR 0034).
 
 ## Threats and controls (STRIDE)
 
@@ -74,7 +76,10 @@ flowchart LR
 | T3 | Malicious upload | Extension and signature must agree, no macros, zip-bomb limits, 5 MB, formula-injection guard, stored in the database, never served (ADR 0022) | Upload signature tests |
 | T4 | Script injection (stored or reflected XSS) | Razor encoding; CSP with a per-response nonce and no `unsafe-inline`; no inline scripts, styles or handlers in views (ADR 0033) | `PortalSecurityHeadersTests`, view scan, CSP check in `demo-scenario.sh` |
 | T5 | Clickjacking | `frame-ancestors 'none'` and `X-Frame-Options: DENY` | Header tests |
-| T6 | Tampered dependency or build | Lock files with locked restore in CI, actions pinned by SHA, CodeQL, vulnerable-package gate; SBOM, Trivy and gitleaks in *phase 11* | CI |
+| T6 | Tampered dependency or build | Lock files with locked restore in CI, actions pinned by SHA, CodeQL, vulnerable-package gate; images built once, scanned (Trivy, fixable high and critical fail) and shipped by commit sha with a CycloneDX SBOM; third-party images pinned, tools by digest (ADR 0034) | CI, Release workflow, `ImagePinTests` |
+| T7 | A stolen CI credential used to run commands on the server | The CI key is restricted to one forced command that accepts only `deploy <sha> <user>` for a commit on `main`; the host key is pinned; the registry token is the run's own, sent on stdin and never stored (ADR 0034) | `regreturns.sh ci-deploy` input checks |
+| T8 | Restoring a backup whose audit history was changed | A restore starts nothing until `verify-audit` walks the chain with the HMAC key from `.env` (ADR 0034) | Release workflow round trip |
+| T9 | A compromised app changing the schema or the audit table | The apps log in as `regreturns_app` in `regreturns_runtime`: no DDL, no trigger changes, `DENY UPDATE, DELETE` on the audit table (ADR 0034) | `RuntimeRoleTests` |
 | R1 | Denying a decision | Every workflow step, sign-in, export, insight, reset and authenticator reset is an audit event with actor, time and trace id | Audit tests |
 | I1 | A bank reading another bank's returns | Use cases scope by the caller's institution from the user record; other banks' ids answer 404 (ADR 0018, 0025) | Cross-bank 404 tests (portal and API) |
 | I2 | Regulator staff seeing drafts | Supervisors see a return only once submitted (`ReturnVisibility`) | Visibility tests |
@@ -83,6 +88,8 @@ flowchart LR
 | I5 | Pages cached on a shared computer | `Cache-Control: no-store` on every signed-in answer | Header tests |
 | I6 | Reconnaissance of the WSO2 console | Deny by default at the edge; only sign-in paths public; `;` path tricks refused | `check-caddy.sh` |
 | I7 | Diagnostics leaking configuration | Administrator with TOTP only; secrets shown as "set" or "not set" | `AdminDiagnosticsTests` |
+| I8 | Secrets committed to the repository | Secrets only in user-secrets, `.env` and `generated/` (git-ignored, mode 0600/0700); gitleaks scans the whole history in CI | `secret-scan` job |
+| I9 | Backups read off the server | Off-site copies are encrypted with `age` to a key that never lives on the server; local backups are 0700 to the deploy user (ADR 0034) | `regreturns.sh backup` |
 | D1 | API flooding by one client | Fixed-window rate limit per client (120 a minute), 429 with `Retry-After` (ADR 0027) | Rate limit tests |
 | D2 | Duplicate deliveries | Idempotency keys per client with request fingerprint (ADR 0027) | Idempotency tests |
 | D3 | Locking out a known user on purpose | Lock lasts 5 minutes and does not grow; accepted (ADR 0033) | - |
@@ -127,6 +134,10 @@ requirements of the chapter that apply to this system are addressed by the contr
   reset refuses to run on a database with real users (ADR 0031).
 - **The AI provider sees figures.** Only figures, codes and the regulator's own template text, and only when a key is
   configured; the provider is advisory and every call is audited (ADR 0030).
+- **The deploy user is root-equivalent** through the `docker` group. The server runs nothing else, SSH takes keys only,
+  and the CI key can run one command (ADR 0034).
+- **WSO2's images are reported, not gated,** for vulnerabilities: they follow WSO2's releases, and only the sign-in
+  paths are public.
 - **Database administrators can read data.** The audit chain detects changes they make but not reads. Column
   encryption is out of scope for this project.
 
@@ -141,3 +152,6 @@ requirements of the chapter that apply to this system are addressed by the contr
 | Edge: allowlist, sign-in paths, path tricks, upstream certificate, log redaction | `scripts/check-caddy.sh` (also in CI) |
 | SQL Server encryption | `/admin/diagnostics` shows "encrypted, TDS 8" and how the connection validates the certificate |
 | Static analysis and dependencies | CodeQL and the vulnerable-package job in GitHub Actions |
+| Secrets in the history, shell scripts | The `secret-scan` (gitleaks) and `scripts` (ShellCheck) jobs in CI |
+| Images, deploy, backup and restore | The Release workflow: SBOMs, Trivy gate, the production stack on the runner, browser smoke test, a restore that must take a change away |
+| The audit chain on a server | `deploy/regreturns.sh verify-audit` (exit 2 when broken) |

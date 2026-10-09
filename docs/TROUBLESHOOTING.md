@@ -413,3 +413,38 @@ EventId.Id = 3015                                  -- WSO2 could not be used; no
 | The person is not asked to set up an authenticator | They signed in after the window closed, or they do not need TOTP (not an approver or administrator) | Open a new window; check the role |
 | A person cannot sign in although the password is right | WSO2 locked the account after five failed sign-ins (it shows the same "login failed" message) | Wait `IamBootstrap:AccountLockMinutes` (5); SCIM shows `accountLocked` and `lockedReason` |
 | `scripts/check-caddy.sh` fails | A change to `deploy/caddy/Caddyfile` | Each `FAIL` line names the request and what came back |
+
+## 15. Deployment, backups and restore
+
+Everything on the server goes through `deploy/regreturns.sh` ([DEPLOYMENT.md](DEPLOYMENT.md), ADR 0034). Start with
+`deploy/regreturns.sh status` (deployed commit, containers and health, latest backup), then
+`deploy/regreturns.sh compose logs --tail 100 <service>`. The apps log JSON with the trace id; Seq has the same events.
+A failed `deploy` prints the command that rolls back; every step is idempotent, so fixing the cause and deploying the
+same commit again is safe.
+
+Migrator `verify-audit` logs:
+
+```
+EventId.Id = 2003                                  -- chain intact (entries checked, head sequence)
+EventId.Id = 2004                                  -- chain broken: the first break (critical)
+EventId.Id = 2005                                  -- verification could not run (error, with the cause)
+```
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `deploy` stops with `container ... is unhealthy` | The app cannot reach SQL Server or WSO2, or cannot read a mounted file | `compose logs --tail 100 web api`: the failing health check or start-up error is there |
+| An app exits at start: `Wso2:TrustedCaPath must name a readable PEM file with at least one certificate` | `.certs/regreturns-dev-ca.crt` is missing or not readable by the app's user (uid 1654) | `scripts/dev-certs.sh` (it resets the folders to 0755 and the certificates to 0644), then deploy again |
+| WSO2 stops at start: `cp: cannot access ... security: Permission denied` | `.certs/wso2` was created under a strict umask, so WSO2 (uid 802) cannot enter it | `scripts/dev-certs.sh`, then deploy again |
+| `sqlservr` or Seq exits at once with `Operation not permitted` | The service lost `cap_add: [NET_BIND_SERVICE]`; its binary carries that file capability and Linux refuses to start it without one | Keep the `cap_add` line in `docker-compose.prod.yml` |
+| Seq restarts with `Access to the path '/data/Seq.json' is denied` | Seq runs as root without capabilities, so it cannot write its own folder | Keep `user: seq` on the service |
+| Signing in to the portal answers 500; the log says `An error occurred while reading the key ring` | The data-protection keys volume is not writable by the app (it was created by an older image) | `deploy/regreturns.sh compose rm -sf web`, `docker volume rm regreturns-prod_web-keys`, deploy again; people sign in again |
+| Smoke: `signing in to the portal does not lead to WSO2`, or the browser gets `Forbidden` after the login form | Caddy refuses a WSO2 sign-in path (WSO2 7 also uses `/t/carbon.super/...`) | Check the `@signIn` paths in `deploy/caddy/Caddyfile`; `scripts/check-caddy.sh` |
+| Smoke: `https://<host> is not answering over TLS` | DNS does not point at this server yet, ports 80 and 443 are closed, or Let's Encrypt refused | `dig +short <host>`, `ufw status`, `compose logs caddy` (it names the ACME error); run `deploy/regreturns.sh smoke` again later |
+| Smoke: `the status page does not say every component is operational` | One dependency is down | `/status` names it; for the REST API row, `compose logs api` |
+| `docker pull` says `denied` or `unauthorized` | The GHCR packages are private and this shell is not logged in | `docker login ghcr.io` with a token that can read packages, or make the packages public |
+| The CI deploy says `refused: the deploy key only runs ...` or `... is not a commit on main` | The workflow's command changed, or the commit is not on `main` (only main deploys) | Deploy from a green run on `main`; the forced command is in `~regreturns/.ssh/authorized_keys` |
+| The CI deploy says `Host key verification failed` | `DEPLOY_KNOWN_HOSTS` does not match the server (new server or new host key) | `ssh-keyscan -t ed25519 <server>`, compare the fingerprint with `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server, update the secret |
+| `backup` stops in `RESTORE VERIFYONLY` | The backup file is damaged as written (disk full or failing) | `df -h`; the unfinished folder is `backups/<stamp>.partial` and is removed after a day |
+| `restore` says `backups/<stamp> is damaged: its checksums do not match` | A file changed after the backup or was copied incompletely | Use another backup, or copy that one again from the off-site archive |
+| `restore` says `the restored audit chain does not verify; nothing was started` | `verify-audit` found a break (2004 names it) or `AUDIT_HMAC_KEY` in `.env` is not the key the chain was written with | [DR-RUNBOOK.md](DR-RUNBOOK.md#when-the-audit-chain-does-not-verify); check that `.env` came from the same archive |
+| No backup for a day | The timer did not run or failed | `systemctl list-timers 'regreturns-*'`, `journalctl -u regreturns-backup` |

@@ -33,8 +33,8 @@ as the domain and server right before the phase 11 deploy.
 | 8. AI assistant: insight service, Anthropic provider, rule-based fallback, reviewer panel, audited calls | done |
 | 9. Demo portal: landing page, try-the-demo, guided scenario, status page, demo reset | done |
 | 10. Security hardening: headers and CSP, anti-forgery audit, SQL TLS, account lock, authenticator reset, diagnostics, edge, CodeQL | done |
-| 11. Docker, CI/CD, VPS deploy | next |
-| 12. Docs and polish | not started |
+| 11. Containers, release pipeline, one-server hosting, backups and restore (live deploy needs the domain and server) | done |
+| 12. Docs and polish | next |
 
 ## Commands
 
@@ -65,6 +65,15 @@ scripts/demo-scenario.sh [--reset]                                    # plays th
                                                                       # running demo (changes data; --reset first)
 scripts/render-diagrams.sh                                            # docs/diagrams/*.mmd -> wwwroot/img/*.svg (needs
                                                                       # Node; CHROMIUM=/path to skip the download)
+dotnet run --project tools/RegReturns.Migrator -- verify-audit        # walk the audit hash chain: 0 intact, 1 failed,
+                                                                      # 2 broken
+
+# Containers and the server (docs/DEPLOYMENT.md, ADR 0034):
+docker buildx build --target web -t regreturns-web:dev .     # targets: web, api, migrator, iam-bootstrap
+deploy/regreturns.sh <command>                               # on the server: init, deploy <sha> [--no-pull], backup,
+                                                             # restore <stamp> [--yes], verify-audit, demo-users, smoke,
+                                                             # status, sql, compose; ci-deploy is for the CI key only
+deploy/server-setup.sh --admin-key ... --ci-key ...          # once, as root, on a fresh Ubuntu 24.04 server
 
 dotnet build RegReturns.slnx                                   # warnings are errors
 dotnet test --project tests/RegReturns.UnitTests               # fast, no Docker
@@ -89,7 +98,8 @@ src/RegReturns.Infrastructure  EF Core context, configurations, migrations, seed
 src/RegReturns.ServiceDefaults Serilog, OpenTelemetry, health endpoints, ProblemDetails, exception handler.
 src/RegReturns.Web             MVC portal (Razor + Bootstrap 5).
 src/RegReturns.Api             REST API v1 for bank systems: reference data, reads, draft delivery (ADR 0026, 0027).
-tools/RegReturns.Migrator      `migrate-db [--seed]`, `seed`, `legacy` (CSV migration, ADR 0029), `legacy-samples`.
+tools/RegReturns.Migrator      `migrate-db [--seed]`, `seed`, `legacy` (CSV migration, ADR 0029), `legacy-samples`,
+                               `verify-audit` (hash chain check; a restore starts nothing unless it passes).
 tools/RegReturns.IamBootstrap  `apply`, `demo-users`: idempotent WSO2 setup over its REST APIs (ADR 0017, 0020).
 scripts/smoke-wso2.sh          End-to-end identity smoke test against a running WSO2 + API (`--browser`: + portal).
 deploy/caddy/Caddyfile         Edge proxy (phase 11): TLS, HSTS, WSO2 sign-in paths public, admin paths allowlisted.
@@ -97,6 +107,12 @@ deploy/sqlserver/mssql.conf    Forces TLS with the certificate the `sqlserver-tl
 scripts/demo-scenario.sh       Browser run of the guided demo tour; `scripts/smoke/*.cjs` hold the Playwright parts.
 scripts/render-diagrams.sh     Renders the Mermaid sources in docs/diagrams to the committed SVGs.
 samples/legacy                 Generated legacy (VRRS) exports with planted defects and their mapping (see its README).
+Dockerfile                     One multi-stage build with the targets web, api, migrator and iam-bootstrap (ADR 0034).
+docker-compose.prod.yml        The production stack behind Caddy; docker-compose.yml is the development stack.
+deploy/                        Caddyfile, WSO2 and its db-init images, SQL Server init jobs, `regreturns.sh` (every server
+                               operation) and `server-setup.sh` (a fresh host).
+.github/workflows/release.yml  Builds the six images, SBOMs, Trivy gate, the production stack end to end on the runner
+                               (browser smoke test, backup and restore), pushes to GHCR on main, deploys when configured.
 tests/RegReturns.UnitTests     Domain, seeding, redaction and architecture tests.
 tests/RegReturns.IntegrationTests  Testcontainers SQL Server, WebApplicationFactory host tests.
 ```
@@ -205,6 +221,23 @@ Public demo (see `src/RegReturns.Application/Demo`, `src/RegReturns.Infrastructu
 - Sandboxed administration (`UserAdministration`): disable or re-enable a person's access; demo, system and client
   accounts and one's own account are refused. Log events 56xx (reset) and 3011-3012 (access changes).
 
+Hosting (see `deploy/`, ADR 0034, docs/DEPLOYMENT.md and docs/DR-RUNBOOK.md):
+- Every app and tool image runs on `mcr.microsoft.com/dotnet/aspnet:<patch>-noble-chiseled-extra` (the tools use
+  ServiceDefaults, which needs ASP.NET Core) as uid 1654 with no shell: `--health-probe [path]` (`HealthProbe`, answered
+  before the host is built) is the Docker `HEALTHCHECK`. Tool entry points are the assembly names
+  `regreturns-migrator.dll` and `regreturns-iam-bootstrap.dll`.
+- Behind Caddy: `ReverseProxy:KnownNetworks` (the edge subnet) trusts forwarded headers and moves the HTTPS redirect to
+  the edge; `DataProtection:KeysPath` keeps the portal's keys on a volume; `Status:ApiHealthUrl` adds the API to the
+  status page under the `status` tag, which is not part of the portal's readiness.
+- The apps log in as `regreturns_app`, member of `DatabaseRoles.Runtime` only (database-wide data and execute rights,
+  `DENY UPDATE, DELETE` on `audit.AuditEntries`); a new append-only table needs its own `DENY` (`RuntimeRoleTests`).
+  The migrator, IamBootstrap and the backups use `sa`.
+- `regreturns.sh` passes `.env`, `generated/.env.generated` (IamBootstrap) and `.env.release` (written by `deploy`; the
+  deployed tag) to Compose in that order, and never a secret on a command line. Backups run on host systemd timers.
+- Third-party images are pinned by tag (CI tools by digest) and `ImagePinTests` keeps each pin's copies equal: SQL
+  Server in both compose files, the WSO2 db-init Dockerfile and `SqlServerFixture.Image`; WSO2 in its two Dockerfiles
+  and `dev-certs.sh`; Caddy in `docker-compose.prod.yml` and `check-caddy.sh`. Change every copy in one PR.
+
 Security (see ADR 0032, 0033 and docs/SECURITY.md):
 - Both hosts send their headers through `UseSecurityHeaders` (ServiceDefaults) on every answer. The portal's CSP has a
   per-response nonce (`HttpContext.CspNonce()`), which `CspNonceTagHelper` puts on every `<script>`; views have no
@@ -241,6 +274,8 @@ Security (see ADR 0032, 0033 and docs/SECURITY.md):
   workflow steps, 54xx reports, 550x insights, 551x AI provider, 56xx demo reset, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
 - Time: inject `TimeProvider`; store UTC `DateTimeOffset`; dates as `DateOnly`; parse numbers with `CultureInfo.InvariantCulture`.
 - Config: options classes with `ValidateDataAnnotations().ValidateOnStart()`. Secrets only in user-secrets or environment variables.
+  On the server `.env` (created by `deploy/regreturns.sh init`) also holds the host names, `APP_DB_PASSWORD`,
+  `SEQ_ADMIN_PASSWORD`, `WSO2_ADMIN_ALLOWLIST` and the backup settings (`.env.example` lists them).
   Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web, Api and the migrator's `legacy` verb share it),
   `Oidc:ClientSecret` (Web), `Iam:Provisioner:ClientId` and `Iam:Provisioner:ClientSecret` (Web, for authenticator
   resets), `Ai:Anthropic:ApiKey` (Web, optional: without it fixed rules write insights).
@@ -358,5 +393,17 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 - WSO2 locks an account for `IamBootstrap:AccountLockMinutes` after `FailedSignInsBeforeLock` failures in a row (the
   message is the generic "login failed"). A script or test that signs in with wrong passwords on purpose must use a
   throwaway user, not a demo user.
+- Production containers drop every capability. A binary that carries a file capability (SQL Server's `sqlservr`, Seq's
+  server) will not start unless that capability is added back (`cap_add: [NET_BIND_SERVICE]`): "Operation not
+  permitted". An image that starts as root and relies on root overriding file permissions (Seq) runs as its own user.
+- Containers read bind-mounted certificates as other users (WSO2 uid 802, the apps 1654, SQL Server 10001):
+  `dev-certs.sh` keeps the folders 0755 and certificates 0644 whatever the umask, keys 0600. `COPY` copies a folder's
+  contents, not the folder, so an owned empty folder needs `--chown`/`--chmod` on the `COPY` itself (the keys folder).
+- WSO2 7 continues a sign-in at `/t/carbon.super/oauth2/authorize`, so Caddy's public paths include the
+  `/t/carbon.super/` forms; `check-caddy.sh` tests both, and `regreturns.sh smoke` follows the portal's sign-in redirect.
+- Options (the authentication handlers' too) are built once per process, and an exception while building them sticks
+  until a restart: check files at start (`ValidateOnStart`, as `Wso2CertificateValidator.CanLoad` does for
+  `Wso2:TrustedCaPath`) so a bad file stops the host instead of failing every request.
+- Docker publishes ports around ufw: only Caddy may publish one.
 - Always pass an absolute `--results-directory` to `dotnet test`: the default location differs between SDK feature
   bands (under `bin/` on 10.0.1xx, the repo root on newer bands), which broke the CI coverage gate once.
