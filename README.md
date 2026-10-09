@@ -1,6 +1,6 @@
 # RegReturns – Regulatory Returns Portal
 
-> **Status:** under active development (phase 8 of 12 complete). Live demo link, screenshots and the full
+> **Status:** under active development (phase 9 of 12 complete). Live demo link, screenshots and the full
 > documentation set arrive in later phases.
 
 RegReturns lets licensed banks submit periodic regulatory returns to a central bank, validates them against
@@ -48,6 +48,14 @@ Open https://localhost:7101, and http://localhost:8081 for logs and traces. Demo
 `DEMO_USER_PASSWORD` from `.env`; approvers and the administrator also need the TOTP code from their secret in
 `.env.generated`. More commands are in [CLAUDE.md](CLAUDE.md#commands).
 
+## Try the demo
+
+Locally the portal runs in demo mode. Open https://localhost:7101/demo for every demo account with a *Sign in as*
+button, the shared password and the authenticator keys, and https://localhost:7101/demo/guide for a guided tour that
+takes one return from draft to approval. The administrator can reset the demo from `/admin`; it also resets itself
+every night, keeping the audit chain. `scripts/demo-scenario.sh` plays the tour in a browser. See the
+[demo guide](docs/DEMO.md) and [ADR 0031](docs/adr/0031-public-demo-and-demo-reset.md).
+
 ## API for bank systems
 
 ```bash
@@ -94,13 +102,14 @@ and every generation is recorded in the audit trail with digests of what was sen
 ## Tech stack
 
 .NET 10 · ASP.NET Core MVC and Web API · EF Core 10 · SQL Server 2025 · Serilog · OpenTelemetry · Seq ·
-Dapper · ClosedXML · QuestPDF · Chart.js · Anthropic SDK · xUnit v3 · Testcontainers · GitHub Actions · WSO2 Identity Server 7.3.
+Dapper · ClosedXML · QuestPDF · Chart.js · Anthropic SDK · Cronos · QRCoder · Mermaid · xUnit v3 · Testcontainers · GitHub Actions · WSO2 Identity Server 7.3.
 Docker deployment comes in a later phase.
 
 ## Documentation
 
 - [Implementation plan](docs/IMPLEMENTATION-PLAN.md)
 - [Architecture decision records](docs/adr)
+- [Demo guide](docs/DEMO.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Data migration guide](docs/DATA-MIGRATION.md)
 - [Advisory insights](docs/AI-ASSISTANT.md)

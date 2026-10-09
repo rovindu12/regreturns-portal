@@ -31,8 +31,9 @@ as the domain and server right before the phase 11 deploy.
 | 6. Dashboards and reports: compliance grid, overdue, findings trend, key ratios, Excel/PDF export | done |
 | 7. Migration tool: legacy CSV generator, dry-run migrator, mapping, error report, reconciliation | done |
 | 8. AI assistant: insight service, Anthropic provider, rule-based fallback, reviewer panel, audited calls | done |
-| 9. Demo portal: landing page, try-the-demo, guided scenario, status page, demo reset | next |
-| 10-12 | not started |
+| 9. Demo portal: landing page, try-the-demo, guided scenario, status page, demo reset | done |
+| 10. Security hardening | next |
+| 11-12 | not started |
 
 ## Commands
 
@@ -58,6 +59,10 @@ dotnet run --project src/RegReturns.Web                               # https://
 dotnet run --project src/RegReturns.Api                               # https://localhost:7201 (/swagger, /openapi/v1.json)
 scripts/smoke-wso2.sh --browser                                       # identity smoke test (needs Web + Api running;
                                                                       # --browser needs Node with Playwright)
+scripts/demo-scenario.sh [--reset]                                    # plays the guided tour in Chromium against a
+                                                                      # running demo (changes data; --reset first)
+scripts/render-diagrams.sh                                            # docs/diagrams/*.mmd -> wwwroot/img/*.svg (needs
+                                                                      # Node; CHROMIUM=/path to skip the download)
 
 dotnet build RegReturns.slnx                                   # warnings are errors
 dotnet test --project tests/RegReturns.UnitTests               # fast, no Docker
@@ -85,6 +90,8 @@ src/RegReturns.Api             REST API v1 for bank systems: reference data, rea
 tools/RegReturns.Migrator      `migrate-db [--seed]`, `seed`, `legacy` (CSV migration, ADR 0029), `legacy-samples`.
 tools/RegReturns.IamBootstrap  `apply`, `demo-users`: idempotent WSO2 setup over its REST APIs (ADR 0017, 0020).
 scripts/smoke-wso2.sh          End-to-end identity smoke test against a running WSO2 + API (`--browser`: + portal).
+scripts/demo-scenario.sh       Browser run of the guided demo tour; `scripts/smoke/*.cjs` hold the Playwright parts.
+scripts/render-diagrams.sh     Renders the Mermaid sources in docs/diagrams to the committed SVGs.
 samples/legacy                 Generated legacy (VRRS) exports with planted defects and their mapping (see its README).
 tests/RegReturns.UnitTests     Domain, seeding, redaction and architecture tests.
 tests/RegReturns.IntegrationTests  Testcontainers SQL Server, WebApplicationFactory host tests.
@@ -180,6 +187,20 @@ docs/AI-ASSISTANT.md):
   and also when the caller cancels after the payload was sent. `ReturnInsight` is `[NotAudited]` and keeps the event's
   sequence. Insights are reused per revision and payload digest, except fallbacks other than "no API key".
 
+Public demo (see `src/RegReturns.Application/Demo`, `src/RegReturns.Infrastructure/Demo`, ADR 0031 and docs/DEMO.md):
+- Demo mode (`Demo:Enabled`) is off by default (on in Development). Only then do `/demo` and `/demo/guide` exist (404
+  otherwise), the banner show and the reset run. `/`, `/demo`, `/demo/guide` and `/status` are anonymous and GET only;
+  `PortalEndpointMetadataTests` lists them. Published credentials come only from `Demo:*` settings, never WSO2 or the DB.
+- The reset (`ResetDemo` → `IDemoReset`, `DemoResetService`) deletes `WorkloadTables` in foreign-key order and seeds
+  again with `DemoDataBuilder` for the kept institutions and users, in one transaction: applock `RegReturns.DemoReset`
+  (no wait), the cooldown from the latest `DemoReset` audit entry (button only), the `Demo.NotADemoDatabase` interlock,
+  then one `DemoReset` audit event under the chain lock. Institutions, users, API clients and audit entries are
+  `KeptTables`. A new table must go in one of the two lists (`DemoResetTablesTests`).
+- `DemoResetJob` runs `Demo:ResetSchedule` (Cronos, UTC) as the system actor; only the portal registers it (`AddDemo`),
+  other hosts get `UnavailableDemoReset`. The WSO2 side is IamBootstrap `demo-users`, run on the host.
+- Sandboxed administration (`UserAdministration`): disable or re-enable a person's access; demo, system and client
+  accounts and one's own account are refused. Log events 56xx (reset) and 3011-3012 (access changes).
+
 ## Conventions
 
 - .NET 10, C# latest, nullable on, `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, SonarAnalyzer and
@@ -195,7 +216,7 @@ docs/AI-ASSISTANT.md):
 - Logging: `[LoggerMessage]` source-generated methods with event ids grouped per area (1xxx persistence, 20xx migrator,
   21xx legacy migration, 30xx audit and identity, 31xx portal sign-in, 32xx API authentication, 33xx API idempotency
   and rate limits, 4xxx IamBootstrap, 50xx templates, 51xx returns and API deliveries, 52xx uploads and files, 53xx
-  workflow steps, 54xx reports, 550x insights, 551x AI provider, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
+  workflow steps, 54xx reports, 550x insights, 551x AI provider, 56xx demo reset, 9xxx hosting). Never log secrets, tokens, e-mails or return figures; the redaction enricher is a safety net, not a licence.
 - Time: inject `TimeProvider`; store UTC `DateTimeOffset`; dates as `DateOnly`; parse numbers with `CultureInfo.InvariantCulture`.
 - Config: options classes with `ValidateDataAnnotations().ValidateOnStart()`. Secrets only in user-secrets or environment variables.
   Secret keys: `ConnectionStrings:RegReturns`, `Audit:HmacKey` (Web, Api and the migrator's `legacy` verb share it),
@@ -291,7 +312,16 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
   Set `Ai:Anthropic:MaxRetries` to 0 there, or a 5xx is retried with back-off.
 - Anthropic SDK: `AnthropicClient.BaseUrl` is init-only, and enum-like values (model, stop reason) are read with
   `.Raw()`, not `ToString()`. The named `HttpClient` has no timeout of its own; the narrator's deadline covers retries.
-- `returns.ReturnInsights` references `iam.Users` with a restrict delete: deleting a user (the phase 9 demo reset)
-  must delete their insights first.
+- `returns.ReturnInsights` references `iam.Users` with a restrict delete: deleting a user must delete their insights
+  first (the demo reset keeps users and deletes every insight).
+- `PortalHost` sets `Demo:ResetSchedule` empty so no host test ever runs the nightly reset; `DemoResetTests` call the
+  reset directly. In .NET 10 `BackgroundService.StartAsync` runs `ExecuteAsync` on a background thread, so job tests
+  wait for log 5603 and then advance the `FakeTimeProvider`; never await `ExecuteTask` (VSTHRD003).
+- The seed is anchored on the last completed month and must build for any reset date: a story change that trips a
+  rule on some calendar month fails `DemoDataBuilderTests.Builds_for_any_reset_date` (ten years of anchors). Add a
+  justification to `DemoScenario` or move the figure; never widen a rule for the seed.
+- WSO2 honours `login_hint`: the sign-in page then shows the account and keeps the user name in a hidden field, so
+  browser scripts wait for the password field. WSO2's TOTP page enables Continue only on key events: type the digits
+  into `pincode-1..6` with `press`, not `fill`.
 - Always pass an absolute `--results-directory` to `dotnet test`: the default location differs between SDK feature
   bands (under `bin/` on 10.0.1xx, the repo root on newer bands), which broke the CI coverage gate once.
