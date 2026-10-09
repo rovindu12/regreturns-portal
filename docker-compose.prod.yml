@@ -1,0 +1,330 @@
+# RegReturns production stack (ADR 0034, docs/DEPLOYMENT.md): Caddy in front of the portal, the API, WSO2 Identity
+# Server and Seq, with SQL Server Express behind them on an internal network. Sized for an 8 GB server (plan §9).
+#
+# Run it through deploy/regreturns.sh, which passes the env files in order (.env, generated/.env.generated from
+# IamBootstrap, .env.release with the image tag) and runs the one-off jobs in the right order:
+#
+#   deploy/regreturns.sh deploy <git sha>     pull images, migrate, set up WSO2, start everything, smoke test
+#
+# Images come from GHCR, tagged with the commit they were built from; nothing is built on the server. Every service
+# runs without Linux capabilities (Caddy may bind 80 and 443) and cannot gain privileges; the app containers also have
+# a read-only file system. Only Caddy publishes ports.
+name: regreturns-prod
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-hardening: &hardening
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+  logging: *logging
+
+# Settings the portal and the API share. Secrets come from .env (scripts/init-env.sh) and generated/.env.generated
+# (IamBootstrap).
+x-app-environment: &app-environment
+  ASPNETCORE_ENVIRONMENT: Production
+  # The application login: member of regreturns_runtime only (deploy/sqlserver/init-app-db.sh). TLS pinned to SQL
+  # Server's certificate (ADR 0033).
+  ConnectionStrings__RegReturns: "Server=sqlserver,1433;Database=RegReturns;User Id=${APP_DB_USERNAME:-regreturns_app};Password=${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env};Encrypt=Strict;ServerCertificate=/certs/mssql.crt"
+  Audit__HmacKey: ${AUDIT_HMAC_KEY:?Set AUDIT_HMAC_KEY in .env}
+  # Public issuer; server-to-server calls go to WSO2 directly, trusting only the RegReturns CA.
+  Wso2__Authority: https://${IAM_HOST:?Set IAM_HOST in .env}/
+  Wso2__BackchannelAuthority: https://wso2:9443/
+  Wso2__TrustedCaPath: /certs/regreturns-ca.crt
+  # Forwarded headers are believed only from the edge network, where Caddy is the only client.
+  ReverseProxy__KnownNetworks__0: ${EDGE_SUBNET:-172.30.0.0/24}
+  Observability__OtlpEndpoint: http://seq:5341/ingest/otlp/
+
+x-app-certificates: &app-certificates
+  - ./.certs/regreturns-dev-ca.crt:/certs/regreturns-ca.crt:ro
+  - ./.certs/sqlserver/mssql.crt:/certs/mssql.crt:ro
+
+services:
+  caddy:
+    # Keep in step with CADDY_IMAGE in scripts/check-caddy.sh.
+    image: caddy:2.10.2-alpine
+    <<: *hardening
+    cap_add: [NET_BIND_SERVICE]
+    read_only: true
+    environment:
+      PORTAL_HOST: ${PORTAL_HOST:?Set PORTAL_HOST in .env}
+      API_HOST: ${API_HOST:?Set API_HOST in .env}
+      IAM_HOST: ${IAM_HOST:?Set IAM_HOST in .env}
+      SEQ_HOST: ${SEQ_HOST:?Set SEQ_HOST in .env}
+      WSO2_ADMIN_ALLOWLIST: ${WSO2_ADMIN_ALLOWLIST:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./.certs/regreturns-dev-ca.crt:/etc/caddy/certs/regreturns-dev-ca.crt:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    tmpfs: [/tmp]
+    networks: [edge]
+    mem_limit: 128m
+    depends_on: [web, api, wso2, seq]
+
+  web:
+    image: ${REGISTRY:-ghcr.io/rovindu12}/regreturns-web:${IMAGE_TAG:?Set IMAGE_TAG (deploy/regreturns.sh writes .env.release)}
+    <<: *hardening
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      <<: *app-environment
+      Oidc__ClientId: ${Oidc__ClientId:-regreturns-portal}
+      Oidc__ClientSecret: ${Oidc__ClientSecret:-}
+      Iam__Provisioner__ClientId: ${PROVISIONER_CLIENT_ID:-}
+      Iam__Provisioner__ClientSecret: ${PROVISIONER_CLIENT_SECRET:-}
+      Ai__Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}
+      # The status page also shows the API, checked over the internal network.
+      Status__ApiHealthUrl: http://api:8080/health/ready
+      # The public demo (ADR 0031): published credentials, the nightly reset at 03:00 UTC.
+      Demo__Enabled: ${DEMO_ENABLED:-true}
+      Demo__ApiBaseUrl: https://${API_HOST}/
+      Demo__UserPassword: ${DEMO_USER_PASSWORD:-}
+      Demo__ApiClientId: ${DEMO_API_CLIENT_ID:-}
+      Demo__ApiClientSecret: ${DEMO_API_CLIENT_SECRET:-}
+      # One line per demo account that signs in with a second factor (IamBootstrap writes TOTP_SECRET_<USER>).
+      Demo__TotpSecrets__ADMIN_DEMO: ${TOTP_SECRET_ADMIN_DEMO:-}
+      Demo__TotpSecrets__APPROVER: ${TOTP_SECRET_APPROVER:-}
+      Demo__TotpSecrets__APPROVER_MFA: ${TOTP_SECRET_APPROVER_MFA:-}
+    volumes:
+      # Data-protection keys survive restarts and deploys, so nobody is signed out by a release.
+      - web-keys:/var/lib/regreturns/keys
+      - ./.certs/regreturns-dev-ca.crt:/certs/regreturns-ca.crt:ro
+      - ./.certs/sqlserver/mssql.crt:/certs/mssql.crt:ro
+    networks: [edge, backend]
+    mem_limit: 512m
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      app-db-init:
+        condition: service_completed_successfully
+
+  api:
+    image: ${REGISTRY:-ghcr.io/rovindu12}/regreturns-api:${IMAGE_TAG:?Set IMAGE_TAG}
+    <<: *hardening
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      <<: *app-environment
+    volumes: *app-certificates
+    networks: [edge, backend]
+    mem_limit: 512m
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      app-db-init:
+        condition: service_completed_successfully
+
+  wso2:
+    # deploy/wso2/Dockerfile (WSO2 IS 7.3 with the SQL Server driver), built and pushed by the release workflow.
+    image: ${REGISTRY:-ghcr.io/rovindu12}/regreturns-wso2:${IMAGE_TAG:?Set IMAGE_TAG}
+    <<: *hardening
+    environment:
+      WSO2_HOSTNAME: ${IAM_HOST}
+      # Behind Caddy: the issuer and every URL WSO2 hands out are https://<IAM_HOST>, port 443.
+      WSO2_PUBLIC_URL: https://${IAM_HOST}
+      WSO2_PUBLIC_PORT: "443"
+      WSO2_ADMIN_USERNAME: ${WSO2_ADMIN_USERNAME:?Set WSO2_ADMIN_USERNAME in .env}
+      WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD:?Set WSO2_ADMIN_PASSWORD in .env}
+      WSO2_DB_HOST: sqlserver
+      WSO2_DB_USERNAME: ${WSO2_DB_USERNAME:?Set WSO2_DB_USERNAME in .env}
+      WSO2_DB_PASSWORD: ${WSO2_DB_PASSWORD:?Set WSO2_DB_PASSWORD in .env}
+      WSO2_KEYSTORE_PASSWORD: ${WSO2_KEYSTORE_PASSWORD:?Set WSO2_KEYSTORE_PASSWORD in .env}
+      WSO2_ENCRYPTION_KEY: ${WSO2_ENCRYPTION_KEY:?Set WSO2_ENCRYPTION_KEY in .env}
+      WSO2_AUTH_ENDPOINT_PASSWORD: ${WSO2_AUTH_ENDPOINT_PASSWORD:?Set WSO2_AUTH_ENDPOINT_PASSWORD in .env}
+      WSO2_AUTH_ENDPOINT_PASSWORD_SHA256: ${WSO2_AUTH_ENDPOINT_PASSWORD_SHA256:?Set WSO2_AUTH_ENDPOINT_PASSWORD_SHA256 in .env}
+      JAVA_OPTS: "-Xms512m -Xmx1536m"
+    volumes:
+      - ./.certs/wso2:/home/wso2carbon/wso2-config-volume/repository/resources/security:ro
+      - ./.certs/sqlserver/mssql.crt:/home/wso2carbon/regreturns-sql/mssql.crt:ro
+    networks: [edge, backend]
+    mem_limit: 2560m
+    depends_on:
+      wso2-db-init:
+        condition: service_completed_successfully
+
+  seq:
+    # Logs and traces. The apps send OTLP to seq:5341 on the internal network; Caddy publishes the UI to the admin
+    # allowlist only. Sign in as admin with SEQ_ADMIN_PASSWORD (set on the first start only).
+    image: datalust/seq:2026.1
+    <<: *hardening
+    # The image starts as root and relies on root overriding file permissions, which dropping every capability takes
+    # away. Run it as the image's own user, which owns /data; the server binary carries the bind capability.
+    user: seq
+    cap_add: [NET_BIND_SERVICE]
+    environment:
+      ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_ADMINPASSWORD: ${SEQ_ADMIN_PASSWORD:?Set SEQ_ADMIN_PASSWORD in .env}
+      # Seq sizes its cache from the machine's memory, not the container's limit: keep it small.
+      SEQ_CACHE_SYSTEMRAMTARGET: "0.03"
+    volumes:
+      - seq-data:/data
+    networks: [edge, backend]
+    mem_limit: 512m
+
+  sqlserver-tls:
+    # One-off job (ADR 0033): installs SQL Server's certificate and key and the mssql.conf that forces TLS. It runs as
+    # root to set the owner, so it keeps the capabilities that needs and nothing else.
+    image: &sqlserver-image mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-24.04
+    user: root
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER]
+    security_opt: ["no-new-privileges:true"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        set -e;
+        install -d -o 10001 -g 10001 -m 0750 /var/opt/mssql/tls;
+        install -o 10001 -g 10001 -m 0444 /src/certs/mssql.crt /var/opt/mssql/tls/mssql.crt;
+        install -o 10001 -g 10001 -m 0400 /src/certs/mssql.key /var/opt/mssql/tls/mssql.key;
+        install -o 10001 -g 10001 -m 0644 /src/mssql.conf /var/opt/mssql/mssql.conf;
+        echo "SQL Server certificate installed"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+      - ./.certs/sqlserver:/src/certs:ro
+      - ./deploy/sqlserver/mssql.conf:/src/mssql.conf:ro
+    network_mode: none
+    restart: "no"
+    logging: *logging
+
+  sqlserver:
+    # Express: free for production, 10 GB per database, about 1.4 GB of buffer pool. deploy/regreturns.sh backup
+    # writes verified backups inside the volume and streams them out to ./backups on the host (no bind mount, so the
+    # host folder can stay private to the deployment user).
+    image: *sqlserver-image
+    <<: *hardening
+    # sqlservr carries the file capability cap_net_bind_service, and Linux refuses to run a binary whose file
+    # capabilities are outside the bounding set. It listens on 1433 and gains nothing (no-new-privileges).
+    cap_add: [NET_BIND_SERVICE]
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Express
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env}
+      MSSQL_MEMORY_LIMIT_MB: "2048"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "SQLCMDPASSWORD=\"$${MSSQL_SA_PASSWORD}\" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -Ns -J /var/opt/mssql/tls/mssql.crt -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks: [backend]
+    mem_limit: 2560m
+    depends_on:
+      sqlserver-tls:
+        condition: service_completed_successfully
+
+  wso2-db-init:
+    # One-off job: WSO2's databases, its SQL login and schema (deploy/wso2/db-init).
+    image: ${REGISTRY:-ghcr.io/rovindu12}/regreturns-wso2-db-init:${IMAGE_TAG:?Set IMAGE_TAG}
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      WSO2_DB_HOST: sqlserver
+      WSO2_DB_USERNAME: ${WSO2_DB_USERNAME}
+      WSO2_DB_PASSWORD: ${WSO2_DB_PASSWORD}
+    volumes:
+      - ./.certs/sqlserver/mssql.crt:/tls/mssql.crt:ro
+    networks: [backend]
+    restart: "no"
+    logging: *logging
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  app-db-init:
+    # One-off job: the RegReturns database and the apps' least-privilege login (deploy/sqlserver/init-app-db.sh).
+    image: *sqlserver-image
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    entrypoint: ["/bin/bash", "/init/init-app-db.sh"]
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      APP_DB_USERNAME: ${APP_DB_USERNAME:-regreturns_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - ./deploy/sqlserver/init-app-db.sh:/init/init-app-db.sh:ro
+      - ./.certs/sqlserver/mssql.crt:/tls/mssql.crt:ro
+    networks: [backend]
+    restart: "no"
+    logging: *logging
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  # Tools, run on demand (`docker compose run --rm`), never by `up`.
+  migrator:
+    image: ${REGISTRY:-ghcr.io/rovindu12}/regreturns-migrator:${IMAGE_TAG:?Set IMAGE_TAG}
+    profiles: [tools]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      # Schema changes need the administrator login; the apps never get it.
+      ConnectionStrings__RegReturns: "Server=sqlserver,1433;Database=RegReturns;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=Strict;ServerCertificate=/certs/mssql.crt"
+      Audit__HmacKey: ${AUDIT_HMAC_KEY}
+      Observability__ConsoleFormat: text
+    volumes: *app-certificates
+    networks: [backend]
+    restart: "no"
+    logging: *logging
+
+  iam-bootstrap:
+    image: ${REGISTRY:-ghcr.io/rovindu12}/regreturns-iam-bootstrap:${IMAGE_TAG:?Set IMAGE_TAG}
+    profiles: [tools]
+    # Writes generated/.env.generated (client secrets, demo TOTP secrets), so it runs as the deployment folder's owner
+    # (deploy/regreturns.sh sets DEPLOY_UID and DEPLOY_GID).
+    user: ${DEPLOY_UID:-1000}:${DEPLOY_GID:-1000}
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      WSO2_ADMIN_USERNAME: ${WSO2_ADMIN_USERNAME}
+      WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD}
+      ConnectionStrings__RegReturns: "Server=sqlserver,1433;Database=RegReturns;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=Strict;ServerCertificate=/certs/mssql.crt"
+      Wso2__Authority: https://${IAM_HOST}/
+      Wso2__BackchannelAuthority: https://wso2:9443/
+      Wso2__TrustedCaPath: /certs/regreturns-ca.crt
+      IamBootstrap__PortalBaseUrl: https://${PORTAL_HOST}/
+      IamBootstrap__ApiBaseUrl: https://${API_HOST}/
+      # WSO2 tells the portal about ended sessions over the internal network, not through the edge.
+      IamBootstrap__BackchannelLogoutUrl: http://web:8080/signout-backchannel
+      IamBootstrap__EnvFilePath: /generated/.env.generated
+      Observability__ConsoleFormat: text
+    volumes:
+      - ./.certs/regreturns-dev-ca.crt:/certs/regreturns-ca.crt:ro
+      - ./.certs/sqlserver/mssql.crt:/certs/mssql.crt:ro
+      - ./generated:/generated
+    networks: [backend]
+    restart: "no"
+    logging: *logging
+
+networks:
+  # Caddy and the services it proxies. Fixed range: the apps trust forwarded headers from it alone.
+  edge:
+    ipam:
+      config:
+        - subnet: ${EDGE_SUBNET:-172.30.0.0/24}
+  # Databases and server-to-server traffic; no route to the internet.
+  backend:
+    internal: true
+
+volumes:
+  sqlserver-data:
+  web-keys:
+  caddy-data:
+  caddy-config:
+  seq-data:

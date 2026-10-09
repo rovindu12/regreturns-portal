@@ -151,6 +151,42 @@ public sealed class Wso2CertificateValidatorTests(TestCertificateAuthority pki) 
         Should.Throw<FileNotFoundException>(() => Wso2CertificateValidator.FromPemFile(path)).FileName.ShouldBe(path);
     }
 
+    [Fact]
+    public void CanLoad_accepts_a_file_with_a_certificate()
+    {
+        var path = WritePem(pki.Root);
+        try
+        {
+            Wso2CertificateValidator.CanLoad(path).ShouldBeTrue();
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void CanLoad_refuses_a_missing_file()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.pem");
+
+        Wso2CertificateValidator.CanLoad(path).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void CanLoad_refuses_a_file_without_a_certificate()
+    {
+        var path = WritePem();
+        try
+        {
+            Wso2CertificateValidator.CanLoad(path).ShouldBeFalse();
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static string WritePem(params X509Certificate2[] certificates)
     {
         var path = Path.Combine(Path.GetTempPath(), $"regreturns-ca-{Guid.NewGuid():N}.pem");

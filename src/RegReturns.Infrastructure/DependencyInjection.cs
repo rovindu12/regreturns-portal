@@ -225,8 +225,10 @@ public static class DependencyInjection
                 o => o.Authority is { IsAbsoluteUri: true, Scheme: "https" },
                 $"{Wso2Options.SectionName}:{nameof(Wso2Options.Authority)} must be an absolute https URL.")
             .Validate(
-                o => string.IsNullOrWhiteSpace(o.TrustedCaPath) || File.Exists(o.TrustedCaPath),
-                $"{Wso2Options.SectionName}:{nameof(Wso2Options.TrustedCaPath)} points to a file that does not exist.")
+                // Read at start, so a missing or unreadable file (a file mode on the server) stops the host at once
+                // instead of failing every sign-in and health check behind a cached options error.
+                o => string.IsNullOrWhiteSpace(o.TrustedCaPath) || Wso2CertificateValidator.CanLoad(o.TrustedCaPath),
+                $"{Wso2Options.SectionName}:{nameof(Wso2Options.TrustedCaPath)} must name a readable PEM file with at least one certificate.")
             .ValidateOnStart();
 
         services.AddHttpClient(Wso2Backchannel.HttpClientName)

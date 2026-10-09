@@ -179,6 +179,34 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - CodeQL analysis of C# and the workflows on every push, pull request and weekly.
 - `scripts/demo-scenario.sh` fails on any Content Security Policy violation reported by the browser.
 
+- Phase 11: containers, a release pipeline and one-server hosting (ADR 0034, `docs/DEPLOYMENT.md`,
+  `docs/DR-RUNBOOK.md`). One multi-stage `Dockerfile` builds the portal, the API, the migrator and IamBootstrap on
+  chiselled, non-root ASP.NET Core images, stamped with the commit; WSO2 and its database job are images too.
+- `--health-probe`: the apps check their own readiness for Docker's `HEALTHCHECK`, since the images have no shell.
+- `docker-compose.prod.yml`: Caddy is the only service with published ports; an internal network for SQL Server; no
+  capabilities, no privilege gain, read-only root file systems and memory caps; Seq on the server; the portal's
+  data-protection keys on a volume; WSO2 behind the proxy with its public URL.
+- Forwarded headers trusted only from the edge network (`ReverseProxy:KnownNetworks`), so the audit trail and rate
+  limits see the client's address and the apps see HTTPS.
+- A least-privilege database login for the portal and the API (`regreturns_runtime` role: no schema changes, and
+  `DENY UPDATE, DELETE` on the audit table), created by the `app-db-init` job.
+- Migrator `verify-audit`: walks the audit hash chain and exits 0 intact, 1 failed or 2 broken (log events 2003-2005).
+- The public status page also shows the REST API (`Status:ApiHealthUrl`), without making it part of the portal's
+  readiness.
+- `deploy/regreturns.sh`: `init`, `deploy <sha>`, `ci-deploy`, `backup`, `restore <stamp>`, `verify-audit`,
+  `demo-users`, `smoke`, `status`, `sql`, `compose`. Backups use page checksums and `RESTORE VERIFYONLY`, keep 14 days
+  with a `SHA256SUMS` manifest and can go off the server encrypted with `age` through rclone. A restore checks the
+  checksums, re-maps logins, applies newer migrations and starts nothing unless the audit chain verifies.
+- `deploy/server-setup.sh`: Docker from its repository with the key fingerprint checked, unattended upgrades, swap,
+  ufw, key-only SSH, the `regreturns` user and systemd timers for the nightly backup and demo-user reset.
+- Release workflow: builds the six images, writes CycloneDX SBOMs, fails on fixable high or critical vulnerabilities
+  (Trivy), deploys the production stack on the runner, runs the browser identity smoke test, a backup, change,
+  restore and smoke again, pushes the images to GHCR on `main` and deploys over an SSH key restricted to one command
+  once a server is configured.
+- CI also scans the whole history for secrets (gitleaks) and checks every shell script (ShellCheck).
+- Dependabot proposes updates for the Dockerfiles' and compose files' images; `ImagePinTests` keeps the copies of
+  each pin in step.
+
 ### Changed
 
 - SQL Server 2025 replaces 2022 for local Docker Compose and the integration tests (ADR 0013).
@@ -193,3 +221,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
   `TrustServerCertificate=True` (ADR 0033 supersedes that part of ADR 0014); `sqlcmd` needs `-Ns -J <certificate>`.
 - Log redaction also masks OAuth parameters (`code`, `id_token_hint`, `logout_token`, `client_assertion`), keys and
   credentials; request logs state explicitly that they carry no query string.
+- SQL Server is pinned to a cumulative update (`2025-CU9-ubuntu-24.04`) everywhere instead of `2025-latest`.
+- `Wso2:TrustedCaPath` must name a readable PEM file with a certificate; the hosts refuse to start otherwise.
+- `scripts/dev-certs.sh` leaves the certificate folders and the CA certificate readable for the containers whatever
+  the umask; `scripts/smoke-wso2.sh` can trust the system store (`WSO2_CA=system`) and read the generated settings
+  from another file (`GENERATED_FILE`); `scripts/init-env.sh` also creates the app database and Seq passwords.

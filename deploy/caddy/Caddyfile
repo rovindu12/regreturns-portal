@@ -100,6 +100,8 @@
 #   /authenticationendpoint/*  the login and TOTP pages with their scripts and styles
 #   /commonauth*               the authentication framework's form target
 #   /logincontext*             the login page's session check
+# and the same under /t/carbon.super/, the tenant-qualified form WSO2 7 also uses (after the login form it continues
+# at /t/carbon.super/oauth2/authorize). The super tenant is the only one; other tenants' paths stay closed.
 # Everything else is for administrators only: /console, /carbon, /api/server, /api/users, /scim2, /myaccount,
 # /accounts, and also /accountrecoveryendpoint, because self-service recovery is locked down (ADR 0020; make it public
 # only if that lockdown is turned off). Anything not public is refused with 403, known or not: the rule lists what is
@@ -119,6 +121,8 @@
 	# Caddy decodes the path and resolves "." and ".." before matching, so %2e%2e and similar tricks end in the 403.
 	@signIn {
 		path /oauth2/* /oidc/* /authenticationendpoint/* /commonauth* /logincontext*
+		path /t/carbon.super/oauth2/* /t/carbon.super/oidc/* /t/carbon.super/authenticationendpoint/*
+		path /t/carbon.super/commonauth* /t/carbon.super/logincontext*
 		not path_regexp ;
 	}
 	handle @signIn {

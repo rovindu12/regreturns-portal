@@ -9,6 +9,7 @@ using RegReturns.Application.Migration;
 using RegReturns.Domain.Migration;
 using RegReturns.Infrastructure;
 using RegReturns.Infrastructure.Legacy;
+using RegReturns.Migrator.Auditing;
 using RegReturns.Migrator.Legacy;
 using RegReturns.ServiceDefaults;
 
@@ -94,7 +95,7 @@ internal static partial class LegacyCommands
         builder.AddObservability("regreturns-migrator");
         builder.Services.AddInfrastructure(builder.Configuration);
         builder.Services.AddAuditTrail(builder.Configuration);
-        builder.Services.AddSingleton<IAuditContext, MigratorAuditContext>();
+        builder.Services.AddSingleton<IAuditContext>(MigratorAuditContext.LegacyMigration);
         builder.Services.AddLegacyMigration();
 
         using var host = builder.Build();

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 
+using MigratorTool::RegReturns.Migrator.Auditing;
 using MigratorTool::RegReturns.Migrator.Commands;
 using MigratorTool::RegReturns.Migrator.Legacy;
 

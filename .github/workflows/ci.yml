@@ -99,3 +99,39 @@ jobs:
       # Validates deploy/caddy/Caddyfile and runs it against stub upstreams: allowlist, sign-in paths, HSTS, redaction.
       - name: Check the Caddyfile
         run: scripts/check-caddy.sh
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Every commit, not only the change: a secret removed later is still in the history. Rules: .gitleaks.toml.
+      - name: Scan the history
+        env:
+          GITLEAKS_IMAGE: zricethezav/gitleaks:v8.28.0@sha256:cdbb7c955abce02001a9f6c9f602fb195b7fadc1e812065883f695d1eeaba854
+        run: >
+          docker run --rm --user "$(id -u):$(id -g)" -v "${PWD}:/repo:ro" "${GITLEAKS_IMAGE}"
+          git --config /repo/.gitleaks.toml --redact --no-banner --exit-code 1 /repo
+
+  scripts:
+    name: Shell scripts (ShellCheck)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: ShellCheck
+        env:
+          SHELLCHECK_IMAGE: koalaman/shellcheck:v0.10.0@sha256:2097951f02e735b613f4a34de20c40f937a6c8f18ecb170612c88c34517221fb
+        run: >
+          docker run --rm -v "${PWD}:/mnt:ro" -w /mnt "${SHELLCHECK_IMAGE}" --severity=warning --external-sources
+          scripts/*.sh deploy/*.sh deploy/sqlserver/*.sh deploy/wso2/db-init/*.sh

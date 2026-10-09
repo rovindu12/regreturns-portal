@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 
+using MigratorTool::RegReturns.Migrator.Auditing;
 using MigratorTool::RegReturns.Migrator.Commands;
 using MigratorTool::RegReturns.Migrator.Legacy;
 
@@ -81,7 +82,7 @@ internal static class LegacyMigrationHarness
             .AddSingleton(clock)
             .AddInfrastructure(configuration)
             .AddAuditTrail(configuration)
-            .AddSingleton<IAuditContext, MigratorAuditContext>()
+            .AddSingleton<IAuditContext>(MigratorAuditContext.LegacyMigration)
             .AddLegacyMigration();
         await using var provider = services.BuildServiceProvider(validateScopes: true);
         await using var scope = provider.CreateAsyncScope();

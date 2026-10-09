@@ -29,3 +29,15 @@ updates:
       interval: weekly
     commit-message:
       prefix: "build(deps)"
+
+  # Base images in the Dockerfiles. The .NET images move together; keep the SQL Server, Caddy and WSO2 pins in step
+  # with the compose files, the test fixture and the scripts (ImagePinTests fails when they drift).
+  - package-ecosystem: docker
+    directories: ["/", "/deploy/wso2", "/deploy/wso2/db-init"]
+    schedule:
+      interval: weekly
+    groups:
+      dotnet-images:
+        patterns: ["*dotnet*"]
+    commit-message:
+      prefix: "build(deps)"

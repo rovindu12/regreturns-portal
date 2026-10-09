@@ -26,6 +26,8 @@ declare -A secrets=(
   [WSO2_AUTH_ENDPOINT_PASSWORD_SHA256]="$(printf '%s' "${endpoint_password}" | sha256sum | cut -d' ' -f1)"
   [DEMO_USER_PASSWORD]="$(password)"
   [AUDIT_HMAC_KEY]="$(openssl rand -base64 32)"
+  [APP_DB_PASSWORD]="$(password)"
+  [SEQ_ADMIN_PASSWORD]="$(password)"
 )
 
 # Value of KEY in an env file (first match), without sourcing it.

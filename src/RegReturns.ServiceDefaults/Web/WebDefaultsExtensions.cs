@@ -4,9 +4,12 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 using Serilog;
 using Serilog.Events;
@@ -31,7 +34,10 @@ public static class WebDefaultsExtensions
     /// <summary>Readiness endpoint path.</summary>
     public const string ReadyPath = "/health/ready";
 
-    /// <summary>Adds observability, problem details with trace ids, the global exception handler and a liveness check.</summary>
+    /// <summary>
+    /// Adds observability, problem details with trace ids, the global exception handler, a liveness check and the
+    /// reverse proxy settings (<see cref="ReverseProxyOptions"/>).
+    /// </summary>
     /// <param name="builder">The web application builder.</param>
     /// <param name="serviceName">The service name for logs and traces.</param>
     /// <returns>The same builder.</returns>
@@ -50,15 +56,27 @@ public static class WebDefaultsExtensions
         });
         builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
         builder.Services.AddHealthChecks().AddCheck("self", () => HealthCheckResult.Healthy(), tags: [LiveTag]);
+        AddReverseProxy(builder.Services, builder.Configuration.GetSection(ReverseProxyOptions.SectionName));
         return builder;
     }
 
-    /// <summary>Adds the trace id response header and one summary log line per request.</summary>
+    /// <summary>
+    /// Applies the proxy's forwarded headers (behind the proxy only), then adds the trace id response header and one
+    /// summary log line per request.
+    /// </summary>
     /// <param name="app">The application.</param>
     /// <returns>The same application.</returns>
     public static WebApplication UseServiceDefaults(this WebApplication app)
     {
         ArgumentNullException.ThrowIfNull(app);
+
+        // First, so the scheme and client address are the real ones for logs, HSTS, cookies, redirect URLs and the
+        // per-address rate limit.
+        if (app.Services.GetRequiredService<IOptions<ReverseProxyOptions>>().Value.BehindProxy)
+        {
+            app.UseForwardedHeaders();
+        }
+
         app.Use((context, next) =>
         {
             context.Response.OnStarting(() =>
@@ -85,6 +103,24 @@ public static class WebDefaultsExtensions
         return app;
     }
 
+    /// <summary>
+    /// Redirects plain HTTP to HTTPS when clients reach the app directly. Behind the reverse proxy the edge does that,
+    /// and the app's plain HTTP port serves only the proxy, the container's health probe and server-to-server calls on
+    /// the internal network (WSO2's back-channel logout), which must not be redirected.
+    /// </summary>
+    /// <param name="app">The application.</param>
+    /// <returns>The same application.</returns>
+    public static WebApplication UseHttpsRedirectionUnlessBehindProxy(this WebApplication app)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        if (!app.Services.GetRequiredService<IOptions<ReverseProxyOptions>>().Value.BehindProxy)
+        {
+            app.UseHttpsRedirection();
+        }
+
+        return app;
+    }
+
     /// <summary>Maps <c>/health/live</c> and <c>/health/ready</c>. Both are anonymous and return no exception details.</summary>
     /// <param name="app">The application.</param>
     /// <returns>The same application.</returns>
@@ -102,6 +138,30 @@ public static class WebDefaultsExtensions
             ResponseWriter = HealthResponseWriter.WriteAsync,
         }).AllowAnonymous();
         return app;
+    }
+
+    private static void AddReverseProxy(IServiceCollection services, IConfiguration section)
+    {
+        services.AddOptions<ReverseProxyOptions>()
+            .Bind(section)
+            .Validate(o => o.AreValid(), $"{ReverseProxyOptions.SectionName}:{nameof(ReverseProxyOptions.KnownNetworks)} must hold networks in CIDR notation, such as 172.30.0.0/24.")
+            .ValidateOnStart();
+
+        // Only the client's scheme and address: the proxy passes the original Host header through unchanged, so
+        // X-Forwarded-Host is never needed and never believed.
+        services.AddOptions<ForwardedHeadersOptions>().Configure<IOptions<ReverseProxyOptions>>((options, proxy) =>
+        {
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            options.KnownProxies.Clear();
+            options.KnownIPNetworks.Clear();
+            if (proxy.Value.AreValid())
+            {
+                foreach (var network in proxy.Value.Networks())
+                {
+                    options.KnownIPNetworks.Add(network);
+                }
+            }
+        });
     }
 
     private static LogEventLevel RequestLogLevel(HttpContext context, double elapsedMs, Exception? exception)

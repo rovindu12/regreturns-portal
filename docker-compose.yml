@@ -1,13 +1,13 @@
 # Local development dependencies. Run the apps with `dotnet run` against these services.
 # Before the first `docker compose up`: scripts/init-env.sh (secrets) and scripts/dev-certs.sh (certificates).
-# Phase 11 adds the app containers and Caddy.
+# The whole stack in containers, behind Caddy, is docker-compose.prod.yml (docs/DEPLOYMENT.md).
 name: regreturns
 
 services:
   sqlserver-tls:
     # One-off job (ADR 0033): installs SQL Server's certificate and key from scripts/dev-certs.sh into the data volume,
     # owned by the mssql user (10001) with the key readable by it alone, and the mssql.conf that forces TLS with them.
-    image: mcr.microsoft.com/mssql/server:2025-latest
+    image: mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-24.04
     user: root
     entrypoint: ["/bin/sh", "-c"]
     command:
@@ -27,7 +27,7 @@ services:
 
   sqlserver:
     # Keep in step with SqlServerFixture.Image in the integration tests.
-    image: mcr.microsoft.com/mssql/server:2025-latest
+    image: mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-24.04
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: Developer
@@ -69,6 +69,9 @@ services:
     build: deploy/wso2
     environment:
       WSO2_HOSTNAME: ${WSO2_HOSTNAME:-localhost}
+      # Reached directly on 9443 here; docker-compose.prod.yml puts Caddy in front on 443 (ADR 0034).
+      WSO2_PUBLIC_URL: https://${WSO2_HOSTNAME:-localhost}:9443
+      WSO2_PUBLIC_PORT: "9443"
       WSO2_ADMIN_USERNAME: ${WSO2_ADMIN_USERNAME:?Set WSO2_ADMIN_USERNAME in .env}
       WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD:?Set WSO2_ADMIN_PASSWORD in .env}
       WSO2_DB_HOST: sqlserver

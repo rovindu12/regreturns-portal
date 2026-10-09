@@ -1,0 +1,206 @@
+name: Release
+
+# Builds the six images, writes their SBOMs, scans them, runs the production stack end to end on the runner (deploy,
+# browser smoke test, backup and restore), and on main pushes the tested images to GHCR and deploys them (ADR 0034).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Pinned by digest: Trivy 0.69.3 (published before the March 2026 compromise of 0.69.4) and gitleaks 8.28.0.
+  TRIVY_IMAGE: aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
+  PLAYWRIGHT_VERSION: 1.56.1
+
+jobs:
+  stack:
+    name: Images, scans and end-to-end stack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      # Used only by the push step, which runs on main alone.
+      packages: write
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Make room for the images
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/local/.ghcup /usr/share/swift /usr/local/share/boost
+          df -h /
+
+      - name: Name the images
+        run: |
+          echo "REGISTRY=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "${GITHUB_ENV}"
+          echo "IMAGE_TAG=${GITHUB_SHA}" >> "${GITHUB_ENV}"
+
+      - name: Build the images
+        run: |
+          created="$(git log -1 --format=%cI)"
+          labels=(--label "org.opencontainers.image.created=${created}" --label "org.opencontainers.image.revision=${GITHUB_SHA}")
+          for target in web api migrator iam-bootstrap; do
+            docker build --target "${target}" --build-arg SOURCE_REVISION="${GITHUB_SHA}" "${labels[@]}" \
+              -t "${REGISTRY}/regreturns-${target}:${IMAGE_TAG}" .
+          done
+          docker build "${labels[@]}" -t "${REGISTRY}/regreturns-wso2:${IMAGE_TAG}" deploy/wso2
+          docker build "${labels[@]}" -t "${REGISTRY}/regreturns-wso2-db-init:${IMAGE_TAG}" deploy/wso2/db-init
+          docker image ls --filter "reference=${REGISTRY}/*"
+
+      - name: SBOMs and vulnerability scan (Trivy)
+        run: |
+          mkdir -p sbom
+          trivy() {
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${PWD}/sbom:/sbom" \
+              -v trivy-cache:/root/.cache/trivy "${TRIVY_IMAGE}" "$@"
+          }
+          for image in web api migrator iam-bootstrap wso2 wso2-db-init; do
+            trivy image --quiet --format cyclonedx --output "/sbom/regreturns-${image}.cdx.json" \
+              "${REGISTRY}/regreturns-${image}:${IMAGE_TAG}"
+          done
+          # Our images fail the build on any fixable high or critical vulnerability, in the OS or in NuGet packages.
+          for image in web api migrator iam-bootstrap; do
+            echo "::group::regreturns-${image}"
+            trivy image --quiet --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 \
+              "${REGISTRY}/regreturns-${image}:${IMAGE_TAG}"
+            echo "::endgroup::"
+          done
+          # WSO2's images follow WSO2's releases and advisories: their operating system is reported, not gated.
+          for image in wso2 wso2-db-init; do
+            echo "::group::regreturns-${image} (report only)"
+            trivy image --quiet --scanners vuln --pkg-types os --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 \
+              "${REGISTRY}/regreturns-${image}:${IMAGE_TAG}"
+            echo "::endgroup::"
+          done
+
+      - name: Upload the SBOMs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom/*.cdx.json
+
+      - name: Prepare the stack (*.localhost names, Caddy's internal CA)
+        run: |
+          deploy/regreturns.sh init
+          for setting in PORTAL_HOST=portal.localhost API_HOST=api.localhost IAM_HOST=iam.localhost \
+            SEQ_HOST=seq.localhost "REGISTRY=${REGISTRY}"; do
+            sed -i "s|^${setting%%=*}=.*|${setting}|" .env
+          done
+          echo "127.0.0.1 portal.localhost api.localhost iam.localhost seq.localhost" | sudo tee -a /etc/hosts > /dev/null
+
+      - name: Deploy the tested images
+        env:
+          SMOKE_CA: caddy
+        run: deploy/regreturns.sh deploy "${IMAGE_TAG}" --no-pull
+
+      - name: Install Playwright
+        run: |
+          npm install --global --no-fund --no-audit "playwright@${PLAYWRIGHT_VERSION}"
+          npx --yes "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium
+
+      - name: Identity smoke test with the browser
+        run: |
+          deploy/regreturns.sh compose exec -T caddy cat /data/caddy/pki/authorities/local/root.crt > "${RUNNER_TEMP}/caddy-root.crt"
+          WSO2_BASE=https://iam.localhost API_BASE=https://api.localhost PORTAL_BASE=https://portal.localhost \
+            WSO2_CA="${RUNNER_TEMP}/caddy-root.crt" APP_CA="${RUNNER_TEMP}/caddy-root.crt" \
+            GENERATED_FILE=generated/.env.generated scripts/smoke-wso2.sh --browser
+
+      - name: Backup and restore round trip
+        env:
+          SMOKE_CA: caddy
+        run: |
+          entries() {
+            deploy/regreturns.sh sql -d RegReturns -h -1 -W -Q \
+              "SET NOCOUNT ON; SELECT COUNT_BIG(*) FROM audit.AuditEntries WHERE ActorSubjectId = N'regreturns-migrator'" \
+              | tr -d '[:space:]'
+          }
+          deploy/regreturns.sh backup
+          stamp="$(find backups -mindepth 1 -maxdepth 1 -type d -name '*Z' -printf '%f\n' | sort | tail -n 1)"
+          # The migrator's audit entries (one per verification) show whether the restore took the database back.
+          before="$(entries)"
+          deploy/regreturns.sh verify-audit
+          [ "$(entries)" -eq $((before + 1)) ]
+          deploy/regreturns.sh restore "${stamp}" --yes
+          # The verification after the backup is gone; the restore's own is the only one on top of it.
+          after="$(entries)"
+          echo "Migrator audit entries: ${before} in the backup, ${after} after the restore"
+          [ "${after}" -eq $((before + 1)) ]
+
+      - name: Identity smoke test after the restore
+        run: |
+          WSO2_BASE=https://iam.localhost API_BASE=https://api.localhost PORTAL_BASE=https://portal.localhost \
+            WSO2_CA="${RUNNER_TEMP}/caddy-root.crt" APP_CA="${RUNNER_TEMP}/caddy-root.crt" \
+            GENERATED_FILE=generated/.env.generated scripts/smoke-wso2.sh
+
+      - name: Show the stack on failure
+        if: failure()
+        run: |
+          deploy/regreturns.sh compose ps --all || true
+          deploy/regreturns.sh compose logs --no-color --tail 150 || true
+
+      - name: Push the images to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s' "${GITHUB_TOKEN}" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+          for image in web api migrator iam-bootstrap wso2 wso2-db-init; do
+            docker push --quiet "${REGISTRY}/regreturns-${image}:${IMAGE_TAG}"
+            docker tag "${REGISTRY}/regreturns-${image}:${IMAGE_TAG}" "${REGISTRY}/regreturns-${image}:main"
+            docker push --quiet "${REGISTRY}/regreturns-${image}:main"
+          done
+          docker logout ghcr.io
+
+  deploy:
+    name: Deploy to production
+    needs: stack
+    # Only once a server is configured: repository variable DEPLOY_HOST, secrets DEPLOY_SSH_KEY and DEPLOY_KNOWN_HOSTS
+    # in the production environment (docs/DEPLOYMENT.md).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: ${{ vars.PORTAL_URL }}
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      # The server pulls the images with this run's token, sent over SSH on stdin and never stored there.
+      packages: read
+    steps:
+      - name: Deploy over SSH (forced command)
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER || 'regreturns' }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/deploy_key
+          printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          chmod 0600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+          # The server's key decides what runs: regreturns.sh ci-deploy with this request, and nothing else.
+          printf '%s\n' "${GITHUB_TOKEN}" | ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o BatchMode=yes -o ServerAliveInterval=30 "${DEPLOY_USER}@${DEPLOY_HOST}" "deploy ${GITHUB_SHA} ${GITHUB_ACTOR}"
+
+      - name: Check the public site
+        if: vars.PORTAL_URL != ''
+        env:
+          PORTAL_URL: ${{ vars.PORTAL_URL }}
+        run: |
+          curl --fail --silent --show-error --max-time 20 "${PORTAL_URL%/}/health/ready"
+          curl --fail --silent --show-error --max-time 20 -o /dev/null "${PORTAL_URL%/}/status"
+          echo "The portal answers at ${PORTAL_URL}"

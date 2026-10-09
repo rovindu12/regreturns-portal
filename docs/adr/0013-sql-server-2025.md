@@ -28,3 +28,11 @@ get compatibility level 170.
 The project runs on the current SQL Server release. WSO2 on 2025 is an accepted, untested combination that phase 2
 must prove. A local data volume created by 2022 upgrades in place on first start and cannot be opened by 2022 again;
 run `docker compose down -v` and re-seed if you need to go back.
+
+## Update (phase 11, ADR 0034)
+
+The image is now pinned to a cumulative update, `mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-24.04` (the image
+`2025-latest` pointed to when this ADR was written), in both compose files, the WSO2 database job and
+`SqlServerFixture.Image`. A floating tag would let a server, the CI runner and a developer run different SQL Server
+builds of the same commit. Dependabot proposes the next CU for the Dockerfiles and compose files, and `ImagePinTests`
+fails until every copy matches.

@@ -1,0 +1,14 @@
+# gitleaks (the "Secret scan" job in .github/workflows/ci.yml): the default rules over the whole history, plus the two
+# values the tests rely on that are not secrets. Add an entry only for a published or test-only value, with its reason.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Test-only values: the RFC 6238 TOTP test secret and the integration tests' audit HMAC key"
+condition = "AND"
+paths = [
+  '''^tests/RegReturns\.UnitTests/IamBootstrap/TotpTests\.cs$''',
+  '''^tests/RegReturns\.IntegrationTests/Infrastructure/TestAuth\.cs$''',
+]
+regexTarget = "line"
+regexes = ['''\b(RfcSecret|AuditKey) = "''']

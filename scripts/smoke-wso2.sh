@@ -8,10 +8,11 @@
 #   scripts/smoke-wso2.sh --browser    also signs in to the portal in headless Chromium (Playwright): bank workspace
 #                                      shown, supervision refused, sign-out
 #
-# Reads .env and .env.generated (IamBootstrap). Override with WSO2_BASE, API_BASE, PORTAL_BASE, WSO2_CA and APP_CA
-# (APP_CA=system uses the system trust store, for the hosted demo). Needs bash, curl, openssl, python3; --browser also
-# needs Node with Playwright. TLS is always verified: WSO2 against the dev CA, the apps against the ASP.NET Core
-# development certificate. Secrets are never printed. Exit code 0 means every check passed.
+# Reads .env and .env.generated (IamBootstrap; GENERATED_FILE names another, such as generated/.env.generated on a
+# server). Override with WSO2_BASE, API_BASE, PORTAL_BASE, WSO2_CA and APP_CA (=system uses the system trust store, for
+# the hosted demo behind Caddy). Needs bash, curl, openssl, python3; --browser also needs Node with Playwright. TLS is
+# always verified: locally WSO2 against the dev CA and the apps against the ASP.NET Core development certificate.
+# Secrets are never printed. Exit code 0 means every check passed.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,7 +25,8 @@ for arg in "$@"; do
 done
 
 env_get() { [ -f "$1" ] && grep -E "^$2=" "$1" | tail -n 1 | cut -d= -f2- || true; }
-setting() { local value="${!1:-}"; [ -n "${value}" ] || value="$(env_get "${ROOT}/.env.generated" "$1")"; \
+GENERATED_FILE="${GENERATED_FILE:-${ROOT}/.env.generated}"
+setting() { local value="${!1:-}"; [ -n "${value}" ] || value="$(env_get "${GENERATED_FILE}" "$1")"; \
   [ -n "${value}" ] || value="$(env_get "${ROOT}/.env" "$1")"; printf '%s' "${value}"; }
 
 WSO2_HOSTNAME="$(setting WSO2_HOSTNAME)"
@@ -58,7 +60,12 @@ ok() { passed=$((passed + 1)); echo "  ok    $*"; }
 die() { echo "  FAIL  $*" >&2; echo "${passed} check(s) passed before the failure." >&2; exit 1; }
 section() { echo; echo "$*"; }
 
-[ -f "${WSO2_CA}" ] || die "WSO2 CA not found at ${WSO2_CA} (run scripts/dev-certs.sh or set WSO2_CA)"
+if [ "${WSO2_CA}" = "system" ]; then
+  wso2_tls=()
+else
+  [ -f "${WSO2_CA}" ] || die "WSO2 CA not found at ${WSO2_CA} (run scripts/dev-certs.sh or set WSO2_CA)"
+  wso2_tls=(--cacert "${WSO2_CA}")
+fi
 for name in BANK_CLIENT_ID BANK_CLIENT_SECRET PORTAL_CLIENT_ID PORTAL_CLIENT_SECRET DEMO_PASSWORD PROVISIONER_CLIENT_ID \
   PROVISIONER_CLIENT_SECRET; do
   [ -n "${!name}" ] || die "${name} is not set: run IamBootstrap apply (it writes .env.generated)"
@@ -80,7 +87,7 @@ else
   app_tls=(--cacert "${APP_CA}")
 fi
 
-wso2() { curl -sS --cacert "${WSO2_CA}" -c "${JAR}" -b "${JAR}" "$@"; }
+wso2() { curl -sS "${wso2_tls[@]}" -c "${JAR}" -b "${JAR}" "$@"; }
 
 # Secrets reach curl through process substitution (printf is a shell builtin), never as command-line arguments that
 # other local users could read from the process list: basic_auth for -K, bearer for -H @file, form values with
@@ -139,7 +146,7 @@ python3 -c 'import json,sys; k=json.load(open(sys.argv[1]))["keys"]; sys.exit(0 
 ok "JWKS publishes an RSA signing key"
 
 section "Bank client ${OWN_BANK} (client credentials)"
-token_response="$(curl -sS --cacert "${WSO2_CA}" -K <(basic_auth "${BANK_CLIENT_ID}" "${BANK_CLIENT_SECRET}") \
+token_response="$(curl -sS "${wso2_tls[@]}" -K <(basic_auth "${BANK_CLIENT_ID}" "${BANK_CLIENT_SECRET}") \
   --data-urlencode grant_type=client_credentials --data-urlencode "scope=returns:read reference:read" \
   "${WSO2_BASE}/oauth2/token")"
 bank_token="$(json_get access_token <<< "${token_response}")"
@@ -227,7 +234,7 @@ portal_login() {
   [ "$(query_param "${location}" state)" = "${state}" ] || die "state mismatch"
   auth_code="$(query_param "${location}" code)"
   [ -n "${auth_code}" ] || die "no authorization code: $(query_param "${location}" error)"
-  tokens="$(curl -sS --cacert "${WSO2_CA}" -K <(basic_auth "${PORTAL_CLIENT_ID}" "${PORTAL_CLIENT_SECRET}") \
+  tokens="$(curl -sS "${wso2_tls[@]}" -K <(basic_auth "${PORTAL_CLIENT_ID}" "${PORTAL_CLIENT_SECRET}") \
     --data-urlencode grant_type=authorization_code --data-urlencode "code=${auth_code}" \
     --data-urlencode "redirect_uri=${redirect_uri}" --data-urlencode "code_verifier=${verifier}" "${WSO2_BASE}/oauth2/token")"
   id_token="$(json_get id_token <<< "${tokens}")"
@@ -287,7 +294,7 @@ done
 
 section "Provisioner client (client credentials, SCIM 2 scopes)"
 provisioner_scopes="internal_user_mgt_create internal_user_mgt_update internal_user_mgt_list internal_user_mgt_view internal_user_mgt_delete internal_role_mgt_view internal_role_mgt_users_update"
-token_response="$(curl -sS --cacert "${WSO2_CA}" -K <(basic_auth "${PROVISIONER_CLIENT_ID}" "${PROVISIONER_CLIENT_SECRET}") \
+token_response="$(curl -sS "${wso2_tls[@]}" -K <(basic_auth "${PROVISIONER_CLIENT_ID}" "${PROVISIONER_CLIENT_SECRET}") \
   --data-urlencode grant_type=client_credentials --data-urlencode "scope=${provisioner_scopes} internal_login" \
   "${WSO2_BASE}/oauth2/token")"
 granted="$(json_get scope <<< "${token_response}")"

@@ -1,4 +1,5 @@
 using System.Net.Security;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 namespace RegReturns.Infrastructure.Identity.Wso2;
@@ -23,6 +24,23 @@ public sealed class Wso2CertificateValidator
         }
 
         _trustedRoots = trustedRoots;
+    }
+
+    /// <summary>Tells whether a PEM file can be read and holds at least one certificate.</summary>
+    /// <param name="pemPath">Path to the PEM file.</param>
+    /// <returns><see langword="true"/> when <see cref="FromPemFile"/> would succeed.</returns>
+    public static bool CanLoad(string pemPath)
+    {
+        try
+        {
+            var roots = new X509Certificate2Collection();
+            roots.ImportFromPemFile(pemPath);
+            return roots.Count > 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or CryptographicException)
+        {
+            return false;
+        }
     }
 
     /// <summary>Loads the trusted roots from a PEM file.</summary>

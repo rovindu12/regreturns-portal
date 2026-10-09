@@ -360,7 +360,7 @@ Goal: when something goes wrong, anyone on support can go from a user's "error r
 | Web, Api | 512 MB each |
 | Caddy | 128 MB |
 | Seq (logs + traces) | 512 MB |
-| Backup sidecar (cron + `sqlcmd BACKUP`) | 128 MB |
+| Backups (host timer, `deploy/regreturns.sh backup`; ADR 0034) | none resident |
 
 GitHub Actions `deploy.yml`: build and test → push images to GHCR (tagged by SHA) → SSH (secrets: host, user, key, known_hosts) → `docker compose -f docker-compose.prod.yml pull && up -d` → `migrator migrate-db` → `iam-bootstrap` → `smoke-wso2.sh` against the public URLs. `ci.yml` covers build with warnings as errors, unit and integration tests (Testcontainers on the runner), `dotnet list package --vulnerable --include-transitive` failing on any High or Critical, and format check. `codeql.yml` runs C# analysis.
 
@@ -394,6 +394,13 @@ Working notes:
   pinned by every client rather than CA trust, because WSO2's JDBC driver connects before WSO2 loads its truststore.
   The authenticator reset opens a time-limited window that the sign-in script acts on, since WSO2 encrypts TOTP
   secrets with its own key and an administrator cannot set one. The ASVS assessment uses version 5.0.
+- Phase 11 as built (ADR 0034, `docs/DEPLOYMENT.md`, `docs/DR-RUNBOOK.md`): backups run on host systemd timers through
+  `deploy/regreturns.sh` instead of a backup sidecar (no long-running container holds the `sa` password), and are
+  streamed out of SQL Server's container rather than bind-mounted. `deploy.yml` became `release.yml`: it builds the six
+  images, writes SBOMs, gates on Trivy, deploys the production compose file on the runner, runs the browser smoke test,
+  backs up, changes, restores and smoke-tests again before anything is pushed, then deploys over a forced-command SSH
+  key. The migrator gained `verify-audit`, which a restore must pass before anything starts. Log backups (1 h RPO) are
+  left out: the demo resets nightly; the runbook says how to add them.
 - Seed anomalies planned: Lotus Union LCR drops ~45% in one month (variance warning); Crestmont misreports Total HQLA ≠ sum of levels (error, corrected in a later revision); Northgate files QCAR late twice; Meridian has one missing MDA month (overdue); Harbourline shows a sudden NPL ratio jump (AI insight showcase).
 
 ---
