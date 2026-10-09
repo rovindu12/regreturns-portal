@@ -241,6 +241,12 @@ expect outside iam.localhost /oidc/checksession 200 wso2
 expect outside iam.localhost /authenticationendpoint/login.do 200 wso2
 expect outside iam.localhost /commonauth 200 wso2
 expect outside iam.localhost /logincontext 200 wso2
+expect outside iam.localhost '/t/carbon.super/oauth2/authorize?sessionDataKey=k' 200 wso2
+expect outside iam.localhost /t/carbon.super/oauth2/token 200 wso2
+expect outside iam.localhost /t/carbon.super/oidc/logout 200 wso2
+expect outside iam.localhost /t/carbon.super/authenticationendpoint/login.do 200 wso2
+expect outside iam.localhost /t/carbon.super/commonauth 200 wso2
+expect outside iam.localhost /t/carbon.super/logincontext 200 wso2
 
 label="[outside] http://regreturns.localhost/reports?x=1 -> 308 to https"
 got="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code} %{redirect_url}' \
@@ -256,7 +262,9 @@ echo "Admin surfaces are refused outside the allowlist"
 for path in /console /console/ /carbon/admin/login.jsp /api/server/v1/applications /api/users/v1/me /scim2/Users \
   /scim2/Me /myaccount /accounts /accountrecoveryendpoint/recoverpassword.do / /unknown \
   '/oauth2/..;/console' '/oauth2/..%3B/console' '/commonauth/..;/carbon/' '/oauth2/%2e%2e/console' \
-  '/oauth2/../console' '//console' '/oauth2;x/../api/server/v1/applications'; do
+  '/oauth2/../console' '//console' '/oauth2;x/../api/server/v1/applications' /t/carbon.super/console \
+  /t/carbon.super/api/server/v1/applications /t/carbon.super/scim2/Users /t/other/oauth2/authorize \
+  '/t/carbon.super/oauth2/..;/console' /t/carbon.super/../console; do
   expect outside iam.localhost "${path}" 403
 done
 expect outside seq.localhost / 403

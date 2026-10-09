@@ -41,6 +41,8 @@ prepare_db() {
 IF DB_ID(N'\$(Db)') IS NULL CREATE DATABASE [\$(Db)];"
   sql -d "$db" -v Login="$WSO2_DB_USERNAME" -Q "
 IF USER_ID(N'\$(Login)') IS NULL CREATE USER [\$(Login)] FOR LOGIN [\$(Login)];
+-- After a restore onto another server the user is orphaned (its SID is the old login's): map it to this login.
+ELSE ALTER USER [\$(Login)] WITH LOGIN = [\$(Login)];
 IF IS_ROLEMEMBER(N'db_owner', N'\$(Login)') = 0 ALTER ROLE db_owner ADD MEMBER [\$(Login)];"
 
   local state

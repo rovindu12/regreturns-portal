@@ -2,10 +2,17 @@
 # Every secret is an environment variable; the defaults shipped with WSO2 (admin/admin, the wso2carbon
 # keystores, the internal encryption key and the auth-endpoint password) are all replaced.
 
+# Public address (ADR 0034). Locally WSO2 is reached directly on 9443. In production Caddy terminates TLS on 443 and
+# passes the Host header through, so WSO2_PUBLIC_URL is https://<IAM_HOST> and WSO2_PUBLIC_PORT is 443: the issuer,
+# discovery document and every redirect then name the public address. Calls WSO2 makes to itself keep using
+# server.internal_hostname (localhost) and the real port.
 [server]
 hostname = "$env{WSO2_HOSTNAME}"
 node_ip = "127.0.0.1"
-base_path = "https://$ref{server.hostname}:${carbon.management.port}"
+base_path = "$env{WSO2_PUBLIC_URL}"
+
+[transport.https.properties]
+proxyPort = "$env{WSO2_PUBLIC_PORT}"
 
 [super_admin]
 username = "$env{WSO2_ADMIN_USERNAME}"

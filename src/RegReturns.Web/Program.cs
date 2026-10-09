@@ -13,6 +13,12 @@ using RegReturns.Web.Status;
 
 using Serilog;
 
+// The container's HEALTHCHECK runs the app's own binary (ADR 0034): answer it before building anything.
+if (HealthProbe.IsRequested(args))
+{
+    return await HealthProbe.RunAsync(args);
+}
+
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
     .CreateBootstrapLogger();
@@ -30,12 +36,13 @@ try
     builder.Services.AddReporting(builder.Configuration);
     builder.Services.AddInsights(builder.Configuration);
     builder.Services.AddDemo(builder.Configuration);
-    builder.Services.AddSingleton<PortalStatus>();
+    builder.Services.AddPortalStatus(builder.Configuration);
     builder.Services.AddScoped<PortalDiagnostics>();
     builder.Services.AddWso2Backchannel(builder.Configuration);
     builder.Services.AddIdentityDirectory(builder.Configuration);
     builder.Services.AddRegReturnsAuthorization(builder.Configuration);
     builder.Services.AddPortalAuthentication(builder.Configuration);
+    builder.Services.AddPortalDataProtection(builder.Configuration);
     builder.Services.AddAntiforgery(options =>
     {
         options.Cookie.Name = PortalSession.AntiforgeryCookieName;
@@ -58,7 +65,7 @@ try
         app.UseHsts();
     }
 
-    app.UseHttpsRedirection();
+    app.UseHttpsRedirectionUnlessBehindProxy();
     app.UseRouting();
     app.UseAuthentication();
     app.UseAuthorization();

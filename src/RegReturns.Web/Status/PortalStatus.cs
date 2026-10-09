@@ -31,7 +31,8 @@ public sealed record ComponentStatus(string Name, string Purpose, StatusLevel Le
 public sealed record PortalStatusReport(StatusLevel Overall, IReadOnlyList<ComponentStatus> Components, DateTimeOffset CheckedAt);
 
 /// <summary>
-/// Runs the readiness checks (<c>ready</c> tag: database, WSO2) for the public status page (ADR 0031), at most once
+/// Runs the readiness checks (<c>ready</c> tag: database, WSO2) and the status-only checks (<see cref="StatusTag"/>: the
+/// REST API, when configured) for the public status page (ADR 0031, 0034), at most once
 /// per <see cref="CacheFor"/> so anonymous visitors cannot load the database or WSO2 through it. Shows levels only,
 /// never a check's description or exception.
 /// </summary>
@@ -40,16 +41,24 @@ public sealed record PortalStatusReport(StatusLevel Overall, IReadOnlyList<Compo
 /// <param name="timeProvider">The clock.</param>
 public sealed class PortalStatus(HealthCheckService health, IMemoryCache cache, TimeProvider timeProvider)
 {
+    /// <summary>The tag of checks shown on the status page that are not part of the portal's own readiness.</summary>
+    public const string StatusTag = "status";
+
+    /// <summary>The name of the REST API's check.</summary>
+    public const string ApiCheck = "api";
+
     /// <summary>How long a report is reused.</summary>
     public static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(15);
 
     private const string CacheKey = "RegReturns.PortalStatus";
 
-    private static readonly Dictionary<string, (string Name, string Purpose)> Labels = new(StringComparer.Ordinal)
-    {
-        ["database"] = ("Database", "Returns, templates, reports and the audit trail"),
-        ["wso2"] = ("Identity server", "Signing in to the portal and API tokens"),
-    };
+    // In the order the page lists them.
+    private static readonly (string Check, string Name, string Purpose)[] Labels =
+    [
+        ("database", "Database", "Returns, templates, reports and the audit trail"),
+        ("wso2", "Identity server", "Signing in to the portal and API tokens"),
+        (ApiCheck, "REST API", "Banks' systems delivering returns and reading results"),
+    ];
 
     /// <summary>Returns the latest report, running the checks when the cached one is older than <see cref="CacheFor"/>.</summary>
     /// <param name="cancellationToken">Cancels the checks.</param>
@@ -61,7 +70,7 @@ public sealed class PortalStatus(HealthCheckService health, IMemoryCache cache, 
             return cached;
         }
 
-        var result = await health.CheckHealthAsync(check => check.Tags.Contains(WebDefaultsExtensions.ReadyTag), cancellationToken);
+        var result = await health.CheckHealthAsync(check => check.Tags.Contains(WebDefaultsExtensions.ReadyTag) || check.Tags.Contains(StatusTag), cancellationToken);
         var report = ToReport(result, timeProvider.GetUtcNow());
         cache.Set(CacheKey, report, CacheFor);
         return report;
@@ -76,13 +85,12 @@ public sealed class PortalStatus(HealthCheckService health, IMemoryCache cache, 
         ArgumentNullException.ThrowIfNull(result);
         var components = new List<ComponentStatus> { new("Portal", "These pages", StatusLevel.Operational) };
         components.AddRange(result.Entries
-            .OrderBy(e => Labels.ContainsKey(e.Key) ? 0 : 1)
-            .ThenBy(e => e.Key, StringComparer.Ordinal)
-            .Select(e =>
-            {
-                var (name, purpose) = Labels.GetValueOrDefault(e.Key, (e.Key, "A service the portal depends on"));
-                return new ComponentStatus(name, purpose, LevelOf(e.Value.Status));
-            }));
+            .Select(e => (Entry: e, Position: Array.FindIndex(Labels, l => l.Check == e.Key)))
+            .OrderBy(e => e.Position < 0 ? Labels.Length : e.Position)
+            .ThenBy(e => e.Entry.Key, StringComparer.Ordinal)
+            .Select(e => e.Position < 0
+                ? new ComponentStatus(e.Entry.Key, "A service the portal depends on", LevelOf(e.Entry.Value.Status))
+                : new ComponentStatus(Labels[e.Position].Name, Labels[e.Position].Purpose, LevelOf(e.Entry.Value.Status))));
         return new PortalStatusReport(components.Max(c => c.Level), components, checkedAt);
     }
 

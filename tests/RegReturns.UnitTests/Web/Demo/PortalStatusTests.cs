@@ -20,6 +20,17 @@ public sealed class PortalStatusTests
     }
 
     [Fact]
+    public void Lists_the_api_after_the_portals_own_dependencies()
+    {
+        var report = PortalStatus.ToReport(
+            Health((PortalStatus.ApiCheck, HealthStatus.Unhealthy), ("wso2", HealthStatus.Healthy), ("database", HealthStatus.Healthy)),
+            CheckedAt);
+
+        report.Components.Select(c => c.Name).ShouldBe(["Portal", "Database", "Identity server", "REST API"]);
+        report.Overall.ShouldBe(StatusLevel.Down);
+    }
+
+    [Fact]
     public void The_worst_component_decides_the_overall_level()
     {
         var report = PortalStatus.ToReport(Health(("database", HealthStatus.Healthy), ("wso2", HealthStatus.Unhealthy)), CheckedAt);

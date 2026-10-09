@@ -1,0 +1,14 @@
+# The image build needs only the build settings and the production projects (see Dockerfile). Everything else stays
+# out of the build context: tests, docs, local secrets (.env, .env.generated, .certs) and build output.
+*
+!global.json
+!Directory.Build.props
+!Directory.Packages.props
+!.editorconfig
+!src/
+!tools/
+**/bin/
+**/obj/
+**/*.user
+**/appsettings.Development.json
+**/Properties/launchSettings.json

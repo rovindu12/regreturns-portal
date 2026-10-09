@@ -11,10 +11,11 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    var root = new RootCommand("RegReturns database tool: applies schema migrations, loads demo data and migrates legacy returns.")
+    var root = new RootCommand("RegReturns database tool: applies schema migrations, loads demo data, migrates legacy returns and verifies the audit chain.")
     {
         DatabaseCommands.MigrateDb(),
         DatabaseCommands.Seed(),
+        AuditCommands.VerifyAudit(),
         LegacyCommands.Legacy(),
         LegacyCommands.Samples(),
     };

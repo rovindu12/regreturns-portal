@@ -30,7 +30,7 @@ public sealed class SqlServerFixture : IAsyncLifetime
     /// The SQL Server image used by the tests. Keep it in step with the <c>sqlserver</c> service in
     /// <c>docker-compose.yml</c>; Dependabot only bumps the compose file.
     /// </summary>
-    public const string Image = "mcr.microsoft.com/mssql/server:2025-latest";
+    public const string Image = "mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-24.04";
 
     private const string MssqlConf = """
         [network]

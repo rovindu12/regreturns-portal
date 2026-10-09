@@ -31,7 +31,10 @@ DOMAIN="$(setting DOMAIN)"
 : "${WSO2_KEYSTORE_PASSWORD:?Set WSO2_KEYSTORE_PASSWORD in .env (scripts/init-env.sh)}"
 export WSO2_KEYSTORE_PASSWORD
 
-mkdir -p "${OUT}/wso2"
+# The containers read the certificates as other users (WSO2 uid 802, the apps uid 1654), so the folders must be
+# traversable whatever the caller's umask; the private keys are protected by their own mode (0600).
+mkdir -p "${OUT}/wso2" "${OUT}/sqlserver"
+chmod 0755 "${OUT}" "${OUT}/wso2" "${OUT}/sqlserver"
 cd "${OUT}"
 
 if [ ! -f regreturns-dev-ca.key ] || [ ! -f regreturns-dev-ca.crt ]; then
@@ -46,6 +49,9 @@ if [ ! -f regreturns-dev-ca.key ] || [ ! -f regreturns-dev-ca.crt ]; then
   mv regreturns-dev-ca.key.new regreturns-dev-ca.key
   mv regreturns-dev-ca.crt.new regreturns-dev-ca.crt
 fi
+# Set on every run, so a CA created under a strict umask still reaches the containers that trust it.
+chmod 0644 regreturns-dev-ca.crt
+chmod 0600 regreturns-dev-ca.key
 
 # SQL Server's certificate. Issued even when the WSO2 keystores exist, so an older checkout gains it on the next run.
 SQL_DIR="${OUT}/sqlserver"
@@ -120,7 +126,8 @@ docker run --rm --user root --entrypoint sh -e WSO2_KEYSTORE_PASSWORD -v "${STAG
   chown '"$(id -u):$(id -g)"' /out/regreturns-truststore.p12'
 
 # Everything is built: move it into place together. The WSO2 container runs as uid 802 and copies these files at
-# start, so they must be readable. They hold development keys only; never reuse them outside a local machine.
+# start, so they must be readable. The keystores are protected by their password and, on a server, by the checkout's
+# mode (0750, deploy/server-setup.sh); the CA key stays 0600.
 for file in "${OUTPUTS[@]}"; do
   chmod 0644 "${STAGE}/${file}"
   mv -f "${STAGE}/${file}" "wso2/${file}"

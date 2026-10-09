@@ -487,3 +487,9 @@ $RECYCLE.BIN/
 
 # RegReturns: migration reports hold return figures (docs/DATA-MIGRATION.md)
 /out/
+
+# RegReturns: production server state (deploy/regreturns.sh): generated secrets, the deployed release, backups
+/generated/
+/.env.release
+/.env.release.new
+/backups/

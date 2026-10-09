@@ -8,6 +8,12 @@ using RegReturns.ServiceDefaults.Web;
 
 using Serilog;
 
+// The container's HEALTHCHECK runs the app's own binary (ADR 0034): answer it before building anything.
+if (HealthProbe.IsRequested(args))
+{
+    return await HealthProbe.RunAsync(args);
+}
+
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
     .CreateBootstrapLogger();
@@ -38,7 +44,7 @@ try
         app.UseHsts();
     }
 
-    app.UseHttpsRedirection();
+    app.UseHttpsRedirectionUnlessBehindProxy();
     app.UseApiDocumentation();
     app.UseAuthentication();
 

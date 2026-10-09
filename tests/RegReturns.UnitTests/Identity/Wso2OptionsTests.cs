@@ -114,6 +114,28 @@ public sealed class Wso2OptionsTests
             .Message.ShouldContain("TrustedCaPath");
     }
 
+    [Fact]
+    public void Backchannel_registration_refuses_a_trusted_ca_file_without_a_certificate()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"not-a-ca-{Guid.NewGuid():N}.pem");
+        File.WriteAllText(path, "not a certificate");
+        try
+        {
+            using var provider = BuildBackchannel(new()
+            {
+                ["Wso2:Authority"] = "https://iam.valoria.test/",
+                ["Wso2:TrustedCaPath"] = path,
+            });
+
+            Should.Throw<OptionsValidationException>(() => provider.GetRequiredService<IOptions<Wso2Options>>().Value)
+                .Message.ShouldContain("Wso2:TrustedCaPath must name a readable PEM file with at least one certificate");
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     private static Wso2Options Options(string authority) => new() { Authority = new Uri(authority) };
 
     private static ServiceProvider BuildBackchannel(Dictionary<string, string?> settings)
