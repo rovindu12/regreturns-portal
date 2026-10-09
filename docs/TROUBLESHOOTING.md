@@ -312,3 +312,40 @@ code; the row error codes are explained in the data migration guide.
 | Rows from before 2024 are `Legacy.NoTemplate` | No template is in force for the period | Expected for the samples; publish a template for the period if that history is needed |
 | A migrated return shows warnings | VRRS accepted them; the migration keeps them with a fixed justification | None |
 | `SqlException` 1205 (deadlock) or a timeout during a large run | Other writers hold locks the load needs | Run outside working hours; the run is one transaction and rolls back cleanly |
+
+## 12. Advisory insights
+
+Insights on the review page (ADR 0030, [guide](AI-ASSISTANT.md)) log under the request's trace, in an
+`insights.generate` activity, and never log figures, the payload, the answer or the API key:
+
+```
+EventId.Id = 5501                                  -- generated (insight, submission, revision, writer, model, ms, audit entry)
+EventId.Id = 5502                                  -- reused: nothing changed since the last insight
+EventId.Id = 5503                                  -- payload failed the privacy guard; nothing sent (error)
+EventId.Id = 5504                                  -- provider gave no answer; fixed rules wrote the insight (warning)
+EventId.Id = 5505                                  -- reviewer gave up while the provider was answering; audited (warning)
+EventId.Id = 5506                                  -- request refused (error code)
+EventId.Id = 5511                                  -- Anthropic answered (model, ms, input and output tokens, stop reason)
+EventId.Id = 5512                                  -- Anthropic call failed (error code, HTTP status, exception type)
+EventId.Id = 5513                                  -- no answer within Ai:Anthropic:TimeoutSeconds
+EventId.Id = 5514                                  -- answer unusable (refusal, cut short, not matching the schema)
+EventId.Id = 5515                                  -- no API key configured
+```
+
+The SDK's HTTP call shows as an `HTTP POST` span to `api.anthropic.com` under the request. Every generation is an
+`InsightGenerated` audit entry; the panel names its number.
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Every insight says "No API key is configured" | `Ai:Anthropic:ApiKey` is empty | Add `ANTHROPIC_API_KEY` to `.env` and run `scripts/dev-secrets.sh`, or set `Ai__Anthropic__ApiKey` |
+| "The AI provider did not accept the API key" (5512, HTTP 401 or 403) | Wrong, revoked or unfunded key | Create a key in the Anthropic Console and set it again |
+| "The AI provider rejected the request" (5512, HTTP 400 or 404) | `Ai:Anthropic:Model` names a model the key cannot use, or an invalid setting | Check the model id; the 5512 entry has the status |
+| "The AI provider's rate limit was reached" (HTTP 429) | Too many requests or tokens for the key's tier | Wait and press the button again; lower `Effort` or `MaxOutputTokens` |
+| "The AI provider did not answer in time" (5513) | Slow answer at high effort, or the network | Raise `Ai:Anthropic:TimeoutSeconds` (at most 300) or lower `Effort` |
+| "The AI provider could not be reached" (5512, `HttpRequestException` or HTTP 5xx/529) | No outbound HTTPS, a proxy, or an overloaded API | Check egress to `api.anthropic.com:443`; set `Ai:Anthropic:BaseUrl` for a proxy |
+| "The AI provider's answer could not be used" (5514) | The answer was cut short (`max_tokens`) or did not match the schema | Raise `MaxOutputTokens`; a repeat usually succeeds |
+| "The data did not pass the privacy check" (5503) | The payload held a string that is not template text or a code, usually after a change to the payload builder | Read the JSON path in the 5503 entry; fix the builder, never the guard |
+| The portal stops at start-up with an `Ai:` validation error | An invalid setting, such as an unknown effort or an `http` base URL | Fix the setting the message names |
+| The button gives 403 | The user is not a supervision reviewer or approver | Expected for other roles |
+| Refresh shows the same insight | Nothing changed since the last one (5502) | Expected; a new revision or approved prior period gives a new one |
+| A stored insight no longer matches its audit entry | The row in `returns.ReturnInsights` was changed | Treat as tampering; the audit entry's digests are the reference |

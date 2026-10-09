@@ -195,6 +195,11 @@
         "resolved": "10.0.12",
         "contentHash": "Kd4o2oO1A6dfKxjz5LS16QyLtpCFTUiFWwmBABETAXRsSImBdRdWeKjSgbbRhAMiV3a3/nWr95ZtzClT4uaADQ=="
       },
+      "Microsoft.Extensions.AI.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.5.1",
+        "contentHash": "nB0l3IlsVbNeUxsE7nZNb9GY8rP1OSeqpj0pseORPejt474HNKEauTWTLdSJPkSvPlRMxowZNMo6nyp7APAiSg=="
+      },
       "Microsoft.Extensions.DependencyModel": {
         "type": "Transitive",
         "resolved": "10.0.0",
@@ -406,6 +411,7 @@
       "regreturns.infrastructure": {
         "type": "Project",
         "dependencies": {
+          "Anthropic": "[12.50.0, )",
           "ClosedXML": "[0.105.1, )",
           "Dapper": "[2.1.89, )",
           "Microsoft.EntityFrameworkCore.SqlServer": "[10.0.12, )",
@@ -428,6 +434,15 @@
           "Serilog.Settings.Configuration": "[10.0.1, )",
           "Serilog.Sinks.Console": "[6.1.1, )",
           "Serilog.Sinks.OpenTelemetry": "[4.2.0, )"
+        }
+      },
+      "Anthropic": {
+        "type": "CentralTransitive",
+        "requested": "[12.50.0, )",
+        "resolved": "12.50.0",
+        "contentHash": "BBtKetn0gsVeaFfRHcqW5hhUwWdNuIp4lTCvrd4roN6HivnJqrKBbEhPWjA/a5eypg2rvGdUr/Z5qzV6Fr7+Bg==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.5.1"
         }
       },
       "ClosedXML": {

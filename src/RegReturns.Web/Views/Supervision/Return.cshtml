@@ -126,6 +126,8 @@
     </ul>
 </section>
 
+@await Component.InvokeAsync("ReturnInsight", new { submissionId = form.SubmissionId })
+
 <section aria-labelledby="values-heading" class="mb-4">
     <h2 id="values-heading" class="h4">Values</h2>
     <partial name="_ReturnValues" model="form" />

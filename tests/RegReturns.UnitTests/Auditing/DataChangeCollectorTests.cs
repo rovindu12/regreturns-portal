@@ -6,6 +6,7 @@ using RegReturns.Application.Auditing;
 using RegReturns.Application.Idempotency;
 using RegReturns.Domain.Auditing;
 using RegReturns.Domain.Identity;
+using RegReturns.Domain.Insights;
 using RegReturns.Domain.Institutions;
 using RegReturns.Domain.Submissions;
 using RegReturns.Domain.Templates;
@@ -306,6 +307,15 @@ public sealed class DataChangeCollectorTests : IDisposable
     {
         _db.Add(IdempotencyRecord.Claim(
             new IdempotentRequest("client", "key", new string('a', 64)), DomainFixture.Now, TimeSpan.FromMinutes(1), TimeSpan.FromHours(1)));
+
+        Collect().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Insights_are_never_audited()
+    {
+        _db.Add(ReturnInsight.Record(
+            Guid.CreateVersion7(), 1, Guid.CreateVersion7(), InsightProvider.RuleBased, "rules", null, "{}", "{}", 1, 1, DomainFixture.Now));
 
         Collect().ShouldBeEmpty();
     }

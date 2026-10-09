@@ -60,6 +60,21 @@ public static class RegReturnsTelemetry
     public static Counter<long> ReportExports { get; } = Meter.CreateCounter<long>(
         "regreturns.reports.exports", "{file}", "Report exports by report and format.");
 
+    /// <summary>
+    /// Gets the count of insight requests, tagged with <c>provider</c> (who wrote the narrative), <c>outcome</c>
+    /// (generated, fallback, reused) and, for a fallback, <c>fallback_reason</c>.
+    /// </summary>
+    public static Counter<long> InsightsGenerated { get; } = Meter.CreateCounter<long>(
+        "regreturns.insights.generated", "{insight}", "Advisory insights by provider and outcome.");
+
+    /// <summary>Gets the time taken to generate an insight, provider call included, tagged with <c>provider</c> and <c>outcome</c>.</summary>
+    public static Histogram<double> InsightDuration { get; } = Meter.CreateHistogram<double>(
+        "regreturns.insights.duration", "ms", "Time to generate an advisory insight.");
+
+    /// <summary>Gets the tokens billed by the AI provider, tagged with <c>model</c> and <c>direction</c> (input, output).</summary>
+    public static Counter<long> AiTokens { get; } = Meter.CreateCounter<long>(
+        "regreturns.ai.tokens", "{token}", "Tokens billed by the AI provider.");
+
     /// <summary>Gets the count of returns first submitted after their due date.</summary>
     public static Counter<long> LateSubmissions { get; } = Meter.CreateCounter<long>(
         "regreturns.workflow.late_submissions", "{return}", "Returns first submitted after their due date.");

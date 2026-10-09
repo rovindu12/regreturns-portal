@@ -104,6 +104,7 @@ public static class AuditDisplay
         AuditAction.StateChanged => "Status changed",
         AuditAction.ChainVerified => "Chain verified",
         AuditAction.ReportExported => "Report exported",
+        AuditAction.InsightGenerated => "Insight generated",
         _ => action.ToString(),
     };
 
@@ -119,6 +120,7 @@ public static class AuditDisplay
         AuditAction.StateChanged => "text-bg-info",
         AuditAction.ChainVerified => "text-bg-secondary",
         AuditAction.ReportExported => "text-bg-warning",
+        AuditAction.InsightGenerated => "text-bg-secondary",
         _ => "text-bg-light border",
     };
 

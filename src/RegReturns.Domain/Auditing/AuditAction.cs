@@ -32,4 +32,10 @@ public enum AuditAction
 
     /// <summary>Someone exported a report; the details say which report, scope and format, never its figures.</summary>
     ReportExported = 10,
+
+    /// <summary>
+    /// A supervisor had an advisory insight generated for a return (ADR 0030); the details name the provider and model
+    /// attempted, the outcome, and the SHA-256 of the payload and content, never a figure.
+    /// </summary>
+    InsightGenerated = 11,
 }

@@ -54,6 +54,7 @@ public sealed class PortalEndpointMetadataTests(SqlServerFixture sql) : IDisposa
     [InlineData("Supervision", "ReturnForCorrection", Policies.SupervisionAccess)]
     [InlineData("Supervision", "Approve", Policies.SupervisionApprove)]
     [InlineData("Supervision", "Reject", Policies.SupervisionApprove)]
+    [InlineData("Supervision", "GenerateInsight", Policies.SupervisionAccess)]
     public void Workflow_steps_require_the_policy_of_their_role(string controller, string action, string policy)
     {
         var endpoint = _factory.Services.GetRequiredService<EndpointDataSource>().Endpoints

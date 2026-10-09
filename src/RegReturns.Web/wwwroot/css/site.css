@@ -76,3 +76,10 @@ html {
   width: 240px;
   height: 40px;
 }
+
+/* Insight panel: the payload shared with the AI provider, scrollable so long returns do not stretch the page. */
+.insight-payload {
+  max-height: 24rem;
+  overflow: auto;
+  font-size: 0.8rem;
+}
