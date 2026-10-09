@@ -1,0 +1,146 @@
+# RegReturns edge proxy: Caddy 2.10 (image caddy:2.10.2-alpine) in front of the portal, the API, WSO2 Identity Server
+# and Seq. Caddy obtains and renews the public certificates, redirects HTTP to HTTPS, sets HSTS, drops the Server header
+# and writes JSON access logs to stdout. No Content-Security-Policy here: the apps send their own, with per-response
+# nonces. scripts/check-caddy.sh validates this file and runs it, unchanged, against stub upstreams.
+#
+# Environment placeholders ({$NAME} is replaced when Caddy loads the file, so a change needs a reload or restart):
+#
+#   PORTAL_HOST           required  public name of the portal, e.g. regreturns.example.org        -> http://web:8080
+#   API_HOST              required  public name of the REST API, e.g. api.example.org             -> http://api:8080
+#   IAM_HOST              required  public name of WSO2 (= WSO2_HOSTNAME), e.g. iam.example.org   -> https://wso2:9443
+#   SEQ_HOST              required  public name of the Seq UI, e.g. seq.example.org               -> http://seq:80
+#   WSO2_ADMIN_ALLOWLIST  required  space-separated CIDRs (IPv4 or IPv6) of the administrators, e.g.
+#                                   "203.0.113.7/32 2001:db8:1::/48": the only clients that reach the WSO2 console,
+#                                   its management APIs and Seq. Unset or empty admits nobody (fails closed).
+#
+# There are no defaults: a production edge must never fall back to a made-up name or an open allowlist. An unset name
+# stops Caddy at load, with the misleading error "unrecognized global option". Names ending in .localhost get
+# certificates from Caddy's internal CA instead of Let's Encrypt (the check script relies on that).
+# The upstreams are the compose service names. Mounts: /data (certificates and ACME account, keep it on a volume) and
+# the development CA from scripts/dev-certs.sh at /etc/caddy/certs/regreturns-dev-ca.crt (ADR 0015).
+#
+# The allowlist matches the TCP peer address (remote_ip). Caddy is the outermost proxy, so that is the client. If a CDN
+# or load balancer is ever put in front, switch to client_ip and declare that proxy in the global trusted_proxies
+# option; never trust X-Forwarded-For from anyone else. Docker's userland proxy relays some connections (for example
+# IPv6 clients when the Docker network is IPv4 only) from the network's gateway address, so never put Docker network
+# ranges on the allowlist, and check remote_ip in the access log once deployed.
+
+# Every site: HSTS for a year (subdomains included), no Server header (Caddy's, Kestrel's or WSO2's), JSON access logs.
+(edge) {
+	import edge_headers
+	# Errors raised inside Caddy (an upstream that is down or fails TLS verification) bypass the site's handlers, so
+	# their answers get the same headers here, with the status line as the only body.
+	handle_errors {
+		import edge_headers
+		respond "{err.status_code} {err.status_text}"
+	}
+	log {
+		output stdout
+		# Tokens never reach the logs (CLAUDE.md): the portal's logout redirect carries the ID token in its Location,
+		# and a browser may repeat any of these URLs as its Referer. Cookie and Authorization headers are redacted by
+		# Caddy itself.
+		format filter {
+			wrap json
+			request>uri query {
+				import token_parameters
+			}
+			request>headers>Referer query {
+				import token_parameters
+			}
+			resp_headers>Location query {
+				import token_parameters
+			}
+		}
+	}
+}
+
+(edge_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+		# Applied as the response is written, so the edge's values replace the upstream's and cover Caddy's own 403s.
+		defer
+	}
+}
+
+(token_parameters) {
+	replace id_token_hint REDACTED
+	replace id_token REDACTED
+	replace access_token REDACTED
+	replace refresh_token REDACTED
+	replace code REDACTED
+	replace client_secret REDACTED
+}
+
+(wso2) {
+	# The original Host (IAM_HOST) is passed on: it is the hostname WSO2 is configured with.
+	reverse_proxy https://wso2:9443 {
+		transport http {
+			# WSO2's certificate is issued by the RegReturns CA: trust that CA only and check the certificate's name
+			# (stated here so it never depends on how the upstream is dialled). Verification is never switched off.
+			tls_trust_pool file /etc/caddy/certs/regreturns-dev-ca.crt
+			tls_server_name wso2
+		}
+	}
+}
+
+{$PORTAL_HOST} {
+	import edge
+	reverse_proxy web:8080
+}
+
+{$API_HOST} {
+	import edge
+	reverse_proxy api:8080
+}
+
+# WSO2 Identity Server. Without the allowlist only the end-user sign-in surface is public:
+#   /oauth2/*                  authorize, token, JWKS and discovery (/oauth2/token/.well-known/openid-configuration)
+#   /oidc/*                    RP-initiated logout and the session check
+#   /authenticationendpoint/*  the login and TOTP pages with their scripts and styles
+#   /commonauth*               the authentication framework's form target
+#   /logincontext*             the login page's session check
+# Everything else is for administrators only: /console, /carbon, /api/server, /api/users, /scim2, /myaccount,
+# /accounts, and also /accountrecoveryendpoint, because self-service recovery is locked down (ADR 0020; make it public
+# only if that lockdown is turned off). Anything not public is refused with 403, known or not: the rule lists what is
+# public (deny by default), so an endpoint added by a WSO2 upgrade starts closed, and 403 rather than 404 tells an
+# administrator whose address is missing from the list what happened, while hiding nothing (the public discovery
+# document already says this is WSO2).
+{$IAM_HOST} {
+	import edge
+
+	@admin remote_ip {$WSO2_ADMIN_ALLOWLIST}
+	handle @admin {
+		import wso2
+	}
+
+	# Tomcat, which serves WSO2, strips ";parameters" from each path segment before resolving dot segments, so
+	# /oauth2/..;/console is the console to WSO2 but a path under /oauth2/ to Caddy: no path with ";" is public.
+	# Caddy decodes the path and resolves "." and ".." before matching, so %2e%2e and similar tricks end in the 403.
+	@signIn {
+		path /oauth2/* /oidc/* /authenticationendpoint/* /commonauth* /logincontext*
+		not path_regexp ;
+	}
+	handle @signIn {
+		import wso2
+	}
+
+	handle {
+		respond "Forbidden" 403
+	}
+}
+
+# Seq (logs and traces): administrators only, with the same allowlist as the WSO2 console. The apps send telemetry to
+# seq:5341 over the internal network, never through this site.
+{$SEQ_HOST} {
+	import edge
+
+	@admin remote_ip {$WSO2_ADMIN_ALLOWLIST}
+	handle @admin {
+		reverse_proxy seq:80
+	}
+
+	handle {
+		respond "Forbidden" 403
+	}
+}
