@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 
 using RegReturns.Application.Abstractions;
 using RegReturns.Application.Auditing;
+using RegReturns.Application.Demo;
 using RegReturns.Application.Idempotency;
 using RegReturns.Application.Insights;
 using RegReturns.Application.Migration;
@@ -14,6 +15,7 @@ using RegReturns.Application.Returns;
 using RegReturns.Domain.Insights;
 using RegReturns.Infrastructure.Ai;
 using RegReturns.Infrastructure.Auditing;
+using RegReturns.Infrastructure.Demo;
 using RegReturns.Infrastructure.Files;
 using RegReturns.Infrastructure.Idempotency;
 using RegReturns.Infrastructure.Identity.Wso2;
@@ -172,6 +174,34 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<ILegacyMigrator, LegacyMigrator>();
         services.TryAddSingleton<IMigrationReportWriter, MigrationReportWriter>();
+        return services;
+    }
+
+    /// <summary>
+    /// Adds the public demo (ADR 0031), configured by <c>Demo</c>: the reset (one transaction that replaces the workload
+    /// and records a <c>DemoReset</c> audit event), its cron schedule and the job that runs it. Requires
+    /// <see cref="AddInfrastructure"/> and <see cref="AddAuditTrail"/>. The job does nothing unless <c>Demo:Enabled</c>
+    /// is on and <c>Demo:ResetSchedule</c> is set.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configuration">Application configuration.</param>
+    /// <returns>The same service collection.</returns>
+    public static IServiceCollection AddDemo(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<DemoOptions>()
+            .Bind(configuration.GetSection(DemoOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(
+                o => CronDemoResetSchedule.IsValid(o.ResetSchedule),
+                $"{DemoOptions.SectionName}:{nameof(DemoOptions.ResetSchedule)} must be empty or a five-field cron expression (UTC), such as 0 3 * * *.")
+            .Validate(
+                o => o.ApiBaseUrl is null || o.ApiBaseUrl is { IsAbsoluteUri: true, Scheme: "https" },
+                $"{DemoOptions.SectionName}:{nameof(DemoOptions.ApiBaseUrl)} must be an absolute https URL.")
+            .ValidateOnStart();
+        services.TryAddSingleton(TimeProvider.System);
+        services.Replace(ServiceDescriptor.Singleton<IDemoResetSchedule, CronDemoResetSchedule>());
+        services.Replace(ServiceDescriptor.Scoped<IDemoReset, DemoResetService>());
+        services.AddHostedService<DemoResetJob>();
         return services;
     }
 

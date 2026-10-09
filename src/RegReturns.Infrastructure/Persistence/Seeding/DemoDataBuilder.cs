@@ -17,7 +17,11 @@ namespace RegReturns.Infrastructure.Persistence.Seeding;
 /// Every submission goes through the real domain workflow, so seeded data obeys the same rules as live data.
 /// </summary>
 /// <param name="now">The time the data set is anchored to; history covers the twelve months before it.</param>
-internal sealed class DemoDataBuilder(DateTimeOffset now)
+/// <param name="directory">
+/// Institutions and demo accounts that already exist (a demo reset, ADR 0031): the data set uses them and creates only
+/// the missing ones. <see langword="null"/> creates everything (first seed).
+/// </param>
+internal sealed class DemoDataBuilder(DateTimeOffset now, DemoDirectory? directory = null)
 {
     /// <summary>Number of monthly periods of history, including the current in-flight month.</summary>
     public const int MonthsOfHistory = 12;
@@ -33,8 +37,9 @@ internal sealed class DemoDataBuilder(DateTimeOffset now)
     /// <summary>Builds the data set.</summary>
     public DemoDataSet Build()
     {
-        var institutions = DemoBank.All.ToDictionary(b => b.Code, b => Institution.Create(b.Code, b.Name, b.Category));
-        _users = new DemoUsers(institutions);
+        var institutions = DemoBank.All.ToDictionary(
+            b => b.Code, b => directory?.InstitutionWithCode(b.Code) ?? Institution.Create(b.Code, b.Name, b.Category));
+        _users = new DemoUsers(institutions, directory);
 
         var mlr = MlrTemplate.CreateReturnType();
         var mda = MdaTemplate.CreateReturnType();
@@ -96,10 +101,11 @@ internal sealed class DemoDataBuilder(DateTimeOffset now)
 
     private static decimal? NplRatioFor(DemoBank bank, int monthsAgo) => (bank.Code, monthsAgo) switch
     {
-        // Harbourline: two large manufacturing exposures reclassified as non-performing, then partial recovery.
+        // Harbourline: two large manufacturing exposures reclassified as non-performing, then partial recovery. The
+        // recovery months stay far enough below the 8% warning that the noise never trips it, whatever the month.
         (DemoBank.Harbourline, DemoScenario.HarbourlineNplJumpMonthsAgo) => 8.9m,
-        (DemoBank.Harbourline, DemoScenario.HarbourlineNplJumpMonthsAgo - 1) => 7.9m,
-        (DemoBank.Harbourline, DemoScenario.HarbourlineNplJumpMonthsAgo - 2) => 7.6m,
+        (DemoBank.Harbourline, DemoScenario.HarbourlineNplJumpMonthsAgo - 1) => 7.4m,
+        (DemoBank.Harbourline, DemoScenario.HarbourlineNplJumpMonthsAgo - 2) => 7.1m,
         _ => null,
     };
 

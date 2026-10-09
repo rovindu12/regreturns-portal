@@ -4,7 +4,8 @@ using RegReturns.Domain.Institutions;
 namespace RegReturns.Infrastructure.Persistence.Seeding;
 
 /// <summary>
-/// Demo user directory. The same user names are created in WSO2 by IamBootstrap and linked by user name.
+/// Demo user directory. The same user names are created in WSO2 by IamBootstrap and linked by user name. Accounts the
+/// given <see cref="DemoDirectory"/> already holds are used as they are.
 /// </summary>
 internal sealed class DemoUsers
 {
@@ -17,8 +18,11 @@ internal sealed class DemoUsers
 
     private readonly Dictionary<string, AppUser> _byUserName = new(StringComparer.Ordinal);
 
-    public DemoUsers(IReadOnlyDictionary<string, Institution> institutionsByCode)
+    private readonly DemoDirectory? _directory;
+
+    public DemoUsers(IReadOnlyDictionary<string, Institution> institutionsByCode, DemoDirectory? directory = null)
     {
+        _directory = directory;
         foreach (var bank in DemoBank.All)
         {
             var institution = institutionsByCode[bank.Code];
@@ -47,6 +51,12 @@ internal sealed class DemoUsers
 
     private void Add(string userName, string displayName, string email, Guid? institutionId, Role role)
     {
+        if (_directory?.UserNamed(userName) is { } existing)
+        {
+            _byUserName.Add(userName, existing);
+            return;
+        }
+
         var result = AppUser.Create(userName, displayName, email, institutionId, [role], isDemoAccount: true);
         _byUserName.Add(userName, result.IsSuccess ? result.Value : throw new InvalidOperationException(result.Error!.Message));
     }
