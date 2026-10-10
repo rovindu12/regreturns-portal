@@ -64,5 +64,19 @@ public sealed class WebHostTests(SqlServerFixture sql) : IDisposable
         html.ShouldNotContain("Demo environment");
     }
 
+    [Fact]
+    public void Every_service_resolves_as_the_development_environment_checks_it()
+    {
+        // Development validates every registration when the host is built; the other environments find a gap only when
+        // a request first needs the service.
+        using var factory = _factory.WithWebHostBuilder(builder => builder.UseDefaultServiceProvider(options =>
+        {
+            options.ValidateOnBuild = true;
+            options.ValidateScopes = true;
+        }));
+
+        Should.NotThrow(() => factory.Services);
+    }
+
     public void Dispose() => _factory.Dispose();
 }
