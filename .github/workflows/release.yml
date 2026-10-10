@@ -1,7 +1,8 @@
 name: Release
 
 # Builds the six images, writes their SBOMs, scans them, runs the production stack end to end on the runner (deploy,
-# browser smoke test, backup and restore), and on main pushes the tested images to GHCR and deploys them (ADR 0034).
+# browser smoke test, the guided tour with accessibility checks, backup and restore), and on main pushes the tested
+# images to GHCR and deploys them (ADR 0034, ADR 0035).
 on:
   push:
     branches: [main]
@@ -19,6 +20,7 @@ env:
   # Pinned by digest: Trivy 0.69.3 (published before the March 2026 compromise of 0.69.4) and gitleaks 8.28.0.
   TRIVY_IMAGE: aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c
   PLAYWRIGHT_VERSION: 1.56.1
+  AXE_CORE_VERSION: 4.13.0
 
 jobs:
   stack:
@@ -103,9 +105,9 @@ jobs:
           SMOKE_CA: caddy
         run: deploy/regreturns.sh deploy "${IMAGE_TAG}" --no-pull
 
-      - name: Install Playwright
+      - name: Install Playwright and axe-core
         run: |
-          npm install --global --no-fund --no-audit "playwright@${PLAYWRIGHT_VERSION}"
+          npm install --global --no-fund --no-audit "playwright@${PLAYWRIGHT_VERSION}" "axe-core@${AXE_CORE_VERSION}"
           npx --yes "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium
 
       - name: Identity smoke test with the browser
@@ -114,6 +116,22 @@ jobs:
           WSO2_BASE=https://iam.localhost API_BASE=https://api.localhost PORTAL_BASE=https://portal.localhost \
             WSO2_CA="${RUNNER_TEMP}/caddy-root.crt" APP_CA="${RUNNER_TEMP}/caddy-root.crt" \
             GENERATED_FILE=generated/.env.generated scripts/smoke-wso2.sh --browser
+
+      # Every person of the demo takes one return from draft to approval in the browser; axe checks every portal page
+      # against WCAG 2.2 AA and the browser reports any CSP violation. The screenshots are kept for the reviewers.
+      - name: Guided tour with accessibility checks
+        run: |
+          PORTAL_BASE=https://portal.localhost WSO2_BASE=https://iam.localhost \
+            WSO2_CA="${RUNNER_TEMP}/caddy-root.crt" APP_CA="${RUNNER_TEMP}/caddy-root.crt" \
+            SCREENSHOTS_DIR="${RUNNER_TEMP}/screenshots" scripts/demo-scenario.sh --screenshots
+
+      - name: Upload the screenshots
+        if: success() || failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: screenshots-${{ github.sha }}
+          path: ${{ runner.temp }}/screenshots/*.png
+          if-no-files-found: ignore
 
       - name: Backup and restore round trip
         env:

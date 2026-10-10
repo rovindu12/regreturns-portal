@@ -100,6 +100,20 @@ jobs:
       - name: Check the Caddyfile
         run: scripts/check-caddy.sh
 
+  docs:
+    name: Documentation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Every relative link, image and #anchor in the Markdown resolves, and every ADR is in the index (ADR 0035).
+      - name: Check the documentation's links
+        run: python3 scripts/check-docs.py
+
   secret-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-24.04

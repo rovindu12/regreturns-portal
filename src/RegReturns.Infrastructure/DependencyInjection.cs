@@ -135,8 +135,8 @@ public static class DependencyInjection
                 o => o.KeyRatios.All(k => !string.IsNullOrWhiteSpace(k.ReturnType) && !string.IsNullOrWhiteSpace(k.Field)),
                 $"Every {ReportingOptions.SectionName}:{nameof(ReportingOptions.KeyRatios)} entry needs a ReturnType and a Field.")
             .ValidateOnStart();
-        services.TryAddSingleton<IReportingReadModel, ReportingReadModel>();
-        services.TryAddSingleton<IComplianceReportRenderer, ComplianceReportRenderer>();
+        services.Replace(ServiceDescriptor.Singleton<IReportingReadModel, ReportingReadModel>());
+        services.Replace(ServiceDescriptor.Singleton<IComplianceReportRenderer, ComplianceReportRenderer>());
         return services;
     }
 

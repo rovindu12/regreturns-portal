@@ -1,33 +1,75 @@
 # RegReturns – Regulatory Returns Portal
 
-> **Status:** under active development (phase 10 of 12 complete). Live demo link, screenshots and the full
-> documentation set arrive in later phases.
+[![CI](https://github.com/rovindu12/regreturns-portal/actions/workflows/ci.yml/badge.svg)](https://github.com/rovindu12/regreturns-portal/actions/workflows/ci.yml)
+[![Release](https://github.com/rovindu12/regreturns-portal/actions/workflows/release.yml/badge.svg)](https://github.com/rovindu12/regreturns-portal/actions/workflows/release.yml)
+[![CodeQL](https://github.com/rovindu12/regreturns-portal/actions/workflows/codeql.yml/badge.svg)](https://github.com/rovindu12/regreturns-portal/actions/workflows/codeql.yml)
 
 RegReturns lets licensed banks submit periodic regulatory returns to a central bank, validates them against
-configurable rules, routes them through a maker-checker and supervisory review workflow, and tracks compliance on
-dashboards. Identity and access are managed centrally by WSO2 Identity Server.
+configurable rules, routes them through a maker-checker and supervisory review workflow with a tamper-evident audit
+trail, and tracks who files on time on dashboards. WSO2 Identity Server signs everyone in.
 
-All institutions, people and data are **fictional**. The regulator in the demo is the "Bank of Valoria".
+All institutions, people and data are **fictional**. The regulator is the "Bank of Valoria" (currency VLD).
+
+> **Status:** all twelve build phases are complete. The hosted demo goes live once a domain and a server are set up
+> ([deployment guide](docs/DEPLOYMENT.md)); until then, run it locally with the [quick start](#quick-start).
+
+![The review page with an advisory insight](docs/images/review-insight.png)
+
+| | |
+|---|---|
+| ![A bank's return after validation](docs/images/return-validated.png) | ![The compliance dashboard](docs/images/reports.png) |
+| ![The supervision worklist](docs/images/supervision-worklist.png) | ![The audit chain verified](docs/images/audit-verified.png) |
+
+## What it does
+
+- **Returns from banks.** Makers enter figures or upload the bank's Excel or CSV file; a checker justifies every
+  warning and submits. Bank systems can deliver the same returns through a versioned REST API with idempotency keys.
+- **Rules the regulator owns.** Versioned templates with required, range, cross-field and variance rules, edited in the
+  portal; every channel runs the same validation engine.
+- **Supervision.** A worklist, review and approval with segregation of duties enforced in the domain, approvals behind
+  a one-time code, and an advisory note on each return written by Claude (or by fixed rules) from figures only.
+- **Evidence.** Every change, decision, sign-in, export and AI call is in an HMAC hash chain that the auditor can
+  verify; the table is append-only at the database.
+- **Oversight.** A bank by period compliance grid, overdue returns, findings trends and key ratios, exported to Excel or
+  PDF.
+- **Migration.** A dry-run-first migrator moves the legacy system's CSV exports in, and commits only when the totals
+  reconcile.
+
+## Roles
+
+| Role | WSO2 role | What they do | One-time code | Demo account |
+|---|---|---|---|---|
+| Bank maker | `bank_maker` | Prepares, uploads and validates their bank's returns; never submits | No | `maker.hlb` (and `.ccb`, `.lub`, `.nsb`, `.mdb`) |
+| Bank checker | `bank_checker` | Justifies warnings and submits a return they did not prepare or last edit | No | `checker.hlb` (and the other banks) |
+| Supervision reviewer | `supervisor_reviewer` | Starts reviews, asks for advisory insights, returns returns for correction | No | `reviewer` |
+| Supervision approver | `supervisor_approver` | Approves or rejects; never a return they reviewed | Yes | `approver.mfa` (always), `approver` |
+| Auditor | `auditor` | Reads the audit trail and verifies its hash chain | No | `auditor` |
+| System administrator | `portal_admin` | Templates and rules, people's access, authenticator resets, diagnostics, the demo reset | Yes | `admin.demo` |
+| Bank system | API client | Reads reference data and its bank's returns, delivers returns as drafts | n/a | The read-only demo client |
+
+Everyone can open **Reports**. The demo accounts share one password, shown on the demo page with the authenticator keys
+of the accounts that need a one-time code ([demo guide](docs/DEMO.md), [identity and access](docs/IAM.md)).
 
 ## Architecture at a glance
 
 ```mermaid
 flowchart LR
-    subgraph Hosts
-        Web[RegReturns.Web<br/>MVC portal]
-        Api[RegReturns.Api<br/>REST API]
-        Mig[RegReturns.Migrator<br/>console]
-    end
-    Web --> App[Application<br/>use cases]
-    Api --> App
-    Mig --> Infra
-    App --> Domain[Domain<br/>entities and rules]
-    Infra[Infrastructure<br/>EF Core, seeding] --> App
-    Web --> Infra
-    Api --> Infra
-    Infra --> SQL[(SQL Server)]
-    Hosts -. logs and traces .-> Seq[Seq / OTLP]
+    people["Bank staff and<br/>Bank of Valoria staff"] -- "browser" --> caddy["Caddy<br/>TLS, allowlist"]
+    banksys["Bank systems"] -- "REST API v1" --> caddy
+    caddy --> web["Portal<br/>ASP.NET Core MVC"]
+    caddy --> api["API<br/>ASP.NET Core"]
+    caddy -- "sign-in pages" --> wso2["WSO2 Identity Server<br/>OIDC, TOTP, roles"]
+    web --> app["Application and Domain<br/>use cases, workflow, validation"]
+    api --> app
+    app --> sql[("SQL Server 2025<br/>returns, templates,<br/>audit hash chain")]
+    web -. "figures only, optional" .-> claude["Claude API"]
+    web -. "logs and traces" .-> seq["Seq"]
+    api -. "logs and traces" .-> seq
 ```
+
+Clean architecture (Domain ← Application ← Infrastructure ← hosts, enforced by tests); the portal and the API share
+one set of use cases and never call each other. The C4 diagrams, the data model and the life of a return are in
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Quick start
 
@@ -41,102 +83,72 @@ scripts/dev-secrets.sh          # secrets into dotnet user-secrets
 dotnet run --project tools/RegReturns.Migrator -- migrate-db --seed
 dotnet run --project tools/RegReturns.IamBootstrap -- apply
 scripts/dev-secrets.sh          # again, for the portal's client secret
-dotnet run --project src/RegReturns.Web
+dotnet run --project src/RegReturns.Web    # https://localhost:7101
+dotnet run --project src/RegReturns.Api    # https://localhost:7201/swagger
 ```
 
-Open https://localhost:7101, and http://localhost:8081 for logs and traces. Demo users sign in with
-`DEMO_USER_PASSWORD` from `.env`; approvers and the administrator also need the TOTP code from their secret in
-`.env.generated`. More commands are in [CLAUDE.md](CLAUDE.md#commands).
+Open https://localhost:7101/demo for every demo account with a *Sign in as* button, the shared password and the
+authenticator keys, and https://localhost:7101/demo/guide for the guided tour that takes one return from draft to
+approval. Logs and traces are at http://localhost:8081. More commands are in [CLAUDE.md](CLAUDE.md#commands).
 
-## Try the demo
+`scripts/demo-scenario.sh --reset` plays the whole tour in a headless browser, checks every page against WCAG 2.2 AA
+with axe and fails on any Content Security Policy violation; `--screenshots` refreshes the pictures in this README.
 
-Locally the portal runs in demo mode. Open https://localhost:7101/demo for every demo account with a *Sign in as*
-button, the shared password and the authenticator keys, and https://localhost:7101/demo/guide for a guided tour that
-takes one return from draft to approval. The administrator can reset the demo from `/admin`; it also resets itself
-every night, keeping the audit chain. `scripts/demo-scenario.sh` plays the tour in a browser. See the
-[demo guide](docs/DEMO.md) and [ADR 0031](docs/adr/0031-public-demo-and-demo-reset.md).
+## Features in more depth
 
-## API for bank systems
+- **API for bank systems.** OAuth 2.0 client credentials from WSO2, one client per bank; `POST /v1/submissions`
+  delivers a whole return as a draft and answers with the validation findings; idempotency keys, paging, rate limits
+  and problem answers with stable codes. Swagger UI signs in with the demo client. See [docs/API.md](docs/API.md).
+- **Reports.** For each return type: the share filed on time, a bank by period grid, every overdue return, findings by
+  rule and key ratios such as the LCR, NPL ratio and capital adequacy ratio. Bank staff see their own bank only;
+  every export is audited ([ADR 0028](docs/adr/0028-reporting-views-and-exports.md)).
+- **Legacy migration.** `regreturns-migrator legacy` cleans dates, amounts and bank names through a JSON mapping,
+  checks every row with the portal's rules and commits only when the stored figures reconcile with the source. Try it
+  on the generated samples, which document their planted defects ([data migration guide](docs/DATA-MIGRATION.md)):
 
-```bash
-dotnet run --project src/RegReturns.Api   # https://localhost:7201/swagger
-```
+  ```bash
+  dotnet run --project tools/RegReturns.Migrator -- legacy --source samples/legacy --dry-run --report out/legacy
+  ```
 
-Swagger UI signs in with client credentials: choose **Authorize** and enter `DEMO_API_CLIENT_SECRET` from
-`.env.generated` for the read-only demo client. Each bank's own client (`BANK_<CODE>_CLIENT_ID` and `_SECRET`) can
-also deliver a return with `POST /v1/submissions` and an `Idempotency-Key`; the return arrives as a draft that a bank
-checker submits in the portal ([ADR 0026](docs/adr/0026-api-delivers-drafts-through-a-client-user.md),
-[ADR 0027](docs/adr/0027-web-api-v1-conventions.md)).
-
-## Reports
-
-The **Reports** area (every role) shows, for one return type at a time, a bank × period compliance grid (on time,
-late, overdue, not due yet), every overdue return, the trend of validation findings by rule, and sparklines of key
-ratios such as the LCR, NPL ratio and capital adequacy ratio. Bank staff see their own bank only. The compliance
-report downloads as Excel or PDF, and every download is recorded in the audit trail
-([ADR 0028](docs/adr/0028-reporting-views-and-exports.md)).
-
-## Migrating legacy returns
-
-`regreturns-migrator legacy` moves filed returns from the old returns system's CSV exports into the portal. A JSON
-mapping cleans dates, amounts and bank names; every row is checked with the same rules as the portal; and the run
-commits only when the stored figures reconcile with the source, by bank, period and field. A dry run shows the
-result first. Try it on the generated sample exports, which have their defects documented in
-[samples/legacy](samples/legacy/README.md):
-
-```bash
-dotnet run --project tools/RegReturns.Migrator -- legacy --source samples/legacy --dry-run --report out/legacy
-```
-
-See the [data migration guide](docs/DATA-MIGRATION.md) and [ADR 0029](docs/adr/0029-legacy-data-migration.md).
-
-## Advisory insights
-
-On the review page, a supervisor can ask for an advisory note on a return: the largest movements against earlier
-approved returns, the rules it failed, likely causes and questions for the bank. Claude writes it through the
-Anthropic API when `ANTHROPIC_API_KEY` is set in `.env`; otherwise, or when a call fails, fixed rules write it. Only
-codes, the regulator's template text and figures are sent, never the bank's name, people or anything a bank typed,
-and every generation is recorded in the audit trail with digests of what was sent and written
-([guide](docs/AI-ASSISTANT.md), [ADR 0030](docs/adr/0030-advisory-return-insights.md)).
-
-## Security
-
-Every answer carries a strict Content Security Policy (a fresh script nonce per response, no inline code) and the
-usual browser protections; every form is protected against cross-site request forgery; SQL Server only accepts
-encrypted connections and every client checks its certificate; WSO2 locks an account after five failed sign-ins;
-approvals and administration need a one-time code, and administrators can let a person enrol a new authenticator
-without ever seeing a secret. The edge exposes only WSO2's sign-in pages; its console needs an allowlisted address.
-The threat model, an OWASP ASVS self-assessment and how each control is tested are in
-[docs/SECURITY.md](docs/SECURITY.md) ([ADR 0032](docs/adr/0032-administrator-opened-totp-enrolment.md),
-[ADR 0033](docs/adr/0033-security-hardening.md)).
-
-## Deployment
-
-One server runs the whole stack with Docker Compose behind Caddy: chiselled, non-root images for the portal, the API
-and the tools, WSO2, SQL Server Express and Seq, with only Caddy reachable from the internet. Every pull request builds
-the images, scans them, deploys the production stack on the CI runner, signs in through a browser, then backs up,
-changes, restores and checks it again; on `main` the tested images go to GHCR and, once a server is configured, are
-deployed over an SSH key that can run one command. `deploy/regreturns.sh` is the single entry point on the server
-(deploy, backup, restore, audit-chain check, smoke test). See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), the
-[disaster-recovery runbook](docs/DR-RUNBOOK.md) and [ADR 0034](docs/adr/0034-containers-release-pipeline-and-hosting.md).
+- **Advisory insights.** Movements and failed rules are computed in code; Claude writes only the headline,
+  observations and questions, from figures, codes and the regulator's template text, never the bank's name or anything
+  a bank typed. Without `ANTHROPIC_API_KEY`, or when a call fails, fixed rules write the note. Every generation is
+  audited with digests of what was sent and written ([guide](docs/AI-ASSISTANT.md)).
+- **Security.** A strict Content Security Policy with a nonce per response, anti-forgery on every form, TLS to SQL
+  Server that every client pins, account lock in WSO2, one-time codes for approvals and administration, a least
+  privilege database login and an edge that exposes only WSO2's sign-in pages. Threat model, ASVS self-assessment and
+  how each control is tested: [docs/SECURITY.md](docs/SECURITY.md).
+- **Accessibility.** WCAG 2.2 AA, checked with axe on every page of the browser tour in the release pipeline
+  ([ADR 0035](docs/adr/0035-documentation-and-accessibility-checks.md)).
+- **Deployment.** One server with Docker Compose behind Caddy: chiselled, non-root images, SBOMs and Trivy, the whole
+  production stack driven through a browser and backed up and restored on every pull request, and deploys over an SSH
+  key that can run one command ([deployment](docs/DEPLOYMENT.md), [disaster recovery](docs/DR-RUNBOOK.md)).
+- **Observability.** One W3C trace id in every log line, trace, error page and API problem answer, searchable in Seq;
+  a troubleshooting guide organised by symptom ([docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)).
 
 ## Tech stack
 
-.NET 10 · ASP.NET Core MVC and Web API · EF Core 10 · SQL Server 2025 · Serilog · OpenTelemetry · Seq ·
-Dapper · ClosedXML · QuestPDF · Chart.js · Anthropic SDK · Cronos · QRCoder · Mermaid · xUnit v3 · Testcontainers · GitHub Actions ·
-CodeQL · Caddy · WSO2 Identity Server 7.3 · Docker · Trivy · gitleaks · ShellCheck.
+.NET 10 · ASP.NET Core MVC and Web API · EF Core 10 · SQL Server 2025 · WSO2 Identity Server 7.3 · Serilog ·
+OpenTelemetry · Seq · Dapper · ClosedXML · QuestPDF · Chart.js · Bootstrap 5 · Anthropic SDK · Cronos · QRCoder ·
+Mermaid · xUnit v3 · Testcontainers · Playwright · axe-core · Docker · Caddy · GitHub Actions · CodeQL · Trivy ·
+gitleaks · ShellCheck.
 
 ## Documentation
 
-- [Implementation plan](docs/IMPLEMENTATION-PLAN.md)
-- [Architecture decision records](docs/adr)
-- [Demo guide](docs/DEMO.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
-- [Data migration guide](docs/DATA-MIGRATION.md)
-- [Advisory insights](docs/AI-ASSISTANT.md)
-- [Security: threat model and controls](docs/SECURITY.md)
-- [Deployment](docs/DEPLOYMENT.md) · [Disaster recovery](docs/DR-RUNBOOK.md)
-- [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+| Document | For |
+|---|---|
+| [User guide](docs/USER-GUIDE.md) | Using the portal, role by role, with screenshots |
+| [Demo guide](docs/DEMO.md) | The public demo: accounts, the story in the data, the guided tour, the reset |
+| [Architecture](docs/ARCHITECTURE.md) | C4 context, container and component diagrams, data model, workflow |
+| [Identity and access](docs/IAM.md) | WSO2 setup, roles, claims, sign-in, MFA, API clients |
+| [API guide](docs/API.md) | Calling the API from a bank system |
+| [Security](docs/SECURITY.md) | Threat model, controls and how they are tested |
+| [Deployment](docs/DEPLOYMENT.md) · [Disaster recovery](docs/DR-RUNBOOK.md) | Running the stack on a server, backups and restore |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Symptoms, causes and fixes, with log event ids |
+| [Data migration](docs/DATA-MIGRATION.md) · [Advisory insights](docs/AI-ASSISTANT.md) | The legacy migrator; the AI assistant |
+| [Backlog](docs/BACKLOG.md) · [Implementation plan](docs/IMPLEMENTATION-PLAN.md) | User stories by sprint and what is next; the original plan |
+| [Architecture decisions](docs/adr/README.md) | Why each choice was made (35 ADRs) |
+| [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) | Conventions for changes; what changed |
 
 ## Licence
 

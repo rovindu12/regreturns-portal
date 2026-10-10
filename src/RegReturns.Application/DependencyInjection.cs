@@ -35,6 +35,11 @@ public static class DependencyInjection
         services.AddScoped<ReturnValidator>();
         services.AddScoped<ReportBuilder>();
 
+        // Only the portal draws reports (AddReporting in Infrastructure); elsewhere the report handlers refuse.
+        services.AddOptions<ReportingOptions>();
+        services.TryAddSingleton<IReportingReadModel, UnavailableReportingReadModel>();
+        services.TryAddSingleton<IComplianceReportRenderer, UnavailableComplianceReportRenderer>();
+
         // Insights are rule-based unless the host adds an AI provider (AddInsights in Infrastructure).
         services.TryAddSingleton<IInsightNarrator, RuleBasedNarrator>();
 

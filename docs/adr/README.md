@@ -36,3 +36,4 @@
 | [0032](0032-administrator-opened-totp-enrolment.md) | Administrators open a TOTP enrolment window; the person enrols at their next sign-in |
 | [0033](0033-security-hardening.md) | Security hardening: browser policies, account lock, strict TLS to SQL Server, a deny-by-default edge and diagnostics |
 | [0034](0034-containers-release-pipeline-and-hosting.md) | Containers, a release pipeline that tests the production stack, and one server run by scripts |
+| [0035](0035-documentation-and-accessibility-checks.md) | Documentation as code, C4 diagrams in Mermaid, and accessibility and screenshots from the browser tour |

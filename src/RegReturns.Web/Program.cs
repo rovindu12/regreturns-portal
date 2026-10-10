@@ -65,6 +65,12 @@ try
         app.UseHsts();
     }
 
+    // A browser asking for a page that is not there gets a page in the portal's layout rather than an empty answer.
+    // GET and HEAD only: re-executing a POST would run the anti-forgery check again on the error page.
+    app.UseWhen(
+        context => HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method),
+        branch => branch.UseStatusCodePagesWithReExecute("/Home/HttpError", "?code={0}"));
+
     app.UseHttpsRedirectionUnlessBehindProxy();
     app.UseRouting();
     app.UseAuthentication();

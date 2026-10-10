@@ -54,7 +54,8 @@ public sealed record SubmissionDetailResponse(
 /// <summary>One workflow step.</summary>
 /// <param name="Revision">The revision it applied to.</param>
 /// <param name="Action">
-/// <c>Create</c>, <c>Submit</c>, <c>StartReview</c>, <c>ReturnForCorrection</c>, <c>Approve</c> or <c>Reject</c>.
+/// <c>Create</c>, <c>Submit</c>, <c>StartReview</c>, <c>ReturnForCorrection</c>, <c>Approve</c>, <c>Reject</c> or <c>Migrate</c>
+/// (the only step of a return loaded from the legacy system).
 /// </param>
 /// <param name="FromStatus">The status before, or <see langword="null"/> when the draft was created.</param>
 /// <param name="ToStatus">The status after.</param>

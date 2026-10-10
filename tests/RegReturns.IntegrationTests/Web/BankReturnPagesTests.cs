@@ -6,6 +6,7 @@ using RegReturns.Domain.Submissions;
 using RegReturns.Domain.Templates;
 using RegReturns.Infrastructure.Persistence.Seeding;
 using RegReturns.IntegrationTests.Hosting;
+using RegReturns.ServiceDefaults.Web;
 
 namespace RegReturns.IntegrationTests.Web;
 
@@ -223,6 +224,31 @@ public sealed class BankReturnPagesTests : IClassFixture<PortalDatabaseFixture>,
         page.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         start.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         download.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_page_that_is_not_there_shows_the_not_found_page_with_a_reference()
+    {
+        using var maker = await _portal.MakerAsync();
+
+        var response = await maker.GetAsync($"/bank/returns/{Guid.CreateVersion7()}", Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        var html = await response.Content.ReadAsStringAsync(Ct);
+        html.ShouldContain("<title>Page not found");
+        html.ShouldContain(response.Headers.GetValues(WebDefaultsExtensions.TraceIdHeader).Single());
+    }
+
+    [Fact]
+    public async Task A_refused_post_keeps_its_status_and_gets_no_error_page()
+    {
+        using var maker = await _portal.MakerAsync();
+        var token = await BankPortal.TokenFromAsync(maker, "/bank");
+
+        var response = await maker.PostAsync($"/bank/obligations/{Guid.CreateVersion7()}/start", BankPortal.Form(token), Ct);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        (await response.Content.ReadAsStringAsync(Ct)).ShouldBeEmpty();
     }
 
     [Fact]

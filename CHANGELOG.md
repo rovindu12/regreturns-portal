@@ -206,6 +206,16 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - CI also scans the whole history for secrets (gitleaks) and checks every shell script (ShellCheck).
 - Dependabot proposes updates for the Dockerfiles' and compose files' images; `ImagePinTests` keeps the copies of
   each pin in step.
+- Phase 12: architecture guide with C4 context, container and component diagrams, the data model and the life of a
+  return; identity and access, API and user guides; a backlog of user stories by sprint with what is left; a README
+  with screenshots, the role mapping and the demo logins (ADR 0035).
+- The guided tour (`scripts/demo-scenario.sh`) checks every portal page against WCAG 2.2 A and AA with axe (and the
+  public pages at phone width too), raises non-performing loans so the checker justifies real warnings, looks round
+  the administration pages, and with `--screenshots` captures the documentation's pictures with the published
+  secrets masked. The Release workflow runs it against the production stack and keeps the screenshots.
+- A "Page not found" page (and pages for other empty error answers) in the portal's layout, with a reference to quote.
+- CI job *Documentation*: every relative link, image and anchor in the Markdown resolves and every ADR is indexed
+  (`scripts/check-docs.py`).
 
 ### Changed
 
@@ -226,3 +236,13 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - `scripts/dev-certs.sh` leaves the certificate folders and the CA certificate readable for the containers whatever
   the umask; `scripts/smoke-wso2.sh` can trust the system store (`WSO2_CA=system`) and read the generated settings
   from another file (`GENERATED_FILE`); `scripts/init-env.sh` also creates the app database and Seq passwords.
+- Accessibility: links inside alerts use Bootstrap's `alert-link`, every table has a caption, tables that scroll
+  sideways can be scrolled from the keyboard, and table wrappers no longer scroll a pixel vertically.
+- Least privilege: the provisioner client is authorised only for the three SCIM user scopes the portal requests
+  (list, view, update); IamBootstrap withdraws the create, delete and role scopes from a client set up earlier
+  (ADR 0032).
+
+### Fixed
+
+- The API refused to start in Development: it registered the report handlers without a reporting read model. Hosts
+  without reports now get refusing fallbacks, and both hosts are built with Development's service validation in tests.

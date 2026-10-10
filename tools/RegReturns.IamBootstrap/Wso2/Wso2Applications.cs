@@ -167,6 +167,25 @@ internal sealed class Wso2Applications(Wso2AdminClient wso2)
         return Outcome.Updated;
     }
 
+    /// <summary>Withdraws an application's authorization for an API resource, if it has one.</summary>
+    /// <param name="appId">The application id.</param>
+    /// <param name="apiResourceId">The API resource id (not its identifier URL).</param>
+    /// <param name="cancellationToken">Cancels the call.</param>
+    /// <returns><see cref="Outcome.Updated"/> if an authorization was withdrawn, otherwise <see cref="Outcome.Unchanged"/>.</returns>
+    public async Task<Outcome> RevokeAuthorizedApiAsync(string appId, string apiResourceId, CancellationToken cancellationToken)
+    {
+        var path = $"{Applications}/{appId}/authorized-apis";
+        var authorized = await wso2.GetAsync(path, cancellationToken);
+        if (!authorized.AsArray().Any(a => a?["id"]?.GetValue<string>() == apiResourceId))
+        {
+            return Outcome.Unchanged;
+        }
+
+        (await wso2.SendAsync(HttpMethod.Delete, $"{path}/{apiResourceId}", null, Wso2AdminClient.Json, cancellationToken))
+            .EnsureSuccess(HttpStatusCode.NotFound);
+        return Outcome.Updated;
+    }
+
     /// <summary>Enables or disables an application without touching anything else.</summary>
     /// <param name="appId">The application id.</param>
     /// <param name="enabled">Whether it should be enabled.</param>

@@ -24,7 +24,10 @@ public interface IIdempotencyStore
     /// <returns>A task that completes when the response is stored.</returns>
     Task CompleteAsync(Guid recordId, StoredResponse response, CancellationToken cancellationToken);
 
-    /// <summary>Forgets a request that failed with a server error, so the client can retry it with the same key.</summary>
+    /// <summary>
+    /// Forgets a request whose answer must not be replayed (403, 409, 429 or a server error), so the client can retry it
+    /// with the same key.
+    /// </summary>
     /// <param name="recordId">The record id from <see cref="IdempotencyStart.RecordId"/>.</param>
     /// <param name="cancellationToken">Cancels the operation.</param>
     /// <returns>A task that completes when the record is gone.</returns>

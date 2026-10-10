@@ -1,23 +1,32 @@
 #!/usr/bin/env bash
 # Plays the guided tour of the demo end to end in headless Chromium against a running demo portal and WSO2:
 # maker.hlb validates last month's MDA draft, checker.hlb submits it, the reviewer starts the review and generates an
-# insight, approver.mfa approves it after the TOTP step, and the auditor verifies the audit chain (docs/DEMO.md).
+# insight, approver.mfa approves it after the TOTP step, the auditor verifies the audit chain and admin.demo looks round
+# the administration pages (docs/DEMO.md).
 #
 #   scripts/demo-scenario.sh            after a reset
 #   scripts/demo-scenario.sh --reset    signs in as admin.demo and presses Reset demo first (refused within the
 #                                       cooldown, ten minutes after the last reset)
+#   scripts/demo-scenario.sh --screenshots
+#                                       also saves the documentation's screenshots in docs/images (SCREENSHOTS_DIR
+#                                       overrides), with the published password and keys masked
+#
+# On every portal page it runs axe (WCAG 2.2 A and AA) and fails on any violation; it also fails on any Content
+# Security Policy violation the browser reports (ADR 0035).
 #
 # It changes data: run it against a demo deployment (Demo:Enabled); the next reset undoes it. It reads the password
 # and the authenticator keys from the public /demo page, as a visitor would, so it needs no secrets of its own.
 # Override PORTAL_BASE, WSO2_BASE, WSO2_CA and APP_CA as for smoke-wso2.sh (APP_CA=system for the hosted demo). Needs
-# Node with Playwright. TLS is always verified. Exit code 0 means the whole tour worked.
+# Node with Playwright and axe-core. TLS is always verified. Exit code 0 means the whole tour worked.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RESET_FIRST=false
+SCREENSHOTS_DIR="${SCREENSHOTS_DIR:-}"
 for arg in "$@"; do
   case "${arg}" in
     --reset) RESET_FIRST=true ;;
+    --screenshots) SCREENSHOTS_DIR="${SCREENSHOTS_DIR:-${ROOT}/docs/images}" ;;
     *) echo "Unknown option: ${arg}" >&2; exit 2 ;;
   esac
 done
@@ -30,7 +39,12 @@ WSO2_CA="${WSO2_CA:-${ROOT}/.certs/regreturns-dev-ca.crt}"
 
 die() { echo "  FAIL  $*" >&2; exit 1; }
 
-command -v node > /dev/null || die "Node with Playwright is needed"
+command -v node > /dev/null || die "Node with Playwright and axe-core is needed"
+export NODE_PATH="${NODE_PATH:-$(npm root -g 2> /dev/null)}"
+for module in playwright axe-core; do
+  node -e "require.resolve('${module}')" 2> /dev/null || die "${module} not found (npm install --global ${module}@<version>)"
+done
+[ -z "${SCREENSHOTS_DIR}" ] || mkdir -p "${SCREENSHOTS_DIR}"
 [ -f "${WSO2_CA}" ] || die "WSO2 CA not found at ${WSO2_CA} (run scripts/dev-certs.sh or set WSO2_CA)"
 
 WORK="$(mktemp -d)"
@@ -44,8 +58,7 @@ if [ -z "${APP_CA:-}" ]; then
 fi
 
 echo "Guided tour against ${PORTAL_BASE} (WSO2 ${WSO2_BASE})"
-NODE_PATH="${NODE_PATH:-$(npm root -g 2> /dev/null)}" PORTAL_BASE="${PORTAL_BASE}" WSO2_BASE="${WSO2_BASE}" \
-  WSO2_CA="${WSO2_CA}" APP_CA="${APP_CA}" RESET_FIRST="${RESET_FIRST}" \
-  node "${ROOT}/scripts/smoke/demo-scenario.cjs" || die "guided tour"
+PORTAL_BASE="${PORTAL_BASE}" WSO2_BASE="${WSO2_BASE}" WSO2_CA="${WSO2_CA}" APP_CA="${APP_CA}" \
+  RESET_FIRST="${RESET_FIRST}" SCREENSHOTS_DIR="${SCREENSHOTS_DIR}" node "${ROOT}/scripts/smoke/demo-scenario.cjs" || die "guided tour"
 echo
 echo "The guided tour worked end to end."

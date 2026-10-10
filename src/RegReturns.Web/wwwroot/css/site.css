@@ -123,3 +123,14 @@ html {
   color: #fff;
   font-size: 0.9rem;
 }
+
+/* Tables scroll sideways only: a table's last border can stick out a pixel below its wrapper, which would otherwise make
+   the wrapper scroll vertically by that pixel. site.js makes a wrapper that does scroll keyboard-focusable. */
+.table-responsive {
+  overflow-y: hidden;
+}
+
+.table-responsive:focus-visible {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: 2px;
+}

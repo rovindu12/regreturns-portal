@@ -64,7 +64,7 @@ internal sealed class ConfigureApiJwtBearerOptions(IOptions<Wso2Options> wso2, I
             ValidIssuer = settings.Issuer.AbsoluteUri,
             ValidAudience = ApiScopes.ApiIdentifier,
 
-            // Portal id_tokens also carry the API audience; only access tokens are typed at+jwt.
+            // Only access tokens are typed at+jwt: an ID token that names the API in its audience is still refused.
             ValidTypes = [AccessTokenType, AccessTokenMediaType],
             ValidAlgorithms = [SigningAlgorithm],
             ValidateIssuer = true,

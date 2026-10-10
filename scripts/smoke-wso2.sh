@@ -293,16 +293,20 @@ for user in ${MFA_USERS}; do
 done
 
 section "Provisioner client (client credentials, SCIM 2 scopes)"
-provisioner_scopes="internal_user_mgt_create internal_user_mgt_update internal_user_mgt_list internal_user_mgt_view internal_user_mgt_delete internal_role_mgt_view internal_role_mgt_users_update"
+# The portal's scopes (Wso2IdentityDirectory.Scopes) are granted; anything more that is asked for is dropped.
+provisioner_scopes="internal_user_mgt_list internal_user_mgt_view internal_user_mgt_update"
+refused_scopes="internal_user_mgt_create internal_user_mgt_delete internal_role_mgt_view internal_role_mgt_users_update internal_login"
 token_response="$(curl -sS "${wso2_tls[@]}" -K <(basic_auth "${PROVISIONER_CLIENT_ID}" "${PROVISIONER_CLIENT_SECRET}") \
-  --data-urlencode grant_type=client_credentials --data-urlencode "scope=${provisioner_scopes} internal_login" \
+  --data-urlencode grant_type=client_credentials --data-urlencode "scope=${provisioner_scopes} ${refused_scopes}" \
   "${WSO2_BASE}/oauth2/token")"
 granted="$(json_get scope <<< "${token_response}")"
 for wanted in ${provisioner_scopes}; do
   [[ " ${granted} " == *" ${wanted} "* ]] || die "provisioner token lacks ${wanted} (WSO2 drops scopes the app is not authorized for)"
 done
-[[ " ${granted} " != *" internal_login "* ]] || die "provisioner token was granted internal_login"
-ok "token carries the seven SCIM user and role scopes and nothing extra that was asked for"
+for unwanted in ${refused_scopes}; do
+  [[ " ${granted} " != *" ${unwanted} "* ]] || die "provisioner token was granted ${unwanted}"
+done
+ok "token carries the portal's three SCIM user scopes; create, delete, role and login scopes are refused"
 
 section "Self-service is closed"
 # Basic authentication with a demo user's own password must not open WSO2's self-service API either.

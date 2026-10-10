@@ -58,8 +58,13 @@ someone else, and the portal holds no WSO2 administrator credentials (ADR 0017, 
 - The old authenticator keeps working until the person signs in inside the window; the secret is removed only at
   that sign-in. If the window closes unused, nothing has changed.
 - A user who does not need TOTP is unaffected by an open window (the script returns after the password step).
-- The portal now holds a WSO2 client secret that can update user attributes. Its scopes cannot change passwords,
-  roles or applications, and WSO2 rejects the token for anything else. A later SCIM user-management feature should
-  reuse this client and its narrow scopes rather than add an administrator credential.
+- The portal now holds a WSO2 client secret that can find, read and update users, and WSO2 rejects its token for
+  anything else: it cannot create or delete users or change roles or applications. `internal_user_mgt_update` covers
+  any change to a user's attributes, so the secret is guarded like the other secrets. A later SCIM user-management
+  feature should reuse this client, adding only the scopes it needs, rather than add an administrator credential.
+- Update (2026-10-09, phase 12): the client itself was authorised for more than the portal requests (creating and
+  deleting users, changing role members). IamBootstrap now authorises exactly `Wso2IdentityDirectory.Scopes` and
+  withdraws the roles API from a client set up earlier; the identity smoke test checks that the other scopes are
+  refused.
 - Live check on 2026-10-09: a reset user signed in, was asked to scan a new QR code, enrolled, and the claim returned
   to `0`; the portal page sent no CSP violations.
