@@ -56,22 +56,27 @@ Every reset seeds twelve months of returns ending with the last completed month,
 - **Meridian** (MDB): the MDA five months ago was never filed and shows as overdue.
 - **Northgate** (NSB): two quarterly capital returns were filed late.
 
-The [reports](../README.md#reports) show all of this; the reviewer can generate an advisory insight on any submitted
+The [reports](USER-GUIDE.md#reports-every-role) show all of this; the reviewer can generate an advisory insight on any submitted
 return.
 
 ## Guided tour
 
 The tour on `/demo/guide` takes Harbourline's MDA from draft to approval: maker.hlb validates it, checker.hlb submits
 it, the reviewer starts the review and generates an insight, approver.mfa approves it after the TOTP step, and the
-auditor verifies the audit chain. A browser script plays the same tour against a running demo:
+auditor verifies the audit chain. A browser script plays the same tour against a running demo, with two additions:
+the maker raises non-performing loans by half, so the checker has real warnings to justify, and admin.demo looks round
+the administration pages at the end.
 
 ```bash
 scripts/demo-scenario.sh                         # local: https://localhost:7101 and WSO2 on 9443
+scripts/demo-scenario.sh --reset --screenshots   # reset first; refresh docs/images
 PORTAL_BASE=https://demo.example APP_CA=system WSO2_BASE=https://iam.demo.example scripts/demo-scenario.sh
 ```
 
-It reads the password and the authenticator key from `/demo`, as a visitor would, and needs Node with Playwright. It
-changes data, so run it after a reset; the next reset undoes it.
+It reads the password and the authenticator keys from `/demo`, as a visitor would, and needs Node with Playwright and
+axe-core. On every portal page it runs axe against WCAG 2.2 A and AA and fails on any violation, and it fails on any
+Content Security Policy violation the browser reports (ADR 0035). It changes data, so run it after a reset; the next
+reset undoes it. The Release workflow runs it on every pull request against the production stack on the runner.
 
 ## Reset
 
@@ -90,7 +95,8 @@ Banks, people, API clients and the **audit trail are kept**: the chain keeps gro
 verifies, and the auditor can filter on *Demo reset*. Sessions stay valid.
 
 The portal never holds WSO2 administrator credentials, so the WSO2 side of the reset (passwords, roles and TOTP keys
-of the demo users) is a separate job on the host, scheduled just before the portal's reset:
+of the demo users) is a separate job on the host. On the server a systemd timer runs it at 03:10 UTC, after the
+portal's 03:00 reset (`deploy/regreturns.sh demo-users`); locally:
 
 ```bash
 dotnet run --project tools/RegReturns.IamBootstrap -- demo-users

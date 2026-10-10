@@ -92,7 +92,7 @@ from `scripts/dev-certs.sh` (ADR 0015).
 | `/health/ready` reports `wso2: Unhealthy` right after `docker compose up` | WSO2 takes a few minutes on first start while it creates its tables | Wait for `WSO2 Carbon started` in `docker compose logs wso2`; if `wso2-db-init` failed, its log says why |
 | IamBootstrap fails with `401 Unauthorized` on the management API | `WSO2_ADMIN_PASSWORD` in `.env` changed after WSO2's first start; the admin account is created once and kept in WSO2's database | Put the original password back, or change it in the Console and then in `.env` |
 | WSO2 rejects a role: `Role names with the prefix: system_ are not allowed` | WSO2 reserves the `system_` prefix | Use the names in `RoleNames` (the platform admin role is `portal_admin`) |
-| Signed in, but every page says access denied | The user has no role for the RegReturns Portal application (only roles whose audience is the portal app reach its tokens), or no `institution_id` for a bank role | `dotnet run --project tools/RegReturns.IamBootstrap -- demo-users` for demo users; otherwise assign the role in the Console under the portal application |
+| Signed in, but a page says *You do not have access* | The user's roles do not include that area (the menu shows only what their roles open). Only roles whose audience is the portal application reach its tokens; a user with no portal role at all is refused at sign-in (`User.RoleRequired`, below) | For demo users run `dotnet run --project tools/RegReturns.IamBootstrap -- demo-users`; for other people, add the portal application's role to the user in WSO2 (role membership is WSO2 data; its configuration is changed only by IamBootstrap) |
 | WSO2 shows a consent page after login | Consent skipping was turned off on the portal application | Re-run `IamBootstrap apply`; it restores the application settings |
 | WSO2 error page: `Callback url mismatch` or `invalid redirect_uri` | You browse the portal on a different URL than `IamBootstrap:PortalBaseUrl` (scheme, host or port) | Set `IamBootstrap:PortalBaseUrl` to the URL you use and re-run `IamBootstrap apply` |
 | WSO2 error: `PKCE is mandatory` | A client sent an authorization request without `code_challenge` | The portal always sends PKCE; this means a hand-made request or a custom client |
@@ -103,7 +103,7 @@ from `scripts/dev-certs.sh` (ADR 0015).
 | Portal shows "Sign-in failed" with `idp_unreachable` | The portal could not fetch WSO2's discovery document or keys (WSO2 down or TLS trust) | Check `/health/ready` and the TLS rows above |
 | Portal shows "Sign-in failed" after a successful WSO2 login; audit reason `User.UnknownInstitution` or `User.RoleRequired` | The WSO2 user has an `institution_id` RegReturns does not know, or no RegReturns role | Fix the user's institution or roles in WSO2 (for demo users: `IamBootstrap demo-users`) |
 | "Sign-in failed", audit reason `User.InstitutionInactive` | The user's institution is deactivated in RegReturns | Reactivate the institution, or move the user to an active one |
-| "Sign-in failed", audit reason `User.InstitutionChanged` | The token names a different institution than RegReturns has on record for this user. RegReturns never follows such a change on its own, so a user cannot switch banks by editing a claim | An administrator moves the user in RegReturns (phase 10) and in WSO2 together; for demo users run `IamBootstrap demo-users` |
+| "Sign-in failed", audit reason `User.InstitutionChanged` | The token names a different institution than RegReturns has on record for this user. RegReturns never follows such a change on its own, so a user cannot switch banks by editing a claim | If the claim is wrong, correct `institution_id` in WSO2. The portal has no way to move a person between banks: someone who joins another bank gets a new account. For demo users run `IamBootstrap demo-users` |
 | "Sign-in failed", audit reason `User.Disabled` | The RegReturns user record is disabled | Re-enable the user in RegReturns |
 | "Sign-in failed", audit reason `User.IdentityConflict` | The RegReturns user is already linked to a different WSO2 user id (the WSO2 user was deleted and re-created) | Check it is the same person, then relink: clear the old `Wso2UserId` on the user record |
 | "Sign-in failed", audit reason `User.SessionMissing` | WSO2's ID token has no `sid` claim, so back-channel logout could not end this session | Check that the portal application in WSO2 still has back-channel logout configured; re-run `IamBootstrap apply` |
@@ -380,7 +380,7 @@ audit trail on *Demo reset* to see them with what each removed and seeded.
 | The portal stops at start-up with a `Demo:` validation error | An invalid cron expression in `Demo:ResetSchedule`, or `Demo:ApiBaseUrl` not an absolute `https` URL | Fix the setting the message names |
 | 5605 with an exception | The database was unavailable, or the seed could not be built | The transaction rolled back and the demo is unchanged; fix the cause, then use *Reset demo* |
 | Disabling a person says demo accounts cannot be changed | Demo accounts are shared by every visitor | Expected |
-| A disabled person still signs in to WSO2 | The portal only stops them acting in the portal (`User.NotLinked`) | Disable the account in WSO2 too (through IamBootstrap or SCIM, never the Console) |
+| A disabled person still signs in to WSO2 | The portal only stops them acting in the portal (`User.NotLinked`) | Expected: the portal's switch covers the portal only. To stop the WSO2 sign-in as well, lock or disable the account in WSO2 (provisioning from the portal is in the [backlog](BACKLOG.md)) |
 | `scripts/demo-scenario.sh` finds no MDA return for last month | The demo was not reset since the month changed, or someone already filed it | Reset the demo, then run the script again |
 
 ## 14. Security: headers, TLS, authenticator resets and diagnostics
@@ -448,3 +448,20 @@ EventId.Id = 2005                                  -- verification could not run
 | `restore` says `backups/<stamp> is damaged: its checksums do not match` | A file changed after the backup or was copied incompletely | Use another backup, or copy that one again from the off-site archive |
 | `restore` says `the restored audit chain does not verify; nothing was started` | `verify-audit` found a break (2004 names it) or `AUDIT_HMAC_KEY` in `.env` is not the key the chain was written with | [DR-RUNBOOK.md](DR-RUNBOOK.md#when-the-audit-chain-does-not-verify); check that `.env` came from the same archive |
 | No backup for a day | The timer did not run or failed | `systemctl list-timers 'regreturns-*'`, `journalctl -u regreturns-backup` |
+
+## 16. Guided tour, accessibility and documentation checks
+
+`scripts/demo-scenario.sh` prints each step and, on failure, `FAIL` with the reason; the Release workflow keeps the
+screenshots it took as an artifact (`screenshots-<sha>`), which show the last page each person saw (ADR 0035).
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `FAIL the reset is cooling down: Available again from HH:mm UTC` | `--reset` within ten minutes of the last reset | Wait until the time shown, or run without `--reset` if nothing has changed since the reset |
+| `no MDA return for <period> in the bank's list (reset the demo first)` | An earlier run already took that return to approval | Run with `--reset` |
+| `the raised non-performing loans caused no warning to justify` | The seed or the MDA template changed so that a 50% rise in non-performing loans no longer trips a warning | Check the `MDA_NPL_MAX` and `MDA_NPL_VAR` rules and the seeded figures; the tour needs at least one warning |
+| `accessibility violations (axe, WCAG 2.2 A and AA)` with a page, rule and element | A change broke a WCAG rule on that page: a missing label or caption, low contrast, a scrollable region without keyboard access | Fix the view; the rule id (such as `color-contrast`) links to its explanation at dequeuniversity.com/rules/axe |
+| `reported (WSO2's page, not the portal's)` lines | WSO2's own sign-in pages break a rule | Informational: WSO2's branding and layouts can fix it (see the backlog) |
+| `playwright not found` or `axe-core not found` | Node cannot find the packages | `npm install --global playwright@<version> axe-core@<version>` with the versions in `.github/workflows/release.yml`, or set `NODE_PATH` |
+| CI job *Documentation* fails: `... does not exist` or `... has no heading for #...` | A link points at a moved file or a renamed heading | Fix the link; anchors are GitHub's: lower case, punctuation dropped, spaces as hyphens (`## 15. Deployment, backups and restore` is `#15-deployment-backups-and-restore`) |
+| CI job *Documentation* fails: `docs/adr/README.md does not list ...` | A new ADR is not in the index | Add its row to `docs/adr/README.md` |
+| A host stops at start in Development with `Some services are not able to be constructed ... Unable to resolve service for type ...` | Development validates every registration; a handler needs a service this host does not register | Register a fallback in `AddApplication` and `Replace` it in the Infrastructure method of the host that provides it (CLAUDE.md, Gotchas) |

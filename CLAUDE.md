@@ -34,7 +34,7 @@ as the domain and server right before the phase 11 deploy.
 | 9. Demo portal: landing page, try-the-demo, guided scenario, status page, demo reset | done |
 | 10. Security hardening: headers and CSP, anti-forgery audit, SQL TLS, account lock, authenticator reset, diagnostics, edge, CodeQL | done |
 | 11. Containers, release pipeline, one-server hosting, backups and restore (live deploy needs the domain and server) | done |
-| 12. Docs and polish | next |
+| 12. Docs and polish: C4 architecture, IAM, API and user guides, backlog, screenshots, axe in the tour, docs link check | done |
 
 ## Commands
 
@@ -61,8 +61,11 @@ dotnet run --project src/RegReturns.Api                               # https://
 scripts/smoke-wso2.sh --browser                                       # identity smoke test (needs Web + Api running;
                                                                       # --browser needs Node with Playwright)
 scripts/check-caddy.sh                                                # edge config against stub upstreams (Docker; CI)
-scripts/demo-scenario.sh [--reset]                                    # plays the guided tour in Chromium against a
-                                                                      # running demo (changes data; --reset first)
+scripts/demo-scenario.sh [--reset] [--screenshots]                    # plays the guided tour in Chromium against a
+                                                                      # running demo (changes data; --reset first), with
+                                                                      # axe (WCAG 2.2 AA) and CSP checks on every page;
+                                                                      # --screenshots refreshes docs/images
+python3 scripts/check-docs.py                                         # Markdown links, images, anchors, ADR index (CI)
 scripts/render-diagrams.sh                                            # docs/diagrams/*.mmd -> wwwroot/img/*.svg (needs
                                                                       # Node; CHROMIUM=/path to skip the download)
 dotnet run --project tools/RegReturns.Migrator -- verify-audit        # walk the audit hash chain: 0 intact, 1 failed,
@@ -104,7 +107,12 @@ tools/RegReturns.IamBootstrap  `apply`, `demo-users`: idempotent WSO2 setup over
 scripts/smoke-wso2.sh          End-to-end identity smoke test against a running WSO2 + API (`--browser`: + portal).
 deploy/caddy/Caddyfile         Edge proxy (phase 11): TLS, HSTS, WSO2 sign-in paths public, admin paths allowlisted.
 deploy/sqlserver/mssql.conf    Forces TLS with the certificate the `sqlserver-tls` compose job installs (ADR 0033).
-scripts/demo-scenario.sh       Browser run of the guided demo tour; `scripts/smoke/*.cjs` hold the Playwright parts.
+scripts/demo-scenario.sh       Browser run of the guided demo tour; `scripts/smoke/*.cjs` hold the Playwright parts
+                               (`demo-session.cjs` signs in from the demo page, `accessibility.cjs` runs axe). The
+                               Release workflow runs it against the production stack (ADR 0035).
+scripts/check-docs.py          Documentation link check (CI job "Documentation").
+docs/                          ARCHITECTURE (C4), IAM, API, USER-GUIDE, BACKLOG and the guides; images/ are captured
+                               by `demo-scenario.sh --screenshots`, never edited by hand.
 scripts/render-diagrams.sh     Renders the Mermaid sources in docs/diagrams to the committed SVGs.
 samples/legacy                 Generated legacy (VRRS) exports with planted defects and their mapping (see its README).
 Dockerfile                     One multi-stage build with the targets web, api, migrator and iam-bootstrap (ADR 0034).
@@ -252,9 +260,20 @@ Security (see ADR 0032, 0033 and docs/SECURITY.md):
   (never `TrustServerCertificate`), JDBC `encrypt=strict;serverCertificate=...`, and `sqlcmd -Ns -J <cert>`.
 - Authenticator reset (`OpenTotpEnrolment`): the portal sets WSO2's `totp_enrolment_until` claim over SCIM with the
   provisioner client (`IIdentityDirectory`, `Wso2IdentityDirectory`), through the back channel; the adaptive script
-  enrols the user at their next sign-in and closes the window. Audited as `TotpEnrolmentOpened`.
+  enrols the user at their next sign-in and closes the window. Audited as `TotpEnrolmentOpened`. IamBootstrap
+  authorises the provisioner for exactly `Wso2IdentityDirectory.Scopes`: a new SCIM call adds its scope there.
 - `/admin/diagnostics` shows settings as "set"/"not set" for secrets and origins for endpoints; a new setting shown
   there must never print a secret (`AdminDiagnosticsTests` checks the configured ones).
+
+Documentation and accessibility (see ADR 0035):
+- Docs are Markdown with Mermaid diagrams, changed in the same PR as the code; `scripts/check-docs.py` fails CI on a
+  broken relative link, image or anchor, or an ADR missing from `docs/adr/README.md`.
+- WCAG 2.2 AA: the guided tour runs axe on every portal page it visits and fails on any A or AA violation (WSO2's own
+  pages are reported only). A new page needs a step in `scripts/smoke/demo-scenario.cjs`. Every table has a
+  `<caption>` (visually hidden is fine); links inside an alert use `alert-link`; `.table-responsive` wrappers that
+  overflow become focusable regions through `site.js`.
+- An empty 4xx/5xx answer to a `GET` or `HEAD` is re-executed to `Home/HttpError` (status code pages, in the portal's
+  layout); `POST`s are never re-executed, so the anti-forgery check never runs twice.
 
 ## Conventions
 
@@ -407,3 +426,9 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 - Docker publishes ports around ufw: only Caddy may publish one.
 - Always pass an absolute `--results-directory` to `dotnet test`: the default location differs between SDK feature
   bands (under `bin/` on 10.0.1xx, the repo root on newer bands), which broke the CI coverage gate once.
+- Development builds the service provider with `ValidateOnBuild`, so a service only one host provides (reports, demo
+  reset, SCIM directory, database diagnostics) needs a fallback in `AddApplication` (`TryAdd` of an `Unavailable*`
+  class) that Infrastructure's `Add*` method `Replace`s; `TryAdd` there would lose to the fallback registered first.
+  `WebHostTests` and `ApiHostTests` build both hosts with that validation.
+- axe runs through Playwright's `evaluate`, which the CSP does not block; never inject it with a script tag or turn on
+  `bypassCSP`, which would hide the CSP violations the tour checks for.
