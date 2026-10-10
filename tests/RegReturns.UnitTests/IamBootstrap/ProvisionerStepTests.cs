@@ -6,6 +6,8 @@ using IamBootstrapTool::RegReturns.IamBootstrap;
 using IamBootstrapTool::RegReturns.IamBootstrap.Steps;
 using IamBootstrapTool::RegReturns.IamBootstrap.Wso2;
 
+using RegReturns.Infrastructure.Identity.Wso2;
+
 namespace RegReturns.UnitTests.IamBootstrap;
 
 public sealed class ProvisionerStepTests : IDisposable
@@ -14,10 +16,7 @@ public sealed class ProvisionerStepTests : IDisposable
     private const string Resources = "api/server/v1/api-resources";
     private const string AuthorizedApis = $"{Apps}/prov-1/authorized-apis";
 
-    private static readonly string[] UserScopes =
-        ["internal_user_mgt_create", "internal_user_mgt_update", "internal_user_mgt_list", "internal_user_mgt_view", "internal_user_mgt_delete"];
-
-    private static readonly string[] RoleScopes = ["internal_role_mgt_view", "internal_role_mgt_users_update"];
+    private static readonly string[] UserScopes = ["internal_user_mgt_list", "internal_user_mgt_view", "internal_user_mgt_update"];
 
     private readonly StubWso2 _wso2 = new();
 
@@ -51,33 +50,36 @@ public sealed class ProvisionerStepTests : IDisposable
     }
 
     [Fact]
-    public async Task Users_api_gets_exactly_the_user_management_scopes()
+    public async Task Users_api_gets_exactly_the_scopes_the_portal_requests()
     {
         Wso2HasTheSystemApis();
 
         await RunAsync();
 
         AuthorizedScopes()["sys-users"].ShouldBe(UserScopes, ignoreOrder: true);
+        ProvisionerStep.UserScopes.ShouldBe(Wso2IdentityDirectory.Scopes.Split(' '), ignoreOrder: true);
     }
 
     [Fact]
-    public async Task Roles_api_gets_only_role_view_and_member_update()
+    public async Task Roles_api_is_not_authorized()
     {
         Wso2HasTheSystemApis();
 
         await RunAsync();
 
-        AuthorizedScopes()["sys-roles"].ShouldBe(RoleScopes, ignoreOrder: true);
+        AuthorizedScopes().Keys.ShouldBe(["sys-users"]);
     }
 
     [Fact]
-    public async Task Seven_scopes_are_authorized_in_total()
+    public async Task A_roles_authorization_from_an_earlier_version_is_withdrawn()
     {
-        Wso2HasTheSystemApis();
+        Wso2HasTheSystemApis(authorized: """[{"id":"sys-roles"}]""");
+        _wso2.On(HttpMethod.Delete, $"{AuthorizedApis}/sys-roles", HttpStatusCode.NoContent);
 
-        await RunAsync();
+        var state = await RunAsync();
 
-        AuthorizedScopes().Values.Sum(scopes => scopes.Count).ShouldBe(7);
+        _wso2.Writes().ShouldContain(r => r.Method == HttpMethod.Delete && r.PathAndQuery == $"{AuthorizedApis}/sys-roles");
+        state.Changes.ShouldContain(("withdrawn API", $"{IamNames.ProvisionerApp} /scim2/Roles", Outcome.Updated));
     }
 
     [Fact]
@@ -92,7 +94,7 @@ public sealed class ProvisionerStepTests : IDisposable
     }
 
     [Fact]
-    public async Task App_and_both_authorizations_are_recorded()
+    public async Task App_and_its_users_authorization_are_recorded()
     {
         Wso2HasTheSystemApis();
 
@@ -102,7 +104,6 @@ public sealed class ProvisionerStepTests : IDisposable
         [
             ("M2M app", IamNames.ProvisionerApp, Outcome.Created),
             ("authorized API", $"{IamNames.ProvisionerApp} /scim2/Users", Outcome.Created),
-            ("authorized API", $"{IamNames.ProvisionerApp} /scim2/Roles", Outcome.Created),
         ]);
     }
 
@@ -124,12 +125,12 @@ public sealed class ProvisionerStepTests : IDisposable
             .On(HttpMethod.Post, Apps, HttpStatusCode.Created, location: $"{StubWso2.Authority}{Apps}/prov-1")
             .OnJson(HttpMethod.Get, $"{Apps}/prov-1/inbound-protocols/oidc", $$"""{"clientId":"{{IamNames.ProvisionerClientId}}","clientSecret":"prov-secret"}""");
 
-    private void Wso2HasTheSystemApis()
+    private void Wso2HasTheSystemApis(string authorized = "[]")
     {
         AppCanBeCreated();
         _wso2.OnJson(HttpMethod.Get, $"{Resources}?filter=identifier+eq+%2Fscim2%2FUsers", """{"apiResources":[{"id":"sys-users"}]}""")
             .OnJson(HttpMethod.Get, $"{Resources}?filter=identifier+eq+%2Fscim2%2FRoles", """{"apiResources":[{"id":"sys-roles"}]}""")
-            .OnJson(HttpMethod.Get, AuthorizedApis, "[]")
+            .OnJson(HttpMethod.Get, AuthorizedApis, authorized)
             .On(HttpMethod.Post, AuthorizedApis, HttpStatusCode.OK);
     }
 
