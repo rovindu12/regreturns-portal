@@ -424,6 +424,9 @@ Troubleshooting guide: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
   until a restart: check files at start (`ValidateOnStart`, as `Wso2CertificateValidator.CanLoad` does for
   `Wso2:TrustedCaPath`) so a bad file stops the host instead of failing every request.
 - Docker publishes ports around ufw: only Caddy may publish one.
+- Integration test hosts watch files by polling (`PollingFileWatchers` sets `DOTNET_USE_POLLING_FILE_WATCHER` in a
+  module initializer): with inotify the suite's hosts exceed Linux's default 128 instances per user and pages that
+  version static files answer 500.
 - Always pass an absolute `--results-directory` to `dotnet test`: the default location differs between SDK feature
   bands (under `bin/` on 10.0.1xx, the repo root on newer bands), which broke the CI coverage gate once.
 - Development builds the service provider with `ValidateOnBuild`, so a service only one host provides (reports, demo
