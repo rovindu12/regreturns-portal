@@ -115,6 +115,7 @@ public sealed class PortalEndpointMetadataTests(SqlServerFixture sql) : IDisposa
             "Demo.Guide",
             "Demo.Index",
             "Home.Error",
+            "Home.HttpError",
             "Home.Index",
             "Status.Index",
         ]);

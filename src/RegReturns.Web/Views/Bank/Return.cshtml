@@ -44,7 +44,7 @@
         <p class="mb-0 comment-text text-break">@verdict.Comment</p>
         @if (rejected)
         {
-            <p class="small mb-0 mt-2">The obligation is open again: start a new return for it from <a asp-action="Index">Bank returns</a>.</p>
+            <p class="small mb-0 mt-2">The obligation is open again: start a new return for it from <a class="alert-link" asp-action="Index">Bank returns</a>.</p>
         }
         else
         {
@@ -98,7 +98,7 @@
             <p class="mb-1">Someone else saved this return after you opened it, so your changes were not saved.</p>
             <p class="mb-0">
                 Your entries are shown below. Saving again replaces the other changes;
-                <a asp-action="Return" asp-route-submissionId="@form.SubmissionId">reload the return</a> to see them first.
+                <a class="alert-link" asp-action="Return" asp-route-submissionId="@form.SubmissionId">reload the return</a> to see them first.
             </p>
         }
         else

@@ -41,4 +41,19 @@ public sealed class HomeController : Controller
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult Error() =>
         View(new ErrorViewModel(WebDefaultsExtensions.CurrentTraceId(HttpContext)));
+
+    /// <summary>
+    /// Shows the page for a request that ended with an error status and no content of its own (a page that does not
+    /// exist, another bank's return), re-executed by the status code pages middleware. Answers with that status.
+    /// </summary>
+    /// <param name="code">The status code of the original request.</param>
+    /// <returns>The page.</returns>
+    [HttpGet]
+    [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
+    public IActionResult HttpError(int code)
+    {
+        var statusCode = code is >= 400 and <= 599 ? code : StatusCodes.Status404NotFound;
+        Response.StatusCode = statusCode;
+        return View(new HttpErrorViewModel(statusCode, WebDefaultsExtensions.CurrentTraceId(HttpContext)));
+    }
 }
