@@ -12,7 +12,7 @@
 # image label. The two base images are pinned by tag; Dependabot proposes their updates as one group
 # (.github/dependabot.yml).
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0.401-noble AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.402-noble AS build
 WORKDIR /src
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
 
@@ -57,7 +57,7 @@ RUN case "${TARGETARCH:-amd64}" in \
 
 # Every image runs on the ASP.NET Core runtime: the tools use ServiceDefaults too. Shared labels (OCI image spec); the
 # release workflow adds created and revision from the commit.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled-extra AS runtime-base
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble-chiseled-extra AS runtime-base
 ARG SOURCE_REVISION=unknown
 LABEL org.opencontainers.image.source="https://github.com/rovindu12/regreturns-portal" \
       org.opencontainers.image.licenses="MIT" \
