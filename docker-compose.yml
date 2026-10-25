@@ -98,7 +98,7 @@ services:
 
   seq:
     # Log and trace viewer. Receives OTLP at http://localhost:5341/ingest/otlp; UI at http://localhost:8081.
-    image: datalust/seq:2026.1
+    image: datalust/seq:2026.1.17182
     environment:
       ACCEPT_EULA: "Y"
       SEQ_FIRSTRUN_NOAUTHENTICATION: "true"

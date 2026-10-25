@@ -154,7 +154,7 @@ services:
   seq:
     # Logs and traces. The apps send OTLP to seq:5341 on the internal network; Caddy publishes the UI to the admin
     # allowlist only. Sign in as admin with SEQ_ADMIN_PASSWORD (set on the first start only).
-    image: datalust/seq:2026.1
+    image: datalust/seq:2026.1.17182
     <<: *hardening
     # The image starts as root and relies on root overriding file permissions, which dropping every capability takes
     # away. Run it as the image's own user, which owns /data; the server binary carries the bind capability.
